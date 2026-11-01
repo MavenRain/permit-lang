@@ -105,6 +105,10 @@ typedef enum {
   RULE_NAT2,
   RULE_LEN, /* S3: len A r (survey section 7) */
   RULE_FLAG_IF,
+  RULE_NONZERO,       /* S3: NonZero Nat */
+  RULE_NONZERO_OF,    /* nonZero x */
+  RULE_NONZERO_VALUE, /* nonZeroValue x */
+  RULE_DIV,           /* natDiv, natMod: a NonZero divisor */
   RULE_KMAP,
   RULE_KMAP_GET,
   RULE_KMAP_SET,
@@ -174,7 +178,7 @@ static const Builtin BUILTINS[] = {
   {"Glue", 3, RULE_GLUE, OP_GLUE, OP_NAT, 0, VIS_GUEST},
   {"glue", 2, RULE_GLUE_ELEM, OP_GLUE_ELEM, OP_NAT, 0, VIS_GUEST},
   {"unglue", 1, RULE_UNGLUE, OP_UNGLUE, OP_NAT, 0, VIS_GUEST},
-  {"natAdd", 2, RULE_NAT2, OP_NAT_ADD, OP_NAT, 0, VIS_INTERNAL},
+  {"natAdd", 2, RULE_NAT2, OP_NAT_ADD, OP_OPTION, 0, VIS_INTERNAL},
   {"natSub", 2, RULE_NAT2, OP_NAT_SUB, OP_NAT, 0, VIS_INTERNAL},
   {"natEq", 2, RULE_NAT2, OP_NAT_EQ, OP_FLAG, 0, VIS_INTERNAL},
   {"natLe", 2, RULE_NAT2, OP_NAT_LE, OP_FLAG, 0, VIS_INTERNAL},
@@ -183,8 +187,11 @@ static const Builtin BUILTINS[] = {
   {"mapEmpty", 0, RULE_EMPTY, OP_KMAP_OF, OP_KMAP, 0, VIS_INTERNAL},
   {"mapGet", 2, RULE_KMAP_GET, OP_KMAP_GET, OP_KMAP, 0, VIS_INTERNAL},
   {"mapSet", 3, RULE_KMAP_SET, OP_KMAP_SET, OP_KMAP, 0, VIS_INTERNAL},
-  {"natDiv", 2, RULE_NAT2, OP_NAT_DIV, OP_NAT, 0, VIS_INTERNAL},
-  {"natMod", 2, RULE_NAT2, OP_NAT_MOD, OP_NAT, 0, VIS_INTERNAL},
+  {"natDiv", 2, RULE_DIV, OP_NAT_DIV, OP_NAT, 0, VIS_INTERNAL},
+  {"natMod", 2, RULE_DIV, OP_NAT_MOD, OP_NAT, 0, VIS_INTERNAL},
+  {"NonZero", 1, RULE_NONZERO, OP_NONZERO, OP_NAT, 0, VIS_INTERNAL},
+  {"nonZero", 1, RULE_NONZERO_OF, OP_NONZERO_OF, OP_OPTION, 0, VIS_INTERNAL},
+  {"nonZeroValue", 1, RULE_NONZERO_VALUE, OP_NONZERO_VALUE, OP_NAT, 0, VIS_INTERNAL},
   {"len", 2, RULE_LEN, OP_FM_LEN, OP_NAT, 0, VIS_GUEST},
 };
 
@@ -2141,13 +2148,13 @@ static const Core *rule_unglue(Call *k) {
 }
 
 /* natAdd, natEq and the like: each argument has the type
-   former ARG. */
+   former ARG. natAdd gives Option ARG, none at overflow (S3). */
 static const Core *rule_prim(Call *k, Op arg) {
   Checker *c = k->c;
   const Value *t = tyop(c, arg, 0, NULL, NULL, NULL);
   const Core *x = check(c, k->args[0], t);
   const Core *y = x == NULL || k->b->arity < 2u ? NULL : check(c, k->args[1], t);
-  k->type = tyop(c, k->b->result, 0, NULL, NULL, NULL);
+  k->type = k->b->result == OP_OPTION ? tyop(c, OP_OPTION, 1, t, NULL, NULL) : tyop(c, k->b->result, 0, NULL, NULL, NULL);
   return k->b->arity < 2u ? op3(c, k->b->op, 0, 1, x, NULL, NULL) : op3(c, k->b->op, 0, 2, x, y, NULL);
 }
 
@@ -2185,6 +2192,60 @@ static const Core *rule_fin_op(Call *k) {
   const Core *y = x == NULL || k->b->arity < 3u ? NULL : check(c, k->args[2], fin);
   k->type = fin;
   return op3(c, k->b->op, 0, k->b->arity, n, x, y);
+}
+
+/* The base type of NonZero (S3): Nat. permit-lang has no
+   U256, so accrue NonZero U256 and mulDiv are not taken. */
+static int nonzero_base(const Value *t) {
+  return val_is(t, OP_NAT);
+}
+
+/* NonZero A (S3): A is Nat, NonZero A : Type 0. */
+static const Core *rule_nonzero(Call *k) {
+  const Core *t = rule_type1(k);
+  const Value *v = here(k->c, t);
+  if (v == NULL)
+    return NULL;
+  if (!nonzero_base(v->args[0]))
+    return nul(FAIL(k->c, "TYPE_MISMATCH", "NonZero takes Nat, found %s", show(k->c, v->args[0])));
+  return t;
+}
+
+/* nonZero x: x : Nat, the result Option (NonZero Nat). */
+static const Core *rule_nonzero_of(Call *k) {
+  Checker *c = k->c;
+  const Value *a = val_is(k->hint, OP_OPTION) && val_is(k->hint->args[0], OP_NONZERO) ? k->hint->args[0]->args[0] : NULL;
+  const Core *x = a != NULL ? check(c, k->args[0], a) : infer(c, k->args[0], &a);
+  if (x == NULL)
+    return NULL;
+  if (!nonzero_base(a))
+    return nul(FAIL(c, "TYPE_MISMATCH", "nonZero needs a Nat, found a term of type %s", show(c, a)));
+  k->type = tyop(c, OP_OPTION, 1, tyop(c, OP_NONZERO, 1, a, NULL, NULL), NULL, NULL);
+  return op3(c, OP_NONZERO_OF, 0, 1, x, NULL, NULL);
+}
+
+/* nonZeroValue x: x : NonZero Nat, the result Nat. */
+static const Core *rule_nonzero_value(Call *k) {
+  Checker *c = k->c;
+  const Value *t = nonzero_base(k->hint) ? tyop(c, OP_NONZERO, 1, k->hint, NULL, NULL) : NULL;
+  const Core *x = t != NULL ? check(c, k->args[0], t) : infer(c, k->args[0], &t);
+  if (x == NULL)
+    return NULL;
+  if (!val_is(t, OP_NONZERO))
+    return nul(FAIL(c, "TYPE_MISMATCH", "nonZeroValue needs a term of type NonZero Nat, found a term of type %s", show(c, t)));
+  k->type = t->args[0];
+  return op3(c, OP_NONZERO_VALUE, 0, 1, x, NULL, NULL);
+}
+
+/* natDiv a d and natMod a d (S3): d : NonZero Nat, the
+   result Nat. The divisor type makes each one total. */
+static const Core *rule_div(Call *k) {
+  Checker *c = k->c;
+  const Value *base = tyop(c, OP_NAT, 0, NULL, NULL, NULL);
+  const Core *x = check(c, k->args[0], base);
+  const Core *d = x == NULL ? NULL : check(c, k->args[1], tyop(c, OP_NONZERO, 1, base, NULL, NULL));
+  k->type = base;
+  return op3(c, k->b->op, 0, 2, x, d, NULL);
 }
 
 /* flagIf b yes no */
@@ -2319,6 +2380,14 @@ static const Core *rule(Call *k) {
     return rule_fin(k);
   case RULE_FLAG_IF:
     return rule_flag_if(k);
+  case RULE_NONZERO:
+    return rule_nonzero(k);
+  case RULE_NONZERO_OF:
+    return rule_nonzero_of(k);
+  case RULE_NONZERO_VALUE:
+    return rule_nonzero_value(k);
+  case RULE_DIV:
+    return rule_div(k);
   case RULE_KMAP:
     return rule_kmap(k);
   case RULE_KMAP_GET:
@@ -2467,16 +2536,52 @@ static int find_known(Checker *c, const char *name, Head *h) {
   return 0;
 }
 
+static int guest(const Checker *c);
+
+/* A partial name (S3): the kit has no
+   total word with this name. KIT is the hint for the kit mode and the
+   domain file. GUEST is the hint for a guest program. */
+typedef struct {
+  const char *name;
+  const char *kit;
+  const char *guest;
+} PartialName;
+
+static const PartialName PARTIAL_NAMES[] = {
+  {"div", "use natDiv x d, with d : NonZero Nat from nonZero", "domain/domain.lang has no division for a guest program"},
+  {"mod", "use natMod x d, with d : NonZero Nat from nonZero", "domain/domain.lang has no remainder for a guest program"},
+  {"sub", "use natSub x y, which gives 0 when y is more than x", "domain/domain.lang has no subtraction for a guest program"},
+  {"mul", "the kit has no total word for a product", "domain/domain.lang has no product for a guest program"},
+  {"head", "use fold (fun x acc => some x) none on the list, which gives an Option", "domain/domain.lang has no head word for a guest program"},
+  {"tail", "use fold on the list into an Option; the kit has no tail word", "domain/domain.lang has no tail word for a guest program"},
+  {"pred", "use natSub x 1, which gives 0 at 0", "domain/domain.lang has no predecessor word for a guest program"}
+};
+
+#define PARTIAL_NAME_COUNT ((uint32_t)(sizeof PARTIAL_NAMES / sizeof PARTIAL_NAMES[0]))
+
+/* The hint for a partial name, or NULL. */
+static const char *partial_hint(const Checker *c, const char *name) {
+  uint32_t i;
+  for (i = 0; i < PARTIAL_NAME_COUNT; i++) {
+    if (strcmp(PARTIAL_NAMES[i].name, name) == 0)
+      return guest(c) ? PARTIAL_NAMES[i].guest : PARTIAL_NAMES[i].kit;
+  }
+  return NULL;
+}
+
 /* An unknown name. When it names this declaration or a later one, the use
-   is recursion (rule R3). */
+   is recursion (rule R3). Else a partial name gives REFUSE_PARTIAL. */
 static int unknown_name(Checker *c, const char *name) {
   size_t i;
+  const char *hint = partial_hint(c, name);
   if (time_word(name))
     return FAIL(c, "REFUSE_TIME", TIME_HINT, name);
   for (i = c->decl_index; i < c->decls->count; i++) {
     if (strcmp(c->decls->items[i].name, name) == 0)
       return FAIL(c, "REFUSE_REC", "%s is this definition or a later one; a definition can use only earlier ones (rule R3)", name);
   }
+  if (hint != NULL)
+    return FAIL(c, "REFUSE_PARTIAL", "%s is a partial name: %s", name, hint);
   return FAIL(c, "NAME_UNKNOWN", "unknown name %s", name);
 }
 
@@ -2633,6 +2738,8 @@ static const Core *var_core(Checker *c, const char *name, const Value **type) {
   }
   if (time_word(name))
     return nul(FAIL(c, "REFUSE_TIME", TIME_HINT, name));
+  if (partial_hint(c, name) != NULL)
+    return nul(FAIL(c, "REFUSE_PARTIAL", "%s is a partial name: %s", name, partial_hint(c, name)));
   return nul(FAIL(c, "NAME_UNKNOWN", "unknown name %s", name));
 }
 
@@ -2640,6 +2747,20 @@ static const Core *apply_term(Checker *c, const Term *head, const Term *const *a
   const Value *ty = NULL;
   const Core *k = head->kind == TERM_VAR ? var_core(c, head->name, &ty) : infer(c, head, &ty);
   return apply_rest(c, k, ty, args, argc, hint, type);
+}
+
+/* REFUSE_PARTIAL site 2 (S3): a checked kit word
+   gives an Option, and the term is where its payload type is wanted. A
+   guest program cannot name a kit word (REFUSE_KIT comes first). 1 when
+   the term is not this case. */
+static int partial_result_ok(Checker *c, const Head *h, const Value *found, const Value *want) {
+  if (h->kind != HEAD_BUILTIN || h->builtin->vis != VIS_INTERNAL || h->builtin->result != OP_OPTION)
+    return 1;
+  if (found == NULL || want == NULL || !val_is(found, OP_OPTION) || val_is(want, OP_OPTION))
+    return 1;
+  if (!conv_values(c->m, c->level, found->args[0], want))
+    return 1;
+  return FAIL(c, "REFUSE_PARTIAL", "%s gives an Option, not a value of type %s: take it apart with option or bind", known_name(c, h), show(c, want));
 }
 
 static const Core *apply_known(Checker *c, const Term *whole, const Head *h, const Term *const *args, uint32_t argc, const Value *hint, const Value **type) {
@@ -2681,6 +2802,8 @@ static const Core *apply_known(Checker *c, const Term *whole, const Head *h, con
   k.outer = hint;
   k.used = arity;
   core = known_core(&k, h);
+  if (core != NULL && argc == k.used && !partial_result_ok(c, h, k.type, hint))
+    return NULL;
   return apply_rest(c, core, k.type, args + k.used, argc - k.used, hint, type);
 }
 
@@ -2880,6 +3003,14 @@ static const Core *elab_inner(Checker *c, const Term *t, const Value *hint, cons
     if (val_is(hint, OP_FIN) && hint->args[0]->kind == VAL_NAT) {
       if (t->nat >= hint->args[0]->nat)
         return nul(FAIL(c, "FIN_RANGE", "the literal %llu is not below %llu, so it is not a value of Fin %llu", (unsigned long long)t->nat, (unsigned long long)hint->args[0]->nat, (unsigned long long)hint->args[0]->nat));
+      *type = hint;
+      return core_leaf(c, CORE_NAT, t->nat);
+    }
+    /* REFUSE_PARTIAL site 3 (S3): a literal other than 0
+       checks as a NonZero Nat. */
+    if (val_is(hint, OP_NONZERO) && val_is(hint->args[0], OP_NAT)) {
+      if (t->nat == 0u)
+        return nul(FAIL(c, "REFUSE_PARTIAL", "the literal 0 is not a value of NonZero Nat: use nonZero, which gives an Option"));
       *type = hint;
       return core_leaf(c, CORE_NAT, t->nat);
     }
@@ -3495,11 +3626,29 @@ static int check_family(Checker *c, const Decl *d) {
   return 1;
 }
 
+/* A bind variable of rule D-9 (S3): in
+   bind ADD (fun v => b), the variable v has the de Bruijn level LEVEL in b. */
+typedef struct HistBind {
+  uint32_t level;
+  const Core *add;
+  const struct HistBind *next;
+} HistBind;
+
+static const HistBind *hist_bind(const HistBind *b, uint32_t level) {
+  return b == NULL || b->level == level ? b : hist_bind(b->next, level);
+}
+
 /* Rule D-9 (slice K3c). The argument A of the history field K of the state
-   constructor CTOR is `F t` or `ADD (F t) e`, with F the projection of the
-   field. ADD is natAdd. */
-static int history_arg_ok(uint32_t ctor, uint32_t k, const Core *a) {
+   constructor CTOR is `F t`, `natAdd (F t) e`, or the variable v of
+   bind (natAdd (F t) e) (fun v => ...) (S3), with F the
+   projection of the field. natAdd gives an Option Nat (N1), so a Nat field
+   takes the bind form. DEPTH is the count of binders above A; BINDS lists
+   the bind variables. */
+static int history_arg_ok(uint32_t ctor, uint32_t k, const Core *a, uint32_t depth, const HistBind *binds) {
   const Core *x = a->kind == CORE_OP && a->op == OP_NAT_ADD && a->argc == 2u ? a->args[0] : a;
+  const HistBind *b = a->kind == CORE_VAR && a->index < depth ? hist_bind(binds, depth - 1u - a->index) : NULL;
+  if (b != NULL)
+    return history_arg_ok(ctor, k, b->add, 0, NULL);
   return x->kind == CORE_OP && x->op == OP_PROJ && x->inst == ctor && x->field == k;
 }
 
@@ -3535,7 +3684,6 @@ static int mentions_state(Machine *m, uint32_t level, const Value *v) {
     return 1;
   switch (v->kind) {
   case VAL_NAT:
-  case VAL_TRAP:
   case VAL_UNIV:
     return 0;
   case VAL_PI:
@@ -3571,16 +3719,17 @@ static int mentions_state(Machine *m, uint32_t level, const Value *v) {
    field. Each use of the state constructor has all of its arguments and
    keeps or adds to each history field. TYPED is 1 when State occurs in the
    type of the definition: then T cannot refer to a definition that the rule
-   does not check (history_root). */
-static int history_ok(Checker *c, const Core *t, int typed) {
+   does not check (history_root). DEPTH and BINDS are as history_arg_ok
+   (S3); the type of a path type opens with no bind variables. */
+static int history_ok(Checker *c, const Core *t, int typed, uint32_t depth, const HistBind *binds) {
   const Machine *m = c->m;
+  HistBind node;
   uint32_t i;
   if (t == NULL || !m->has_state)
     return 1;
   switch (t->kind) {
   case CORE_VAR:
   case CORE_NAT:
-  case CORE_TRAP:
   case CORE_UNIV:
   case CORE_IZERO:
   case CORE_IONE:
@@ -3592,15 +3741,17 @@ static int history_ok(Checker *c, const Core *t, int typed) {
   case CORE_LAM:
   case CORE_PI:
   case CORE_SIGMA:
-  case CORE_APP:
   case CORE_PLAM:
+    return history_ok(c, t->a, typed, depth, binds) && history_ok(c, t->b, typed, depth + 1u, binds);
+  case CORE_APP:
   case CORE_INEG:
   case CORE_IMEET:
   case CORE_IJOIN:
-    return history_ok(c, t->a, typed) && history_ok(c, t->b, typed);
+    return history_ok(c, t->a, typed, depth, binds) && history_ok(c, t->b, typed, depth, binds);
   case CORE_PATHP:
+    return history_ok(c, t->a, typed, depth, NULL) && history_ok(c, t->b, typed, depth + 1u, binds) && history_ok(c, t->args[0], typed, depth, binds) && history_ok(c, t->args[1], typed, depth, binds);
   case CORE_PAPP:
-    return history_ok(c, t->a, typed) && history_ok(c, t->b, typed) && history_ok(c, t->args[0], typed) && history_ok(c, t->args[1], typed);
+    return history_ok(c, t->a, typed, depth, binds) && history_ok(c, t->b, typed, depth, binds) && history_ok(c, t->args[0], typed, depth, binds) && history_ok(c, t->args[1], typed, depth, binds);
   case CORE_OP:
     break;
   }
@@ -3609,12 +3760,18 @@ static int history_ok(Checker *c, const Core *t, int typed) {
     if (t->argc < ci->field_count)
       return FAIL(c, "REFUSE_HISTORY_WRITE", "%s must have all of its arguments (rule D-9)", ci->name);
     for (i = 0; i < ci->field_count; i++) {
-      if (ci->fields[i].history && !history_arg_ok(t->inst, i, t->args[t->argc - ci->field_count + i]))
-        return FAIL(c, "REFUSE_HISTORY_WRITE", "the history field %s must be (%s t) or ADD (%s t) e, with ADD natAdd (rule D-9)", ci->fields[i].name, ci->fields[i].name, ci->fields[i].name);
+      if (ci->fields[i].history && !history_arg_ok(t->inst, i, t->args[t->argc - ci->field_count + i], depth, binds))
+        return FAIL(c, "REFUSE_HISTORY_WRITE", "the history field %s must be (%s t), natAdd (%s t) e, or the variable of bind (natAdd (%s t) e) (rule D-9)", ci->fields[i].name, ci->fields[i].name, ci->fields[i].name, ci->fields[i].name);
     }
   }
+  if (t->op == OP_BIND && t->argc == 2u && t->args[0] != NULL && t->args[0]->kind == CORE_OP && t->args[0]->op == OP_NAT_ADD && t->args[0]->argc == 2u && t->args[1] != NULL && t->args[1]->kind == CORE_LAM) {
+    node.level = depth;
+    node.add = t->args[0];
+    node.next = binds;
+    return history_ok(c, t->args[0], typed, depth, binds) && history_ok(c, t->args[1]->a, typed, depth, binds) && history_ok(c, t->args[1]->b, typed, depth + 1u, &node);
+  }
   for (i = 0; i < t->argc; i++) {
-    if (!history_ok(c, t->args[i], typed))
+    if (!history_ok(c, t->args[i], typed, depth, binds))
       return 0;
   }
   return 1;
@@ -3801,7 +3958,6 @@ static int law_uses(const Machine *m, uint32_t trunc, const Core *t) {
   switch (t->kind) {
   case CORE_VAR:
   case CORE_NAT:
-  case CORE_TRAP:
   case CORE_UNIV:
   case CORE_IZERO:
   case CORE_IONE:
@@ -3855,7 +4011,7 @@ static int check_def_body(Checker *c, const Decl *d, const Value *tv, const Core
   int law;
   if (body == NULL || !check_sig(c, d, tv))
     return 0;
-  if (has_history(m) && strcmp(d->name, "init") != 0 && !is_family(tv, m->state_family) && !history_ok(c, body, mentions_state(m, c->level, tv)))
+  if (has_history(m) && strcmp(d->name, "init") != 0 && !is_family(tv, m->state_family) && !history_ok(c, body, mentions_state(m, c->level, tv), 0, NULL))
     return 0;
   /* Rule O7 (S5): the domain marks its law defs; a program def is law-only
      when its type or its body uses a law-only name. Kit mode sets the flag
@@ -4394,6 +4550,9 @@ int entry_of(Machine *m, const Value *type, Entry *out) {
     t = closure_apply(m, t, val_var(m, out->param_count));
     out->param_count++;
   }
+  /* An Option result prints its payload or none (S3). */
+  out->result_option = val_is(t, OP_OPTION);
+  t = out->result_option ? t->args[0] : t;
   out->result_flag = val_is(t, OP_FLAG);
   return val_is(t, OP_NAT) || val_is(t, OP_FLAG);
 }
@@ -4442,15 +4601,17 @@ static int print_result(Machine *m, const char *name, const Value *v, FILE *out,
   case VAL_NAT:
     fprintf(out, "%llu\n", (unsigned long long)v->nat);
     return 0;
-  case VAL_TRAP:
-    fputs("trap\n", out);
-    fprintf(err, "langc: EVAL_OVERFLOW: %s: an operation trapped: a Nat overflow or a division by 0\n", name);
-    return 0;
   case VAL_OP:
     if (val_is(v, OP_FLAG_YES) || val_is(v, OP_FLAG_NO)) {
       fprintf(out, "%d\n", val_is(v, OP_FLAG_YES));
       return 0;
     }
+    if (val_is(v, OP_NONE)) {
+      fputs("none\n", out);
+      return 0;
+    }
+    if (val_is(v, OP_SOME))
+      return print_result(m, name, v->args[0], out, err);
     break;
   case VAL_UNIV:
   case VAL_LAM:

@@ -2,11 +2,9 @@
 
    The checker (front/check.c) writes core terms. Evaluation is normalization
    by evaluation: each value is a normal form. A neutral value (VAL_VAR,
-   VAL_APP, VAL_STUCK) is stuck on a variable. A trap (an overflow or a division by 0) is a
-   value too. It goes up through each strict position (an arithmetic operation, the
-   scrutinee of an eliminator, the function of an application) and nowhere
-   else. So the evaluator and the residual program agree: a trap that no
-   strict position reads does not stop the program. */
+   VAL_APP, VAL_STUCK) is stuck on a variable. No value is a trap: an
+   operation that can overflow gives an Option value, and a divisor is a
+   NonZero Nat (S3). */
 #ifndef LANG_FRONT_CORE_H
 #define LANG_FRONT_CORE_H
 
@@ -79,7 +77,12 @@ typedef enum {
   OP_FIN_CASE, /* finAll case: k, body0, ..., body(n-1); body j at the literal j */
   OP_GLUE,     /* Glue A phi sys: a type; sys as in OP_HCOMP, each branch pack T e */
   OP_GLUE_ELEM, /* glue: phi, sys, a; sys as in OP_HCOMP, each branch t */
-  OP_UNGLUE    /* unglue: A, phi, sys, g; stuck when no rule applies */
+  OP_UNGLUE,   /* unglue: A, phi, sys, g; stuck when no rule applies */
+  /* S3: NonZero Nat. A value of NonZero
+     Nat is a Nat that is not 0: the type carries the fact. */
+  OP_NONZERO,      /* NonZero Nat: a type */
+  OP_NONZERO_OF,   /* nonZero x: some x, or none when x is 0 */
+  OP_NONZERO_VALUE /* nonZeroValue x: the base value; stuck on an open x */
 } Op;
 
 /* The instance of pure, map, bind and filter (formers F5 and F8). */
@@ -93,7 +96,6 @@ typedef enum {
   CORE_VAR,    /* index: de Bruijn index */
   CORE_GLOBAL, /* index: definition number */
   CORE_NAT,    /* nat */
-  CORE_TRAP,   /* an overflow or a division by 0; only quote writes it */
   CORE_UNIV,   /* Type nat */
   CORE_LAM,    /* fun name => b; a retains an explicit annotation for checks */
   CORE_PI,     /* (name : a) -> b */
@@ -129,7 +131,6 @@ struct Core {
 
 typedef enum {
   VAL_NAT,
-  VAL_TRAP,
   VAL_UNIV,
   VAL_LAM,
   VAL_PI,
@@ -310,7 +311,6 @@ typedef struct {
   uint32_t ctor_cap;
   unsigned depth;
   uint64_t fuel;
-  int overflowed;
   int has_state;          /* the program declares the state (slice K3a) */
   uint32_t state_family; /* the state family, when has_state is 1 */
   uint32_t fresh; /* the count of fresh levels for the Kan head test */

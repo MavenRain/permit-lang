@@ -31,12 +31,14 @@ trap: a denial is a value with a reason code.
 
 ## Status
 
-S2: the kernel. The repo holds the Cubical TT kernel of intent-lang
+S3: no trap. The repo holds the Cubical TT kernel of intent-lang
 (67445ae), ported from relay-lang 05dd63b without the crypto code, on the
-tcc-wasm host, and the plan. The Wasm writer is out of the build until S3.
-The permit-lang types, the permit refusals, the gate and the three targets
-do not exist yet. `docs/PLAN.md`
-gives the readings, the route, the slices and the open questions.
+tcc-wasm host, and the plan. S3 adds R0 from relay-lang 5c386bb: total
+Nat operations, `REFUSE_PARTIAL`, and a Wasm writer that emits no trap
+form (`test/notraptool.c` checks each built module). The permit-lang
+types, the permit refusals, the gate and the three targets do not exist
+yet. `docs/PLAN.md` gives the readings, the route, the slices and the
+open questions.
 
 ## Layout
 

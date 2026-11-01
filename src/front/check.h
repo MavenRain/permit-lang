@@ -13,6 +13,7 @@ typedef struct {
   uint32_t param_count;
   int param_flag[ENTRY_PARAMS_MAX];
   int result_flag;
+  int result_option;
 } Entry;
 
 /* Checks the domain declarations, then the program, into M. Returns 1, or 0

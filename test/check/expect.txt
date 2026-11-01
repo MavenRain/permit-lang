@@ -149,3 +149,7 @@ time-timestamp.lang REFUSE_TIME
 time-time.lang REFUSE_TIME
 time-clock.lang REFUSE_TIME
 time-epoch.lang REFUSE_TIME
+partial-name.lang REFUSE_PARTIAL
+partial-option.lang REFUSE_PARTIAL
+partial-option-arg.lang REFUSE_PARTIAL
+partial-zero.lang REFUSE_PARTIAL

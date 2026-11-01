@@ -6,6 +6,8 @@
 
 #include "front/check.h"
 #include "front/front.h"
+#include "front/lower.h"
+#include "target.h"
 
 #define ARENA_LIMIT_BYTES ((size_t)1 << 30)
 
@@ -45,7 +47,7 @@ static int usage(FILE *err) {
         "       langc [--kit] eval PROG NAME [ARGS...]\n"
         "       langc [--kit] ir PROG\n"
         "       langc [--kit] abi PROG [--text]\n"
-        "       langc [--kit] build PROG [-o OUT] [--runtime]\n"
+        "       langc [--kit] build PROG -o OUT [--runtime]\n"
         "--kit: the kit mode, the trusted test scope of the kit gate\n", err);
   return 2;
 }
@@ -69,7 +71,7 @@ static int parse_build_options(int argc, char **argv, Options *opt, Diag *diag) 
     opt->runtime |= is_runtime;
     i += is_out;
   }
-  return 1;
+  return opt->out_path != NULL ? 1 : diag_fail(diag, "USAGE", NULL, "build needs -o OUT");
 }
 
 static int parse_options(int argc, char **argv, Options *opt, Diag *diag) {
@@ -114,15 +116,29 @@ static int read_source(Arena *arena, const char *path, char **out, size_t *len, 
   return 1;
 }
 
-static const char *command_word(Command command) {
-  switch (command) {
-    case CMD_CHECK: return "check";
-    case CMD_EVAL: return "eval";
-    case CMD_IR: return "ir";
-    case CMD_ABI: return "abi";
-    case CMD_BUILD: return "build";
+/* Lowers the entries, then runs the ir, abi or build command. */
+static int run_target(const Options *opt, Machine *machine, Diag *diag) {
+  IrProgram prog;
+  FILE *out;
+  size_t i;
+  int ok = 1;
+  if (!lower_program(machine, &prog)) return 1;
+  switch (opt->command) {
+    case CMD_IR:
+      ir_print(&prog, stdout);
+      return 0;
+    case CMD_ABI:
+      for (i = 0; i < prog.func_count && ok; i++) ok = target_abi_line(&prog.funcs[i], stdout, stderr);
+      return ok ? 0 : 1;
+    case CMD_CHECK:
+    case CMD_EVAL:
+    case CMD_BUILD:
+      break;
   }
-  return "?";
+  out = fopen(opt->out_path, "wb");
+  if (out == NULL) return diag_fail(diag, "IO", NULL, "cannot write '%s'", opt->out_path) + 1;
+  ok = target_write(&prog, opt->runtime ? TARGET_PART_RUNTIME : TARGET_PART_MAIN, out, stderr);
+  return fclose(out) == 0 && ok ? 0 : 1;
 }
 
 static int run(const Options *opt, Arena *arena, Diag *diag) {
@@ -139,15 +155,12 @@ static int run(const Options *opt, Arena *arena, Diag *diag) {
       return 0;
     case CMD_EVAL:
       return eval_command(&machine, opt->entry, opt->args, opt->arg_count, stdout, stderr);
-    case CMD_BUILD:
-    case CMD_ABI:
-      /* The EVM writer is not ported: the permit-lang target comes in S3. */
-      return diag_fail(diag, "REFUSE_LOWER", NULL, "%s: target pending S3", command_word(opt->command)) + 1;
     case CMD_IR:
+    case CMD_ABI:
+    case CMD_BUILD:
       break;
   }
-  diag_fail(diag, "PLANNED", NULL, "the %s command is not built yet (target pending S3)", command_word(opt->command));
-  return 1;
+  return run_target(opt, &machine, diag);
 }
 
 int main(int argc, char **argv) {

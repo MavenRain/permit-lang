@@ -81,3 +81,7 @@ time-timestamp.lang
 time-time.lang
 time-clock.lang
 time-epoch.lang
+partial-name.lang
+partial-option.lang
+partial-option-arg.lang
+partial-zero.lang

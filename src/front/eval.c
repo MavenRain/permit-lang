@@ -28,7 +28,8 @@ static const char *const OP_NAMES[] = {
   [OP_INTERVAL] = "I", [OP_TRANSP] = "transp",
   [OP_SYSTEM] = "system", [OP_HCOMP] = "hcomp", [OP_FIN] = "Fin",
   [OP_FIN_ADD] = "finAdd", [OP_FIN_NEG] = "finNeg", [OP_FIN_CASE] = "finCase",
-  [OP_GLUE] = "Glue", [OP_GLUE_ELEM] = "glue", [OP_UNGLUE] = "unglue"
+  [OP_GLUE] = "Glue", [OP_GLUE_ELEM] = "glue", [OP_UNGLUE] = "unglue",
+  [OP_NONZERO] = "NonZero", [OP_NONZERO_OF] = "nonZero", [OP_NONZERO_VALUE] = "nonZeroValue"
 };
 
 /* The number of arguments of each operation. VARIES: it comes from the
@@ -49,12 +50,12 @@ static const unsigned char OP_ARITY[] = {
   [OP_INTERVAL] = 0, [OP_TRANSP] = 3,
   [OP_SYSTEM] = VARIES, [OP_HCOMP] = 4, [OP_FIN] = 1, [OP_FIN_ADD] = 3,
   [OP_FIN_NEG] = 2, [OP_FIN_CASE] = VARIES, [OP_GLUE] = 3, [OP_GLUE_ELEM] = 3,
-  [OP_UNGLUE] = 4
+  [OP_UNGLUE] = 4,
+  [OP_NONZERO] = 1, [OP_NONZERO_OF] = 1, [OP_NONZERO_VALUE] = 1
 };
 
 typedef enum {
   SCRUT_VALUE,
-  SCRUT_TRAP,
   SCRUT_NEUTRAL
 } Scrut;
 
@@ -64,7 +65,7 @@ typedef struct {
   uint32_t cap;
 } ValBuf;
 
-/* A list value: its cons cells, then the end (nil, a trap or a neutral). */
+/* A list value: its cons cells, then the end (nil or a neutral). */
 typedef struct {
   const Value *const *cells;
   uint32_t count;
@@ -114,15 +115,6 @@ const Value *val_nat(Machine *m, uint64_t n) {
   if (v != NULL)
     v->nat = n;
   return v;
-}
-
-static const Value *val_trap(Machine *m) {
-  return new_value(m, VAL_TRAP);
-}
-
-static const Value *overflow(Machine *m) {
-  m->overflowed = 1;
-  return val_trap(m);
 }
 
 const Value *val_var(Machine *m, uint32_t level) {
@@ -512,8 +504,6 @@ const Value *def_value(Machine *m, uint32_t index) {
 
 static Scrut scrut_of(const Value *v) {
   switch (v->kind) {
-  case VAL_TRAP:
-    return SCRUT_TRAP;
   case VAL_VAR:
   case VAL_APP:
   case VAL_STUCK:
@@ -533,13 +523,10 @@ static Scrut scrut_of(const Value *v) {
   return SCRUT_VALUE;
 }
 
-/* 1 when the scrutinee S stops the operation: a trap gives the trap, a
-   neutral S gives the stuck operation. */
+/* 1 when the scrutinee S stops the operation: a neutral S gives the stuck
+   operation. */
 static int blocked(Machine *m, const Value *s, Op op, uint32_t inst, uint32_t field, const Value *const *a, uint32_t n, const Value **out) {
   switch (scrut_of(s)) {
-  case SCRUT_TRAP:
-    *out = s;
-    return 1;
   case SCRUT_NEUTRAL:
     *out = val_op(m, VAL_STUCK, op, inst, field, a, n);
     return 1;
@@ -601,12 +588,10 @@ static const Value *build_list(Machine *m, const Value *const *items, uint32_t c
   return acc;
 }
 
-/* The end of a list result: nil stays nil, a trap stays a trap, a neutral
-   end gives OP FIRST END. */
+/* The end of a list result: nil stays nil, a neutral end gives OP FIRST
+   END. */
 static const Value *list_tail(Machine *m, const Value *tail, Op op, uint32_t inst, const Value *first) {
   switch (scrut_of(tail)) {
-  case SCRUT_TRAP:
-    return tail;
   case SCRUT_NEUTRAL:
     return make(m, VAL_STUCK, op, inst, 2, first, tail, NULL);
   case SCRUT_VALUE:
@@ -622,8 +607,6 @@ const Value *apply_value(Machine *m, const Value *fn, const Value *arg) {
   switch (fn->kind) {
   case VAL_LAM:
     return closure_apply(m, fn, arg);
-  case VAL_TRAP:
-    return fn;
   case VAL_VAR:
   case VAL_APP:
   case VAL_STUCK:
@@ -670,8 +653,6 @@ const Value *path_apply(Machine *m, const Value *p, const Value *r, const Value 
     return NULL;
   if (p->kind == VAL_PLAM)
     return closure_apply(m, p, r);
-  if (p->kind == VAL_TRAP)
-    return p;
   if (scrut_of(p) != SCRUT_NEUTRAL)
     return internal(m, "a path application of a value that is not a path");
   /* The end point rule: a neutral path at i0 or i1 is its end. */
@@ -812,8 +793,6 @@ static const Value *bind_list(Machine *m, const Value *const *a, uint32_t n) {
       return NULL;
     if (scrut_of(t.tail) == SCRUT_NEUTRAL)
       return val_op(m, VAL_STUCK, OP_BIND, CARRIER_LIST, 0, a, n);
-    if (scrut_of(t.tail) == SCRUT_TRAP)
-      return build_list(m, out.items, out.count, t.tail);
   }
   return build_list(m, out.items, out.count, list_tail(m, s.tail, OP_BIND, CARRIER_LIST, a[1]));
 }
@@ -856,9 +835,6 @@ static const Value *reduce_fold_list(Machine *m, const Value *const *a) {
   if (!spine_of(m, a[2], &s))
     return NULL;
   switch (scrut_of(s.tail)) {
-  case SCRUT_TRAP:
-    acc = s.tail;
-    break;
   case SCRUT_NEUTRAL:
     acc = make(m, VAL_STUCK, OP_FOLD_LIST, 0, 3, a[0], a[1], s.tail);
     break;
@@ -927,8 +903,6 @@ static const Value *fold_family(Machine *m, uint32_t family, const Value *const 
   if (x == NULL)
     return NULL;
   switch (scrut_of(x)) {
-  case SCRUT_TRAP:
-    return x;
   case SCRUT_NEUTRAL:
     return stuck_fold(m, family, cases, ncases, x);
   case SCRUT_VALUE:
@@ -1129,9 +1103,6 @@ static int unfold_end(Machine *m, const Value *g, uint64_t left, const Value *se
     return 1;
   }
   switch (scrut_of(p)) {
-  case SCRUT_TRAP:
-    *tail = p;
-    return 1;
   case SCRUT_NEUTRAL:
     *tail = make(m, VAL_STUCK, OP_UNFOLD, 0, 3, g, val_nat(m, left), seed);
     return 1;
@@ -1196,8 +1167,6 @@ static const Value *filter_list(Machine *m, const Value *const *a) {
     if (test == NULL)
       return NULL;
     switch (scrut_of(test)) {
-    case SCRUT_TRAP:
-      return build_list(m, kept.items, kept.count, test);
     case SCRUT_NEUTRAL:
       return build_list(m, kept.items, kept.count, make(m, VAL_STUCK, OP_FILTER, CARRIER_LIST, 2, a[0], s.cells[i], NULL));
     case SCRUT_VALUE:
@@ -1224,12 +1193,8 @@ static const Value *reduce_filter(Machine *m, uint32_t inst, const Value *const 
   return internal(m, "a filter with no instance");
 }
 
-/* 1 when both arguments are numbers. Else *OUT is the trap or the stuck
-   operation. */
+/* 1 when both arguments are numbers. Else *OUT is the stuck operation. */
 static int nat_args(Machine *m, Op op, const Value *const *a, uint32_t n, uint64_t *x, uint64_t *y, const Value **out) {
-  *out = a[0]->kind == VAL_TRAP ? a[0] : a[1];
-  if (a[0]->kind == VAL_TRAP || a[1]->kind == VAL_TRAP)
-    return 0;
   if (blocked(m, a[0], op, 0, 0, a, n, out) || blocked(m, a[1], op, 0, 0, a, n, out))
     return 0;
   if (a[0]->kind != VAL_NAT || a[1]->kind != VAL_NAT) {
@@ -1241,13 +1206,14 @@ static int nat_args(Machine *m, Op op, const Value *const *a, uint32_t n, uint64
   return 1;
 }
 
+/* natAdd (S3): an Option Nat, none at overflow. */
 static const Value *nat_add(Machine *m, const Value *const *a, uint32_t n) {
   const Value *out;
   uint64_t x = 0;
   uint64_t y = 0;
   if (!nat_args(m, OP_NAT_ADD, a, n, &x, &y, &out))
     return out;
-  return x + y < x ? overflow(m) : val_nat(m, x + y);
+  return x + y < x ? constant(m, OP_NONE) : make(m, VAL_OP, OP_SOME, 0, 1, val_nat(m, x + y), NULL, NULL);
 }
 
 /* len A X (S3, survey section 7): the op count of the FreeMon value
@@ -1260,8 +1226,8 @@ static const Value *nat_add(Machine *m, const Value *const *a, uint32_t n) {
 static const Value *fm_len(Machine *m, const Value *const *a, uint32_t n);
 
 /* The sum of the counts of the fields FIRST .. FIRST + COUNT - 1 of
-   X = A[1], with the overflow of nat_add. A neutral count makes the len of
-   X stuck. */
+   X = A[1]. A neutral count makes the len of X stuck. A sum above 2^64 - 1
+   is an internal error: the value needs 2^64 fmEta nodes (S3). */
 static const Value *fm_len_sum(Machine *m, const Value *const *a, uint32_t n, uint32_t first, uint32_t count) {
   const Value *x = a[1];
   const Value *part;
@@ -1278,11 +1244,11 @@ static const Value *fm_len_sum(Machine *m, const Value *const *a, uint32_t n, ui
     part = fm_len(m, sub, 2u);
     if (part == NULL || part->kind != VAL_NAT) {
       m->depth--;
-      return part == NULL || part->kind == VAL_TRAP ? part : val_op(m, VAL_STUCK, OP_FM_LEN, 0, 0, a, n);
+      return part == NULL ? part : val_op(m, VAL_STUCK, OP_FM_LEN, 0, 0, a, n);
     }
     if (sum + part->nat < sum) {
       m->depth--;
-      return overflow(m);
+      return internal(m, "a len above 2^64 - 1");
     }
     sum += part->nat;
   }
@@ -1329,8 +1295,8 @@ static const Value *nat_sub(Machine *m, const Value *const *a, uint32_t n) {
   return val_nat(m, x < y ? 0 : x - y);
 }
 
-/* natDiv and natMod (S2, R14): the floor and the rest; a zero divisor traps
-   like an overflow does. */
+/* natDiv and natMod (S2, R14): the floor and the rest. The divisor is a
+   NonZero Nat (S3), so it is not 0. */
 static const Value *nat_divmod(Machine *m, Op op, const Value *const *a, uint32_t n) {
   const Value *out;
   uint64_t x = 0;
@@ -1338,8 +1304,27 @@ static const Value *nat_divmod(Machine *m, Op op, const Value *const *a, uint32_
   if (!nat_args(m, op, a, n, &x, &y, &out))
     return out;
   if (y == 0)
-    return overflow(m);
+    return internal(m, "a natDiv or natMod with a 0 divisor");
   return val_nat(m, op == OP_NAT_DIV ? x / y : x % y);
+}
+
+/* nonZero x (S3): some x when x is not 0, else none.
+   The NonZero value is the base value. */
+static const Value *nonzero_of(Machine *m, const Value *const *a, uint32_t n) {
+  const Value *out;
+  if (blocked(m, a[0], OP_NONZERO_OF, 0, 0, a, n, &out))
+    return out;
+  if (a[0]->kind == VAL_NAT)
+    return a[0]->nat == 0 ? constant(m, OP_NONE) : make(m, VAL_OP, OP_SOME, 0, 1, a[0], NULL, NULL);
+  return internal(m, "nonZero on a value that is not a Nat");
+}
+
+/* nonZeroValue x (S3): the base value. An open x stays stuck. */
+static const Value *nonzero_value(Machine *m, const Value *const *a, uint32_t n) {
+  const Value *out;
+  if (blocked(m, a[0], OP_NONZERO_VALUE, 0, 0, a, n, &out))
+    return out;
+  return a[0];
 }
 
 /* finAdd n a b: (a + b) mod n, with no overflow. A[0] is n. */
@@ -1350,8 +1335,6 @@ static const Value *fin_add(Machine *m, const Value *const *a, uint32_t n) {
   uint64_t y = 0;
   if (!nat_args(m, OP_FIN_ADD, a, n, &k, &x, &out))
     return out;
-  if (a[2]->kind == VAL_TRAP)
-    return a[2];
   if (blocked(m, a[2], OP_FIN_ADD, 0, 0, a, n, &out))
     return out;
   if (a[2]->kind != VAL_NAT)
@@ -1902,6 +1885,7 @@ static const Value *transp_data(Machine *m, const Value *head, const Value *line
   case OP_FLAG:
   case OP_UNIT:
   case OP_KMAP:
+  case OP_NONZERO:
     return base;
   case OP_PROD:
     if (neutral)
@@ -1990,6 +1974,8 @@ static const Value *transp_data(Machine *m, const Value *head, const Value *line
   case OP_FIN_CASE:
   case OP_GLUE_ELEM:
   case OP_UNGLUE:
+  case OP_NONZERO_OF:
+  case OP_NONZERO_VALUE:
     return internal(m, "a transport along a line that is not a type");
   }
   return transp_stuck(m, line, phi, base);
@@ -2017,7 +2003,7 @@ static const Value *transp(Machine *m, const Value *line, const Value *phi, cons
   if (face == NULL)
     return NULL;
   /* Rule 1: phi is true. */
-  if (ival_is_end(face, 1) || base->kind == VAL_TRAP)
+  if (ival_is_end(face, 1))
     return base;
   head = line_head(m, line);
   if (head == NULL)
@@ -2031,8 +2017,6 @@ static const Value *transp(Machine *m, const Value *line, const Value *phi, cons
     return kan_closure(m, VAL_LAM, CLOS_TRANSP_PI, 0, 3, line, face, base);
   case VAL_SIGMA: /* rule 6 */
     return transp_sigma(m, line, face, base);
-  case VAL_TRAP:
-    return head;
   case VAL_NAT:
   case VAL_LAM:
   case VAL_PLAM:
@@ -2319,8 +2303,6 @@ static const Value *hcomp(Machine *m, const Value *ty, const Value *phi, const V
   face = face_norm(m, phi);
   if (face == NULL)
     return NULL;
-  if (base->kind == VAL_TRAP)
-    return base;
   /* In U a true key goes to hcomp_univ, so that its Glue makes the record
      that transp at Glue reads at an end. */
   if (ival_is_end(face, 1) && ty->kind != VAL_UNIV)
@@ -2338,8 +2320,6 @@ static const Value *hcomp(Machine *m, const Value *ty, const Value *phi, const V
     return hcomp_data(m, ty, face, sys, base);
   case VAL_UNIV:
     return hcomp_univ(m, face, sys, base);
-  case VAL_TRAP:
-    return ty;
   case VAL_NAT:
   case VAL_LAM:
   case VAL_PLAM:
@@ -2441,14 +2421,12 @@ static const Value *reduce_glue_elem(Machine *m, const Value *const *a, uint32_t
   return glue_true(m, a[1], &branch) ? branch : glue_op(m, VAL_OP, OP_GLUE_ELEM, a, n, 0);
 }
 
-/* unglue A phi sys g. A trap g gives the trap. A true key gives witness e
+/* unglue A phi sys g. A true key gives witness e
    g, with e the payload of its branch pack T e. Test this first: its
    branch type may itself be Glue, with a glue constructor for g. Else
    unglue (glue sys a) is a, and a neutral g leaves unglue stuck. */
 static const Value *reduce_unglue(Machine *m, const Value *const *a, uint32_t n) {
   const Value *branch = NULL;
-  if (a[3]->kind == VAL_TRAP)
-    return a[3];
   if (glue_true(m, a[2], &branch))
     return apply_value(m, sigma_part(m, sigma_part(m, branch, 1), 0), a[3]);
   if (val_is(a[3], OP_GLUE_ELEM) && a[3]->argc == 3u)
@@ -2618,7 +2596,6 @@ static const Value *val_isubst(Machine *m, const Value *v, uint32_t level, const
   case VAL_UNIV:
   case VAL_NAT:
   case VAL_VAR:
-  case VAL_TRAP:
     break;
   case VAL_OP:
   case VAL_STUCK:
@@ -2881,6 +2858,7 @@ static const Value *reduce_op(Machine *m, Op op, uint32_t inst, uint32_t field, 
   case OP_PACK:
   case OP_KMAP:
   case OP_KMAP_OF:
+  case OP_NONZERO:
     return val_op(m, VAL_OP, op, inst, field, a, n);
   case OP_CTOR:
     return reduce_ctor(m, inst, field, a, n);
@@ -2936,6 +2914,10 @@ static const Value *reduce_op(Machine *m, Op op, uint32_t inst, uint32_t field, 
   case OP_NAT_DIV:
   case OP_NAT_MOD:
     return nat_divmod(m, op, a, n);
+  case OP_NONZERO_OF:
+    return nonzero_of(m, a, n);
+  case OP_NONZERO_VALUE:
+    return nonzero_value(m, a, n);
   case OP_FM_LEN:
     return fm_len(m, a, n);
   case OP_FLAG_IF:
@@ -2996,8 +2978,6 @@ static const Value *eval_inner(Machine *m, const Env *env, const Core *c) {
     return def_value(m, c->index);
   case CORE_NAT:
     return val_nat(m, c->nat);
-  case CORE_TRAP:
-    return val_trap(m);
   case CORE_UNIV:
     return val_univ(m, c->nat);
   case CORE_LAM:
@@ -3114,8 +3094,6 @@ static int conv_loop(Machine *m, uint32_t level, const Value *a, const Value *b)
     case VAL_UNIV:
     case VAL_VAR:
       return a->nat == b->nat;
-    case VAL_TRAP:
-      return 1;
     case VAL_LAM:
     case VAL_PLAM:
       return 0;
@@ -3326,8 +3304,6 @@ static const Core *quote_inner(Machine *m, uint32_t level, const Value *v) {
   switch (v->kind) {
   case VAL_NAT:
     return core_leaf(m, CORE_NAT, v->nat);
-  case VAL_TRAP:
-    return core_leaf(m, CORE_TRAP, 0);
   case VAL_UNIV:
     return core_leaf(m, CORE_UNIV, v->nat);
   case VAL_VAR:
@@ -3508,7 +3484,6 @@ static void print_binder(Printer *p, const Value *v) {
     put(p, ") ");
     break;
   case VAL_NAT:
-  case VAL_TRAP:
   case VAL_UNIV:
   case VAL_OP:
   case VAL_VAR:
@@ -3631,9 +3606,6 @@ static void print_other(Printer *p, const Value *v, int atom) {
     snprintf(num, sizeof num, "%llu", (unsigned long long)v->nat);
     put(p, num);
     return;
-  case VAL_TRAP:
-    put(p, "trap");
-    return;
   case VAL_VAR:
     put(p, var_name(p, v->nat));
     return;
@@ -3679,7 +3651,6 @@ static void print_other(Printer *p, const Value *v, int atom) {
     print_value(p, v->arg, 1);
     break;
   case VAL_NAT:
-  case VAL_TRAP:
   case VAL_VAR:
   case VAL_OP:
   case VAL_STUCK:

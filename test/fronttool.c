@@ -282,7 +282,8 @@ int main(void) {
   ok &= domain("family Even := ez | es (oddPrev : Odd) and Odd := os (evenPrev : Even)\n"
                "def one : Path Nat (fold Nat Unit 0 (fun (u : Unit) => 1) (fun (n : Nat) => unit) (es (os ez))) 1 := refl", NULL);
   ok &= domain("family Even := ez | es (oddPrev : Odd) and Odd := os (evenPrev : Even)\n"
-               "def two : Path Nat (fold Nat Nat 0 (fun (u : Nat) => natAdd u 1) (fun (n : Nat) => natAdd n 1) (es (os ez))) 2 := refl", NULL);
+               "def two : Path (Option Nat) (fold (Option Nat) (Option Nat) (some 0) (fun (u : Option Nat) => bind u (fun (a : Nat) => natAdd a 1))"
+               " (fun (n : Option Nat) => bind n (fun (a : Nat) => natAdd a 1)) (es (os ez))) (some 2) := refl", NULL);
   /* block-fold-extra: a block fold with an extra argument before the
      value. Without the arity test the extra argument is never read. */
   ok &= domain("family Even := ez | es (oddPrev : Odd) and Odd := os (evenPrev : Even)\n"

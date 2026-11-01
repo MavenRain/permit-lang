@@ -17,8 +17,9 @@ not ruled stays a recommendation.
 
 Status: S0 DONE (seed 1e69513): the tcc-wasm kit and this plan. S1 DONE:
 the USER took each recommendation of section 14 (section 1). S2 DONE: the
-Cubical TT kernel, ported from relay-lang 05dd63b (section 8.1). Next: S3
-(R0 in the kernel and the Wasm writer).
+Cubical TT kernel, ported from relay-lang 05dd63b (section 8.1). S3 DONE:
+R0 in the kernel and the Wasm writer, ported from relay-lang 5c386bb
+(section 2, "S3 result"). Next: S4 (the affine layer, section 6).
 
 ## 1. Rulings
 
@@ -44,6 +45,9 @@ Cubical TT kernel, ported from relay-lang 05dd63b (section 8.1). Next: S3
 | 2026-11-01 | Q-S2-1 Port source: "(a) relay-lang 05dd63b (Recommended)". Apply the relay-lang diff 145f58f to 05dd63b (195 paths, not docs/PLAN.md), keep the permit dash exclusion of test/gate.sh, and rename the relay lines to permit. Edit: section 8.1. | USER, S2 |
 | 2026-11-01 | Q-S2-2 Cut decisions: "(a) Keep all cuts (Recommended)". No prove command, no `langc run`, no `event` declaration, no WORD, `U256` or `Addr`. permit-lang needs none of these parts (O1). | USER, S2 |
 | 2026-11-01 | Q-S2-3 Lost gate lines: "(a) Accept until S3 (Recommended)". The lines of the IR, the Wasm modules and the differential cases go until S3. `langc build` gives `REFUSE_LOWER` "target pending S3". Edit: section 13, O12. | USER, S2 |
+| 2026-11-01 | Q-S3-1 Port source: "(a) Port relay S7 (Recommended)". Port the relay-lang 5c386bb R0 and Wasm hunks, without the relay domain (relay S3 to S6) and `REFUSE_CLOCK`. Edit: section 2, "S3 result". | USER, S3 |
+| 2026-11-01 | Q-S3-2 Lost gate lines (O12): "(b) Notrap rows only". Reading: S3 keeps the writer rows that run no node and no wasmtime (the ir rows, the build rows, `notrap modules`, `notrap bad rows`). The `differential cases` row and the `wasm runs` row run node, so they are out of the S3 gate and come back at S8. The S3 changes of `test/grid.awk` and `test/run-wasm.mjs` are in the repo, out of the gate. Edit: sections 12 and 13. | USER, S3 |
+| 2026-11-01 | Q-S3-3 The kernel `state` form in the Wasm host: "(b) Lower as a plain family". Reading: `build`, `ir` and `abi` lower a `state` family as an ordinary family. Result: `langc build examples/state-no-history.lang` exits 0, and `wasm-validate` and `build/notraptool` accept the module, with no change to the writer. Its differential row waits for S8 (Q-S3-2 (b)). | USER, S3 |
 
 The seed is `bin/new-lang.sh permit-lang tcc-wasm` from lang-template
 5265a2a. The kit gives the parser, the checker, the evaluator, the lowering
@@ -96,6 +100,28 @@ reads each built module and fails on each trap opcode and on each unguarded
 `div` or `rem`. The kit gate row "a trap is equal to a trap"
 (`docs/host/README.md` line 172) changes at S3: no checked program gives a
 trap, so the row becomes "no row gives a trap".
+
+S3 result (2026-11-01). Port source: relay-lang 5c386bb "Implement
+no-trap kernel arithmetic and Wasm emission (S7)" (tree be47f962), on the
+S2 base relay-lang 05dd63b (Q-S3-1 (a)). Taken: the R0 hunks of the
+kernel (`natAdd` gives `Option Nat`, the `NonZero Nat` divisor of
+`natDiv` and `natMod`, `REFUSE_PARTIAL`), the lowering, the Wasm writer
+(`src/wasm.c`, `src/wasmop.h`), `test/notraptool.c` and
+`test/notrap/bad/`. Dropped: the relay domain of relay S3 to S6,
+`REFUSE_CLOCK`, `langc sim`, the relay target refusals, and the
+`reasonCode` row of `test/ir/natops.lang` (it folds a relay
+`DeadReason`; rule R1, O15). The kit row "a trap is equal to a trap" is
+gone (O2). At S8 the differential row comes back with the relay-lang
+5c386bb text: a Wasm `trap` is a mismatch.
+
+| Row | At S3 |
+|---|---|
+| N1 | Partly. `natAdd` gives `Option Nat`. `natDiv` and `natMod` need a `NonZero Nat` divisor. `natSub` stops at 0. The kernel has no `natMul` word, so there is nothing to change. `spend` and `decide` come at S6 and S7. |
+| N2 | Covered. `REFUSE_REC`, `REFUSE_RUNTIME_CLOSURE` and `REFUSE_RUNTIME_TREE` are in the kernel and the lowering. |
+| N3 | Partly. The heap bound is static and the memory has a fixed size: no `memory.grow`, minimum = maximum (notrap bad rows `memory-grow`, `no-max`, `max-above-min`). The per-list capacity of the scope and of the approvals comes at S5 to S7. |
+| N4 | Covered for Wasm. No `unreachable`, a guard before each `div_u` and `rem_u`, and a `br_table` default that runs the last arm; `test/notraptool.c` and 7 bad rows. The T2 and T3 writers come at S10 and S11. |
+| N5 | Covered. `langc eval` has no trap values and no trap flags. `EVAL_FUEL` is a host limit, not a trap. |
+| `REFUSE_PARTIAL` | Covered. `partial_hint` names the total form for `head`, `tail`, `pred` and the partial kit forms; 4 check rows. |
 
 ## 3. The reading of R1
 
@@ -413,12 +439,12 @@ One session for each slice: scope, gate, mutants, docs, close.
 | S0 | Seed from tcc-wasm, DESIGN.md, this plan, README table, AGENTS.md; gate EXIT 0 (9 parse refusals, 19 check refusals, 32 evals, 10 lowered, 13 Wasm modules valid, 813 differential cases, 0 mismatches, review and domain regressions passed); seed commit; private repo | DONE |
 | S1 | The USER rules section 14. Record the rulings here. Each question takes (a) (section 1). Reading edits in sections 2, 4, 7 and 8.1; review clarifies the approval bytes and adds D10 and D11 (sections 4, 7, 8.3 and 10). No code change; gate EXIT 0 with the S0 counts. | DONE |
 | S2 | Port the Cubical TT kernel (8.1, Q-S0-2). Survey first. Ported from relay-lang 05dd63b (Q-S2-1 to Q-S2-3 (a)); gate EXIT 0: 29 examples, 16 parse refusals, 151 check refusals, 10 kit-only refusals, 1 time hint, 78 evals, 1 build refusal, review, domain and path regressions passed; mutants of `REFUSE_CELL` and `REFUSE_TIME` killed. | DONE |
-| S3 | R0 in the kernel and the Wasm writer: N1 to N5, `REFUSE_PARTIAL`, `test/notraptool.c`, no `unreachable`, static memory; the kit trap row (O2). Port source candidate: relay-lang 5c386bb (O13). | NEXT |
-| S4 | The affine layer (section 6): multiplicities, `REFUSE_AFFINE_REUSE`, the resource sorts. | |
+| S3 | R0 in the kernel and the Wasm writer: N1 to N5, `REFUSE_PARTIAL`, `test/notraptool.c`, no `unreachable`, static memory; the kit trap row (O2). Ported from relay-lang 5c386bb (Q-S3-1 to Q-S3-3); gate EXIT 0: 30 examples, 16 parse refusals, 155 check refusals, 10 kit-only refusals, 1 time hint, 79 evals, 1 build, 1 ir lowered, 5 ir refusals, 2 ir lowerings, 4 notrap modules, 7 notrap bad rows, 10 spine evals, review, domain and path regressions passed; mutants of `REFUSE_PARTIAL` and `test/notraptool.c` killed. | DONE |
+| S4 | The affine layer (section 6): multiplicities, `REFUSE_AFFINE_REUSE`, the resource sorts. | NEXT |
 | S5 | `Resource`, `Action`, `Scope`, `StepBound`, `Allowance` (CC), `Decision`, `Reason`; `REFUSE_TIME`; L4, L6. | |
 | S6 | `Budget`, `spend`, `split`, `Capability`, `delegate`; `REFUSE_DELEGATE_WIDEN`, `REFUSE_BUDGET_OVERSPEND`; L1, L2. | |
 | S7 | `Payload`, `Mutation`, `canon`, `Digest`, `hash`, `Approval`, `Call`, `Plan` (CM), `Trace` (CC), `decide`; `REFUSE_EXECUTE_UNAPPROVED`; L3, L5, L7. | |
-| S8 | T1 part 1: the Wasm module of `decide`, the binding (Q-S0-5), the notrap rows. | |
+| S8 | T1 part 1: the Wasm module of `decide`, the binding (Q-S0-5), the notrap rows; the differential and wasm runs lines (Q-S3-2 (b)). | |
 | S9 | T1 part 2: `permitd`: the Wasm engine, SHA-256, the canonical bytes, the approver channel, the state, the stdio MCP proxy, `fakedeploy`, N6; the demo D1 to D11; L8. | |
 | S10 | T2: the JSON authority report, `docs/REPORT-JSON.md`. | |
 | S11 | T3: the Cedar export, the golden files. | |
@@ -433,9 +459,9 @@ One session for each slice: scope, gate, mutants, docs, close.
 
 - O1 The kit base data is `Nat` and `Flag`. Section 4 adds names only with
   a pasted line. A slice that needs more records why here first.
-- O2 The kit `docs/host/README.md` "Lazy traps" section (line 120) and the
-  gate row "a trap is equal to a trap" (line 172) stay until S3. S3
-  rewrites them.
+- O2 CLOSED at S3. The kit "Lazy traps" section and the gate row "a trap
+  is equal to a trap" are gone. `docs/host/README.md` has "No traps"
+  (the relay-lang 5c386bb text in permit words) and the S3 gate rows.
 - O3 The cedar CLI is not on PATH. T3 is checked by golden files only. A
   `cedar validate` row needs a USER install.
 - O4 The link to the thread in pasted 1 did not survive the paste. The
@@ -454,15 +480,21 @@ One session for each slice: scope, gate, mutants, docs, close.
 - O11 The gate reads the credential from a file or an environment variable
   that its flags name, and gives it only to the upstream child. A run on a
   real SaaS tool is a USER-run check.
-- O12 The S2 kernel port has no Wasm writer in the build (Q-S2-3 (a)).
-  The gate lines "ir: 10 lowered", "wasm: 13 modules valid" and
-  "differential: 813 cases, 0 mismatches" of the S1 log are gone until
-  S3. `langc build` gives `REFUSE_LOWER` "target pending S3".
-- O13 The S3 port source candidate is relay-lang 5c386bb "Implement
-  no-trap kernel arithmetic and Wasm emission". S3 surveys it first.
+- O12 The S2 kernel port had no Wasm writer in the build (Q-S2-3 (a)).
+  S3 brings back the IR lines (`ir`, `ir refusals`, `ir lowerings`), the
+  build line (`builds`) and the notrap lines (`notrap modules`, `notrap
+  bad rows`) (Q-S3-2 (b)). The differential line and the `wasm runs`
+  line run node: they stay open until S8.
+- O13 CLOSED at S3. The port source is relay-lang 5c386bb (Q-S3-1 (a));
+  section 2, "S3 result".
 - O14 The kernel `REFUSE_TIME` has the cairn word list (`now`, `block`,
   `timestamp`, `time`, `clock`, `epoch`). S5 adds `ttl`, `deadline` and
   `expires` (Q-S0-9).
+- O15 The natops row with a run-time case split (`reasonCode` of
+  relay-lang 5c386bb `test/ir/natops.lang`) is not in S3. It folds a
+  relay `DeadReason`, and a test program cannot declare a family (rule
+  R1, `REFUSE_DATA`). The row comes back when the domain has a sum with
+  no fields (the deny `Reason`, S5).
 
 ## 14. Questions for the USER (S0)
 

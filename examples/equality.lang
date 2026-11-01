@@ -3,6 +3,6 @@ def price : Nat := 1200
 def cost : Nat := 1200
 def same : Path Nat price cost := refl
 def back : Path Nat cost price := sym same
-def bumped : Path Nat (natAdd price 1) (natAdd cost 1) := cong (fun (n : Nat) => natAdd n 1) same
+def bumped : Path (Option Nat) (natAdd price 1) (natAdd cost 1) := cong (fun (n : Nat) => natAdd n 1) same
 def start : Nat := same @ i0
 def backEnd : Nat := (sym same) @ i1

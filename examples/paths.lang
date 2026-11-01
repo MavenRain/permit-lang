@@ -3,10 +3,10 @@
 def price : Nat := 1200
 def same : Path Nat price price := refl
 def back : Path Nat price price := sym same
-def bumped : Path Nat (natAdd price 1) (natAdd price 1) := cong (fun (n : Nat) => natAdd n 1) same
-def plusOne : Nat -> Nat := fun (n : Nat) => natAdd n 1
-def plusOneAt : (n : Nat) -> Path Nat (plusOne n) (natAdd n 1) := fun (n : Nat) => refl
-def pointwise : Path (Nat -> Nat) plusOne (fun (m : Nat) => natAdd m 1) := funExt plusOneAt
+def bumped : Path (Option Nat) (natAdd price 1) (natAdd price 1) := cong (fun (n : Nat) => natAdd n 1) same
+def plusOne : Nat -> Option Nat := fun (n : Nat) => natAdd n 1
+def plusOneAt : (n : Nat) -> Path (Option Nat) (plusOne n) (natAdd n 1) := fun (n : Nat) => refl
+def pointwise : Path (Nat -> Option Nat) plusOne (fun (m : Nat) => natAdd m 1) := funExt plusOneAt
 -- Not refl: the ends hold only by the neutral end point rule (JSON rule 6).
 def ev : Path ((p : Path Nat 0 0) -> Nat) (fun (p : Path Nat 0 0) => 0) (fun (p : Path Nat 0 0) => 0) :=
   fun (i : I) => fun (p : Path Nat 0 0) => p @ i

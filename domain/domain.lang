@@ -257,3 +257,17 @@ def uaArrow : (A : Type 0) -> (B : Type 0) -> (C : Type 0) -> (e : Equiv A B) ->
   fun (A : Type 0) => fun (B : Type 0) => fun (C : Type 0) => fun (e : Equiv A B) => fun (f0 : A -> C) => fun (f1 : B -> C) =>
   fun (h : (a : A) -> Path C (f0 a) (f1 (witness e a))) =>
     fun (i : I) => fun (a : ua A B e @ i) => hcomp C (~i \/ i) (fun (j : I) => [ ~i -> h a @ ~j, i -> f1 a ]) (f1 (unglue a))
+
+-- A binary tree for the IR tests (S3). fork has
+-- two recursive fields, so a fold over a run-time Tree gives
+-- REFUSE_RUNTIME_TREE (test/ir/tree.lang). No def here uses it.
+family Tree := tip | fork (forkLeft : Tree) (forkRight : Tree)
+
+-- Two blocks for the block rows of the lowering (S3). Signal and Window have no recursive field, so a fold over
+-- Window is a case split: its cases come after the two cases of Signal
+-- (test/ir/block.lang). Hop and Echo each have one recursive field of the
+-- other family, so the lowering refuses a fold over them (test/ir/hop.lang).
+family Signal := sigQuiet | sigLoud (loudLevel : Nat)
+and Window := winOpen | winShut (shutFor : Nat)
+family Hop := hopEnd | hopNext (nextEcho : Echo)
+and Echo := echoBack (backHop : Hop)

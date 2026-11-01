@@ -22,9 +22,9 @@ printf 'def value : Unit -> Flag := %s\ndef answer : Nat := flagIf (value unit) 
 test "$(build/langc --kit eval "$tmp/roundtrip.lang" answer)" = 1
 
 # A generated eta binder must also print as a source identifier.
-printf 'def value : Unit -> Nat -> Nat -> Nat := fun u => natAdd\n' >"$tmp/eta.lang"
+printf 'def value : Unit -> Nat -> Nat -> Option Nat := fun u => natAdd\n' >"$tmp/eta.lang"
 normal=$(build/langc --kit eval "$tmp/eta.lang" value)
-printf 'def value : Unit -> Nat -> Nat -> Nat := %s\ndef answer : Nat := value unit 4 9\n' "$normal" >"$tmp/roundtrip.lang"
+printf 'def value : Unit -> Nat -> Nat -> Option Nat := %s\ndef answer : Option Nat := value unit 4 9\n' "$normal" >"$tmp/roundtrip.lang"
 test "$(build/langc --kit eval "$tmp/roundtrip.lang" answer)" = 13
 
 # More than 64 live binders used to read past the printer's name table.
@@ -60,6 +60,6 @@ case "$(cat "$tmp/err")" in
   *) exit 1 ;;
 esac
 # The sample domain is gone (S2, R21): its names are free for a program.
-printf 'def red : Nat := 1\ndef Color : Nat := 2\ndef lineTotal : Nat := natAdd red Color\n' >"$tmp/free.lang"
+printf 'def red : Nat := 1\ndef Color : Nat := 2\ndef lineTotal : Option Nat := natAdd red Color\n' >"$tmp/free.lang"
 test "$(build/langc --kit eval "$tmp/free.lang" lineTotal)" = 3
 echo 'review regressions: passed'

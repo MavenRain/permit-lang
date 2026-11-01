@@ -1,1 +1,1 @@
-def f : Nat -> Nat -> Nat := natDiv
+def f : Nat -> NonZero Nat -> Nat := natDiv

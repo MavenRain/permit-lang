@@ -17,7 +17,7 @@ def motive : (y : Nat) -> Path Nat 0 y -> Type 0 := fun (y : Nat) => fun (p : Pa
 def jNat : Nat := J Nat 0 motive 5 0 refl
 def jReflNat : Path Nat (J Nat 0 motive 5 0 refl) 5 := JRefl Nat 0 motive 5
 def trNat : Path Nat 3 3 := fun (i : I) => transp (fun (_ : I) => Nat) i 3
-def evPi : Nat := transp (fun (_ : I) => Nat -> Nat) i0 (fun (n : Nat) => natAdd n 1) 4
+def evPi : Option Nat := transp (fun (_ : I) => Nat -> Option Nat) i0 (fun (n : Nat) => natAdd n 1) 4
 def evPair : Nat := first (transp (fun (_ : I) => Prod Nat Nat) i0 (pair 3 4))
 -- A transport fill: the face ~i makes the line constant at i0; the i1 end is stuck.
 def fillT : PathP (fun (i : I) => (p : Path (Type 0) Nat Nat) -> p @ i) (fun (p : Path (Type 0) Nat Nat) => 0)

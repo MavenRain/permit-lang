@@ -1,1 +1,1 @@
-def f : Nat -> Nat -> Nat := natAdd
+def f : Nat -> Nat -> Option Nat := natAdd
