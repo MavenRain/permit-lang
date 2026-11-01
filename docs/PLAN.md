@@ -15,8 +15,9 @@ gives the readings of that request, the route, the slices and the open
 questions. Section 14 lists the questions for the USER. A reading that is
 not ruled stays a recommendation.
 
-Status: S0 (seed): the tcc-wasm kit and this plan. Next: S1 (the USER rules
-section 14).
+Status: S0 DONE (seed 1e69513): the tcc-wasm kit and this plan. S1 DONE:
+the USER took each recommendation of section 14 (section 1). Next: S2
+(port the Cubical TT kernel, section 8.1).
 
 ## 1. Rulings
 
@@ -28,6 +29,17 @@ section 14).
 | 2026-11-01 | Approval: "Digest, abstract hash (Recommended)". An approval carries the digest of the canonical (target, payload) bytes. The language has one opaque hash with laws. v1 binds SHA-256. The C host records approvals from an approver channel (a CLI prompt) and refuses a call whose digest is different. | DESIGN.md 2 |
 | 2026-11-01 | Time: "Operation counts only". No time at all. Expiry is a call-count bound. Not chosen: host ticks, both. | DESIGN.md 2 |
 | 2026-11-01 | Host: TinyCC. All of `langc` is C99 that TinyCC builds, `langc mcp` too. The T1 gate is C99 that TinyCC builds. Implied by A4, not asked. | DESIGN.md 1, 2 |
+| 2026-11-01 | Q-S0-1 Wasm engine: "(a) Own C99 interp (Recommended)". The gate runs `decide` in an own interpreter for the MVP subset that `langc` emits, in C99 that TinyCC builds. node and wasmtime are differential oracles in the gate. Copy the relay-lang engine when it exists. | USER, S1 |
+| 2026-11-01 | Q-S0-2 Kernel source: "(a) cairn kernel, no crypto (Recommended)". S2 ports the Cubical TT kernel that cairn-lang took from intent-lang, without the crypto code. Edit: section 8.1 cites this ruling. | USER, S1 |
+| 2026-11-01 | Q-S0-3 Resource form: "(a) Segment path (Recommended)". A `Resource` is a path of segments (for example `deploy/prod/web`). `within` is prefix containment by segments. The gate interns the segments. There is no wildcard. Edit: section 4, the `Resource` row. | USER, S1 |
+| 2026-11-01 | Q-S0-4 Canonical bytes: "(a) RFC 8785 JCS (Recommended)". The gate makes the RFC 8785 (JCS) form of the call arguments and forwards those bytes unchanged. Review clarification: the approval digest binds the effective target and the exact canonical tool call in the envelope of section 4, to preserve the S0 approval ruling. | USER, S1; review clarification |
+| 2026-11-01 | Q-S0-5 Binding: "(a) `bind` in program (Recommended)". A `bind` declaration in the permit program gives the tool name, the `Action` and the JSON pointer of the target. `langc` compiles it into the module: one source. | USER, S1 |
+| 2026-11-01 | Q-S0-6 Steps: "(a) Each decided call (Recommended)". Each call that the gate decides (permit or deny) takes one step, so an agent cannot probe without end. | USER, S1 |
+| 2026-11-01 | Q-S0-7 Upstream failure: "(a) Consume on forward (Recommended)". A permitted `execute` uses its approval, its step and its cost when the gate forwards it, whatever the upstream result (at most once). Edit: section 2, the item on an upstream failure. | USER, S1 |
+| 2026-11-01 | Q-S0-8 Gate state: "(a) SQLite file (Recommended)". One SQLite file holds the used approvals, the steps and the budget left, and the trace. A restart cannot make a used approval good again. | USER, S1 |
+| 2026-11-01 | Q-S0-9 Clock refusal name: "(a) REFUSE_TIME (Recommended)". The code is `REFUSE_TIME`, with the cairn-lang word list plus `ttl`, `deadline` and `expires`. Edit: section 7, the line on the refusal names. | USER, S1 |
+| 2026-11-01 | Q-S0-10 Token comparison: "(a) cairn-lang rulings (Recommended)". S16 uses the Anthropic `count_tokens` endpoint for the newest Claude model (the model id and the date go in the report). The Python and Rust programs run, and their outputs are equal to the permit-lang output. | USER, S1 |
+| 2026-11-01 | Q-S0-11 Which calls need an approval: "(a) needsApproval mark (Recommended)". The program marks each `Action` that needs an approval (`needsApproval execute`). A call of a marked action without a matching approval is `deny noApproval`. | USER, S1 |
 
 The seed is `bin/new-lang.sh permit-lang tcc-wasm` from lang-template
 5265a2a. The kit gives the parser, the checker, the evaluator, the lowering
@@ -58,7 +70,9 @@ never an error:
 - A request from the agent that the gate cannot read: `deny malformed`.
 - The upstream tool fails (a socket error, an HTTP 5xx): the gate gives the
   `Outcome` value `toolFailed code`. The failure never reaches the program
-  as an error.
+  as an error. The gate used the approval, the step and the cost of the
+  call when it forwarded the call, so they stay used (Q-S0-7 (a): at most
+  once).
 
 | Rule | Statement | Where |
 |---|---|---|
@@ -154,7 +168,7 @@ The lines of pasted 1 (DESIGN.md 1):
 
 | Name | Kind | Line | Note |
 |---|---|---|---|
-| `Resource` | opaque base type; `resEq`, `within : Resource -> Resource -> Flag` | P3 | The gate interns the names. A program never parses a string (Q-S0-3). |
+| `Resource` | opaque base type; `resEq`, `within : Resource -> Resource -> Flag` | P3 | A path of segments (for example `deploy/prod/web`). `within` is prefix containment by segments, with no wildcard. The gate interns the segments. A program never parses a string (Q-S0-3 (a)). |
 | `Action` | a user sum, declared in each program | P2, P8 | For example `inspect`, `propose`, `execute`. |
 | `needsApproval` | a mark on an `Action` | P7, P8 | Q-S0-11. |
 | `Scope` | `FreeMon (Resource * Action)`; `allows`, `scopeWithin` | P3, P5 | Finite. `scopeWithin child parent` is decidable. |
@@ -162,14 +176,42 @@ The lines of pasted 1 (DESIGN.md 1):
 | `Budget` | a `Nat` count of units, affine; `spend`, `split` | P6 | Section 6. `spend` and `split` give an `Option`. |
 | `Capability` | record: scope, steps, budget | P1, P5 | A resource type, because it holds a `Budget`. |
 | `delegate` | `Capability -o Scope -> StepBound -> Nat -> Option (Capability * Capability)` | P5 | Attenuation only: the child scope is within the parent scope, the child steps are not more than the parent steps, and the child budget is split from the parent budget (L1). |
-| `Payload` | opaque bytes; equality and `canon` input only | P7, P9 | |
+| `Payload` | opaque canonical tool-call bytes; equality and `canon` input only | P7, P9, P10 | The gate canonicalizes the tool name, arguments and each forwarded call parameter before it constructs a `Payload`. Raw JSON spellings are not payload values. |
 | `Mutation` | record: target `Resource`, `Action`, `Payload` | P7, P9 | |
-| `canon` | `Mutation -> Bytes`: the canonical bytes of (target, payload) | P9 | Q-S0-4. |
+| `canon` | `Mutation -> Bytes`: the canonical bytes of (target, payload) | P9 | Q-S0-4; the target envelope below. |
 | `Digest`, `hash` | opaque; `digestEq`; `hash : Bytes -> Digest` with laws only | P7, P9 | v1 binds SHA-256 (ruling). |
 | `Approval` | record: one `Digest`; affine | P7 | Section 6. The gate records who approved; the program does not read it. |
 | `Call` | record: `Mutation`, cost `Nat`, an optional `Approval` | P2, P10 | One request from the agent. |
 | `Decision`, `Reason` | `permit` or `deny Reason`; `Reason` is the closed sum of section 2 | P3 to P9 | A denial is a value (R0). |
 | `decide` | `Allowance -> Call -> Decision * Allowance` | P10 | The one entry of the T1 module. |
+
+Review clarification of Q-S0-4 (a) under the S0 approval ruling (L3):
+
+- Both the approver channel and the call gate validate the arguments under
+  [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) and make their JCS
+  form. A `Payload` holds the canonical upstream tool-call object, including
+  its tool name, arguments and each forwarded call parameter. Invalid input,
+  including duplicate object keys or invalid Unicode, gives `deny malformed`.
+  White space and object key order do not distinguish payload values.
+- The gate extracts the effective target through the compiled `bind`, from
+  those canonical arguments. It does not trust a separate target from the
+  agent. `canon m` is the JCS form of the object with two fields: `target`
+  is the ordered array of resource segment strings, and `payload` is the
+  canonical tool-call object. The target uses segment strings, never the
+  gate's intern ids, so its bytes are stable across a restart.
+- The gate hashes this whole envelope. It forwards the canonical tool-call
+  object, with the same bytes that occur in the envelope's
+  `payload` field. The envelope is not an extra upstream argument.
+  Hashing the arguments alone would lose the effective target when two
+  bindings select different JSON pointers in the same object. The tool name
+  also stays bound: identical arguments for different tools are different
+  payloads, even if their effective targets and actions are equal.
+- L3 is injectivity on target and canonical payload values. It is not
+  injectivity on raw JSON text: for the same tool, arguments `{"x":1}` and
+  `{ "x": 1 }` give the same payload. S7 checks this equality, a changed
+  canonical payload, and equal payloads with different targets.
+  S9 checks D10 and D11 below and that the forwarded bytes equal the payload
+  bytes. It also checks that the canonical argument bytes stay unchanged.
 
 Refused, with the reason:
 
@@ -234,7 +276,7 @@ is `refl`; a general law uses induction where the kernel has it.
 |---|---|
 | L1 attenuation | `delegate` gives a child with `scopeWithin child parent`, child steps not more than parent steps, and child budget plus rest budget equal to the parent budget. A widening gives `none`. |
 | L2 conservation | `split b n` gives budgets with sum `b`. `spend b n` gives `rest` with `rest + n = b`. |
-| L3 approval binding | `decide` permits an `execute` of `m` with approval `a` only when `digestEq (digestOf a) (hash (canon m))`. `canon` is injective on (target, payload). The binding then rests on the collision resistance of `hash`, which is an assumption, not a law (O5). |
+| L3 approval binding | `decide` permits an `execute` of `m` with approval `a` only when `digestEq (digestOf a) (hash (canon m))`. `canon` is injective on (target, canonical payload) values as defined in section 4. The binding then rests on the collision resistance of `hash`, which is an assumption, not a law (O5). |
 | L4 steps monotone | Along `advance`, the steps never increase. Each decided call takes one step until 0. At 0, each decision is `deny boundSpent`. |
 | L5 sequence guard | On each path of a `Plan`, each `execute m` has an approval of `hash (canon m)` in scope, and a `propose m` before it. The checker refuses a path without them: `REFUSE_EXECUTE_UNAPPROVED`. |
 | L6 scope soundness | `decide` permits a call only when `allows scope target action`. |
@@ -245,16 +287,17 @@ Static refusals: `REFUSE_EXECUTE_UNAPPROVED` (L5), `REFUSE_DELEGATE_WIDEN`
 (L1, when the scopes are literals), `REFUSE_BUDGET_OVERSPEND` (the sum of
 the literal costs on a path is more than the literal budget),
 `REFUSE_AFFINE_REUSE` (section 6), `REFUSE_TIME` (section 5),
-`REFUSE_PARTIAL` (section 2). The names are proposals until S1.
+`REFUSE_PARTIAL` (section 2). S1 ruled the name `REFUSE_TIME` (Q-S0-9
+(a)). The other names stay proposals until the slice that adds the code.
 
 ## 8. Route
 
 ### 8.1 Kernel
 
 Port the Cubical TT kernel that cairn-lang took from intent-lang, without
-the crypto code (relay-lang Q-S0-2 (a), ruled 2026-10-27). Add the
-leaf-lang affine layer (section 6). S2 surveys the candidates and records
-the hash (Q-S0-2).
+the crypto code (Q-S0-2 (a), ruled at S1, as relay-lang ruled on
+2026-10-27). Add the leaf-lang affine layer (section 6). S2 surveys the
+candidates and records the hash.
 
 ### 8.2 The three targets
 
@@ -285,6 +328,8 @@ the permit program, never the credential. The rows:
 | D7 | a call when the steps are at 0 | `deny boundSpent` |
 | D8 | a call outside the scope | `deny scopeMiss` |
 | D9 | a sub-agent with a delegated capability asks for a wider scope | `deny widen` |
+| D10 | two tools bind `execute` with target pointers `/left` and `/right`; both targets are in scope, both calls have `{"left":"prod","right":"dev"}`, and an unused approval is for the first call | the second call is `deny digestDiffers`: the effective target changed from `prod` to `dev` even though the arguments did not |
+| D11 | tools `restart` and `delete` both bind `execute` at `/target`, have identical arguments `{"target":"prod"}`, and an unused approval is for `restart` | `delete` is `deny digestDiffers`: the tool name changed even though the target, action and arguments did not |
 
 ### 8.4 Later target: zkpolicy-lang
 
@@ -311,7 +356,7 @@ fits. Each item has one deliverable, one slice and one gate.
 The kit layout stays: `test/parse`, `test/check`, `test/eval`, `test/ir`,
 `test/fronttool.c`, `test/gate.sh`. New: `test/notrap/` and
 `test/notraptool.c` (R0), `test/affine/` (section 6), `test/host/` (the
-gate in stdio mode with the fake deployment tool, rows D1 to D9),
+gate in stdio mode with the fake deployment tool, rows D1 to D11),
 `test/report/` (T2), `test/cedar/` (T3), `test/json/` (A2), `test/mcp/` and
 `test/mcptool.c` (A4), `test/fmt/` (A1). The SHA-256 rows use a C tool
 ported from cairn-lang `test/shatool.c`. New tests are guest `.lang` files
@@ -344,15 +389,15 @@ One session for each slice: scope, gate, mutants, docs, close.
 | Slice | Work | Status |
 |---|---|---|
 | S0 | Seed from tcc-wasm, DESIGN.md, this plan, README table, AGENTS.md; gate EXIT 0 (9 parse refusals, 19 check refusals, 32 evals, 10 lowered, 13 Wasm modules valid, 813 differential cases, 0 mismatches, review and domain regressions passed); seed commit; private repo | DONE |
-| S1 | The USER rules section 14. Record the rulings here. | NEXT |
-| S2 | Port the Cubical TT kernel (8.1, Q-S0-2). Survey first. | |
+| S1 | The USER rules section 14. Record the rulings here. Each question takes (a) (section 1). Reading edits in sections 2, 4, 7 and 8.1; review clarifies the approval bytes and adds D10 and D11 (sections 4, 7, 8.3 and 10). No code change; gate EXIT 0 with the S0 counts. | DONE |
+| S2 | Port the Cubical TT kernel (8.1, Q-S0-2). Survey first. | NEXT |
 | S3 | R0 in the kernel and the Wasm writer: N1 to N5, `REFUSE_PARTIAL`, `test/notraptool.c`, no `unreachable`, static memory; the kit trap row (O2). | |
 | S4 | The affine layer (section 6): multiplicities, `REFUSE_AFFINE_REUSE`, the resource sorts. | |
 | S5 | `Resource`, `Action`, `Scope`, `StepBound`, `Allowance` (CC), `Decision`, `Reason`; `REFUSE_TIME`; L4, L6. | |
 | S6 | `Budget`, `spend`, `split`, `Capability`, `delegate`; `REFUSE_DELEGATE_WIDEN`, `REFUSE_BUDGET_OVERSPEND`; L1, L2. | |
 | S7 | `Payload`, `Mutation`, `canon`, `Digest`, `hash`, `Approval`, `Call`, `Plan` (CM), `Trace` (CC), `decide`; `REFUSE_EXECUTE_UNAPPROVED`; L3, L5, L7. | |
 | S8 | T1 part 1: the Wasm module of `decide`, the binding (Q-S0-5), the notrap rows. | |
-| S9 | T1 part 2: `permitd`: the Wasm engine, SHA-256, the canonical bytes, the approver channel, the state, the stdio MCP proxy, `fakedeploy`, N6; the demo D1 to D9; L8. | |
+| S9 | T1 part 2: `permitd`: the Wasm engine, SHA-256, the canonical bytes, the approver channel, the state, the stdio MCP proxy, `fakedeploy`, N6; the demo D1 to D11; L8. | |
 | S10 | T2: the JSON authority report, `docs/REPORT-JSON.md`. | |
 | S11 | T3: the Cedar export, the golden files. | |
 | S12 | A1: canonical forms and `langc fmt`. | |
@@ -390,7 +435,8 @@ One session for each slice: scope, gate, mutants, docs, close.
 
 ## 14. Questions for the USER (S0)
 
-Each question has a recommendation (rec). S1 records the rulings.
+Each question has a recommendation (rec). S1 records the rulings: each
+question takes (a) (section 1).
 
 - Q-S0-1 Wasm engine in the gate. (a) rec: take the relay-lang ruling: an
   own interpreter for the MVP subset that `langc` emits, in C99 that
@@ -399,44 +445,57 @@ Each question has a recommendation (rec). S1 records the rulings.
   engine, but a large C tree that the repo then owns. (c) The wasmtime C
   API: complete, but a Rust library that TinyCC links only through a
   prebuilt binary.
+  RULED: (a), S1.
 - Q-S0-2 Kernel source. (a) rec: port the Cubical TT kernel that
   cairn-lang took from intent-lang, without the crypto code (the
   relay-lang ruling). (b) Port the cairn-lang kernel whole. (c) Extend the
   kit checker to Cubical TT in place.
+  RULED: (a), S1.
 - Q-S0-3 Resource form. (a) rec: a path of segments (for example
   `deploy/prod/web`); `within` is prefix containment by segments; the gate
   interns the segments; no wildcard. (b) Flat opaque ids with equality
   only; a scope lists each resource.
+  RULED: (a), S1.
 - Q-S0-4 Canonical bytes. (a) rec: the gate makes the RFC 8785 (JCS) form
-  of the call arguments, hashes those bytes and forwards the same bytes,
-  so the hashed bytes are the sent bytes. (b) Raw bytes as the agent sent
+  of the call arguments and forwards those bytes unchanged. The hash binds
+  the target and that exact canonical tool call (section 4, review
+  clarification), so a change of binding cannot hide a changed target or
+  tool. (b) Raw bytes as the agent sent
   them: a change of white space is a new digest.
+  RULED: (a), S1.
 - Q-S0-5 Binding of a tool call to (target, action, payload). (a) rec: a
   `bind` declaration in the permit program (the tool name, the `Action`,
   the JSON pointer of the target), compiled into the module: one source.
   (b) A separate host config file.
+  RULED: (a), S1.
 - Q-S0-6 Steps. (a) rec: each call that the gate decides (permit or deny)
   takes one step, so an agent cannot probe without end. (b) Only a
   permitted call takes a step.
+  RULED: (a), S1.
 - Q-S0-7 Upstream failure. (a) rec: a permitted `execute` uses its
   approval, its step and its cost when the gate forwards it, whatever the
   upstream result. The gate cannot know if the change was applied, so at
   most once is the safe side. (b) Give them back on an upstream refusal
   before apply (this needs a signal from each tool).
+  RULED: (a), S1.
 - Q-S0-8 Gate state. (a) rec: one SQLite file (the used approvals, the
   steps and the budget left, the trace), so a restart cannot make a used
   approval good again. (b) Memory only, for one session.
+  RULED: (a), S1.
 - Q-S0-9 Clock refusal name. (a) rec: `REFUSE_TIME` with the cairn-lang
   word list plus `ttl`, `deadline` and `expires`. (b) `REFUSE_CLOCK`, the
   accrue-lang and relay-lang name.
+  RULED: (a), S1.
 - Q-S0-10 Token comparison (A6). (a) rec: take the cairn-lang rulings: the
   Anthropic `count_tokens` endpoint for the newest Claude model (model id
   and date in the report), and the Python and Rust programs run with
   outputs equal to the permit-lang output. (b) A pinned offline
   tokenizer, text only.
+  RULED: (a), S1.
 - Q-S0-11 Which calls need an approval. (a) rec: the program marks each
   `Action` that needs an approval (`needsApproval execute`); a call of a
   marked action without a matching approval is `deny noApproval`. (b)
   Each call of a mutating action needs one. (c) The mandate-lang
   `autoLimit` reading: a call needs one only when its cost is above a
   limit.
+  RULED: (a), S1.
