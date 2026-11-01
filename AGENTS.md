@@ -1,12 +1,14 @@
 # AGENTS.md
 
-How an agent works in permit-lang. This file is true at S0 (the seed). The
-final form comes at slice S15 (`docs/PLAN.md` section 9, A5).
+How an agent works in permit-lang. This file is true at S2 (the kernel
+port). The final form comes at slice S15 (`docs/PLAN.md` section 9, A5).
 
-## State at S0
+## State at S2
 
-- The code is the lang-template tcc-wasm kit: `langc` (C99, TinyCC), its
-  sample domain in `domain/`, and the Wasm writer in `src/wasm.c`.
+- The code is the Cubical TT kernel of intent-lang (67445ae), ported from
+  relay-lang 05dd63b without the crypto code: `langc` (C99, TinyCC) and
+  its domain in `domain/`. The Wasm writer `src/wasm.c` is out of the
+  build until S3, so `langc build` gives `REFUSE_LOWER`.
 - The permit-lang types, refusals and targets are a plan only:
   `docs/PLAN.md` sections 4 to 8.
 - `design/DESIGN.md` is verbatim. Do not edit it. A design change is a

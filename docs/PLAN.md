@@ -16,8 +16,9 @@ questions. Section 14 lists the questions for the USER. A reading that is
 not ruled stays a recommendation.
 
 Status: S0 DONE (seed 1e69513): the tcc-wasm kit and this plan. S1 DONE:
-the USER took each recommendation of section 14 (section 1). Next: S2
-(port the Cubical TT kernel, section 8.1).
+the USER took each recommendation of section 14 (section 1). S2 DONE: the
+Cubical TT kernel, ported from relay-lang 05dd63b (section 8.1). Next: S3
+(R0 in the kernel and the Wasm writer).
 
 ## 1. Rulings
 
@@ -40,6 +41,9 @@ the USER took each recommendation of section 14 (section 1). Next: S2
 | 2026-11-01 | Q-S0-9 Clock refusal name: "(a) REFUSE_TIME (Recommended)". The code is `REFUSE_TIME`, with the cairn-lang word list plus `ttl`, `deadline` and `expires`. Edit: section 7, the line on the refusal names. | USER, S1 |
 | 2026-11-01 | Q-S0-10 Token comparison: "(a) cairn-lang rulings (Recommended)". S16 uses the Anthropic `count_tokens` endpoint for the newest Claude model (the model id and the date go in the report). The Python and Rust programs run, and their outputs are equal to the permit-lang output. | USER, S1 |
 | 2026-11-01 | Q-S0-11 Which calls need an approval: "(a) needsApproval mark (Recommended)". The program marks each `Action` that needs an approval (`needsApproval execute`). A call of a marked action without a matching approval is `deny noApproval`. | USER, S1 |
+| 2026-11-01 | Q-S2-1 Port source: "(a) relay-lang 05dd63b (Recommended)". Apply the relay-lang diff 145f58f to 05dd63b (195 paths, not docs/PLAN.md), keep the permit dash exclusion of test/gate.sh, and rename the relay lines to permit. Edit: section 8.1. | USER, S2 |
+| 2026-11-01 | Q-S2-2 Cut decisions: "(a) Keep all cuts (Recommended)". No prove command, no `langc run`, no `event` declaration, no WORD, `U256` or `Addr`. permit-lang needs none of these parts (O1). | USER, S2 |
+| 2026-11-01 | Q-S2-3 Lost gate lines: "(a) Accept until S3 (Recommended)". The lines of the IR, the Wasm modules and the differential cases go until S3. `langc build` gives `REFUSE_LOWER` "target pending S3". Edit: section 13, O12. | USER, S2 |
 
 The seed is `bin/new-lang.sh permit-lang tcc-wasm` from lang-template
 5265a2a. The kit gives the parser, the checker, the evaluator, the lowering
@@ -299,6 +303,24 @@ the crypto code (Q-S0-2 (a), ruled at S1, as relay-lang ruled on
 2026-10-27). Add the leaf-lang affine layer (section 6). S2 surveys the
 candidates and records the hash.
 
+S2 result (Q-S2-1 (a)): the source is relay-lang 05dd63b (tree cf6ea02f,
+base seed 145f58f). That commit is cairn-lang d076765 (tree fd5a1e0e, the
+intent-lang 67445ae kernel) with six cut parts done: the crypto, the ZK
+prelude, the prove command, the contract runtime and `langc run`, the
+chain words, and WORD, `U256` and `Addr` (Q-S2-2 (a)). The port takes 195
+of the 196 relay paths (164 A, 30 M, 1 R; not docs/PLAN.md). 192 paths are
+byte equal to 05dd63b. Three paths have edits: Makefile and src/main.c
+(the name, and the target slice S3), and test/gate.sh (the same, and the
+permit dash exclusion of design/DESIGN.md). The kernel keeps
+`REFUSE_CELL`, `REFUSE_TIME` (the cairn word list), `FreeMon` and the
+kernel `state` form (intent-lang, not a relay word). src/front/lower.c,
+src/wasm.c and src/ir.h stay in the tree, out of the build, until S3.
+Gate: the S1 lines of the IR (10 lowered), the Wasm modules (13 valid) and
+the differential cases (813) go (O12). The examples go from 10 to 29, the
+parse refusals from 9 to 16, the check refusals from 19 to 151 and the
+evals from 32 to 78. New lines: 10 kit-only refusals, 1 time hint, 1 build
+refusal, the path regressions. The counts are those of relay 05dd63b.
+
 ### 8.2 The three targets
 
 | Target | Code | Output | Check |
@@ -390,8 +412,8 @@ One session for each slice: scope, gate, mutants, docs, close.
 |---|---|---|
 | S0 | Seed from tcc-wasm, DESIGN.md, this plan, README table, AGENTS.md; gate EXIT 0 (9 parse refusals, 19 check refusals, 32 evals, 10 lowered, 13 Wasm modules valid, 813 differential cases, 0 mismatches, review and domain regressions passed); seed commit; private repo | DONE |
 | S1 | The USER rules section 14. Record the rulings here. Each question takes (a) (section 1). Reading edits in sections 2, 4, 7 and 8.1; review clarifies the approval bytes and adds D10 and D11 (sections 4, 7, 8.3 and 10). No code change; gate EXIT 0 with the S0 counts. | DONE |
-| S2 | Port the Cubical TT kernel (8.1, Q-S0-2). Survey first. | NEXT |
-| S3 | R0 in the kernel and the Wasm writer: N1 to N5, `REFUSE_PARTIAL`, `test/notraptool.c`, no `unreachable`, static memory; the kit trap row (O2). | |
+| S2 | Port the Cubical TT kernel (8.1, Q-S0-2). Survey first. Ported from relay-lang 05dd63b (Q-S2-1 to Q-S2-3 (a)); gate EXIT 0: 29 examples, 16 parse refusals, 151 check refusals, 10 kit-only refusals, 1 time hint, 78 evals, 1 build refusal, review, domain and path regressions passed; mutants of `REFUSE_CELL` and `REFUSE_TIME` killed. | DONE |
+| S3 | R0 in the kernel and the Wasm writer: N1 to N5, `REFUSE_PARTIAL`, `test/notraptool.c`, no `unreachable`, static memory; the kit trap row (O2). Port source candidate: relay-lang 5c386bb (O13). | NEXT |
 | S4 | The affine layer (section 6): multiplicities, `REFUSE_AFFINE_REUSE`, the resource sorts. | |
 | S5 | `Resource`, `Action`, `Scope`, `StepBound`, `Allowance` (CC), `Decision`, `Reason`; `REFUSE_TIME`; L4, L6. | |
 | S6 | `Budget`, `spend`, `split`, `Capability`, `delegate`; `REFUSE_DELEGATE_WIDEN`, `REFUSE_BUDGET_OVERSPEND`; L1, L2. | |
@@ -432,6 +454,15 @@ One session for each slice: scope, gate, mutants, docs, close.
 - O11 The gate reads the credential from a file or an environment variable
   that its flags name, and gives it only to the upstream child. A run on a
   real SaaS tool is a USER-run check.
+- O12 The S2 kernel port has no Wasm writer in the build (Q-S2-3 (a)).
+  The gate lines "ir: 10 lowered", "wasm: 13 modules valid" and
+  "differential: 813 cases, 0 mismatches" of the S1 log are gone until
+  S3. `langc build` gives `REFUSE_LOWER` "target pending S3".
+- O13 The S3 port source candidate is relay-lang 5c386bb "Implement
+  no-trap kernel arithmetic and Wasm emission". S3 surveys it first.
+- O14 The kernel `REFUSE_TIME` has the cairn word list (`now`, `block`,
+  `timestamp`, `time`, `clock`, `epoch`). S5 adds `ttl`, `deadline` and
+  `expires` (Q-S0-9).
 
 ## 14. Questions for the USER (S0)
 

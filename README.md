@@ -31,9 +31,11 @@ trap: a denial is a value with a reason code.
 
 ## Status
 
-S0: the seed. The repo holds the lang-template tcc-wasm kit (its sample
-domain and its gate) and the plan. The permit-lang types, the checker
-refusals, the gate and the three targets do not exist yet. `docs/PLAN.md`
+S2: the kernel. The repo holds the Cubical TT kernel of intent-lang
+(67445ae), ported from relay-lang 05dd63b without the crypto code, on the
+tcc-wasm host, and the plan. The Wasm writer is out of the build until S3.
+The permit-lang types, the permit refusals, the gate and the three targets
+do not exist yet. `docs/PLAN.md`
 gives the readings, the route, the slices and the open questions.
 
 ## Layout
