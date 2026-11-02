@@ -1,0 +1,1 @@
+def f : (@1 b : Budget) -> Nat -> (Budget -o Unit) -> Unit := fun b n k => fold (fun r => k b) (k b) n

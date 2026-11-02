@@ -1,0 +1,1 @@
+def dup : Budget -o Option (Prod Budget Budget) := fun l => map (fun f => pair (f unit) (f unit)) (some (fun (u : Unit) => l))

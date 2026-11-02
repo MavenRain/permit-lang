@@ -58,6 +58,15 @@ Flag eliminator `flagIf b yes no`. `Type 0 : Type 1` is the universe
 chain. `Sigma (x : A) B` and `(x : A) * B` are dependent pairs.
 `FORMERS.md` gives the status of each former.
 
+The affine layer (S4, `docs/PLAN.md` section 6) adds these forms. A
+binder can have the mark `@0` or `@1` (its multiplicity). `A -o B` is a
+function that uses its argument one time. `unpack p (fun a b => t)` uses
+the pair `p` one time and binds `a` and `b` at 1. `Budget : Type 0` and
+`Approval : Type 0` are kernel sorts with no constructor, so a program
+cannot make one. A use that the multiplicity does not allow gives
+`REFUSE_AFFINE_REUSE`, `REFUSE_AFFINE_OMEGA`, `REFUSE_AFFINE_FIX` or
+`REFUSE_AFFINE_PATH`.
+
 The compiler enforces these rules:
 
 | Rule | Code | The compiler refuses |
@@ -177,8 +186,8 @@ how to replace the sample domain.
 | Line | What the gate does |
 |---|---|
 | `examples: 30 checked, 0 failed` | `langc check` accepts each `examples/*.lang` file |
-| `parse refusals: 16 checked` | each `test/parse` file fails with the code in `test/parse/expect.txt`; one file has 1100 nested parentheses |
-| `check refusals: 155 checked` | each `test/check` file fails with the code in `test/check/expect.txt`; the `TYPE_REFL` message shows both normal forms |
+| `parse refusals: 20 checked` | each `test/parse` file fails with the code in `test/parse/expect.txt`; one file has 1100 nested parentheses. 4 files (S4) have a bad mark (`@2`, a marked parameter, a marked field) or `-ops` |
+| `check refusals: 200 checked` | each `test/check` file fails with the code in `test/check/expect.txt`; the `TYPE_REFL` message shows both normal forms. The 45 `affine-*.lang` files (S4) give `REFUSE_AFFINE_REUSE` (11), `REFUSE_AFFINE_OMEGA` (24), `REFUSE_AFFINE_FIX` (3), `REFUSE_AFFINE_PATH` (4) or `TYPE_MISMATCH` (3). 16 of them are in `test/check/kit.txt`, so they run with `--kit` |
 | `kit-only refusals: 10 checked` | each `REFUSE_KIT` row refuses a kit item in guest mode only: `langc --kit check` accepts the file |
 | `time hint: 1 checked` | a `REFUSE_TIME` refusal names the op-count form (`len r`, an `OpPos`) |
 | `evals: 79 checked` | `langc eval` gives each result in `test/eval/expect.txt` |
@@ -191,7 +200,7 @@ how to replace the sample domain.
 | `spine evals: 10 checked` | `langc --kit eval` gives each eval of `test/ir/spine.lang` at 4 |
 | `gate: 0 failures` | the sum of all failures of `test/gate.sh` |
 | `review regressions: passed` | `test/review.sh` passes |
-| `domain regressions: passed` | `build/fronttool` (the domain declaration rows) passes |
+| `domain regressions: passed` | `build/fronttool` (the domain declaration rows and the 54 affine rows of S4) passes |
 | `path regressions: passed` | `build/pathtool` (the path rows) passes |
 
 The gate also checks the usage and IO exit codes, five `eval` refusals and

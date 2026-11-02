@@ -1,0 +1,1 @@
+def hold : (@0 l : Budget) -> Path Nat ((fun (x : Budget) => 0) l) 0 := fun l => refl

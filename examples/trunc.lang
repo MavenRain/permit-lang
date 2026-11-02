@@ -5,12 +5,13 @@
 -- Fin 3 (S5: Fin and ua came with coin-lang 44c917f and 91d7091).
 def sq1 : Path (Trunc1 Nat) (trunc1 Nat 0) (trunc1 Nat 1) :=
   fun (i : I) => squash1 Nat (trunc1 Nat 0) (trunc1 Nat 1) i
--- The fold sends trunc1 a to trunc1 (f a) and squash1 to squash1.
-def map1 : (A : Type 0) -> (B : Type 0) -> (f : A -> B) -> Trunc1 A -> Trunc1 B :=
-  fun (A : Type 0) => fun (B : Type 0) => fun (f : A -> B) => fun (t : Trunc1 A) =>
-    fold (fun (a : A) => trunc1 B (f a)) (fun (x : Trunc1 B) (y : Trunc1 B) => fun (i : I) => squash1 B x y i) t
-def map1At : Path (Trunc1 Nat) (map1 Nat Nat (fun (r : Nat) => flagIf (natEq (natMod r 3) 0) 1 (flagIf (natEq (natMod r 3) 1) 2 0)) (trunc1 Nat 2)) (trunc1 Nat 0) := refl
-def truncMapped : Trunc1 Nat := map1 Nat Nat (fun (r : Nat) => flagIf (natEq (natMod r 3) 0) 1 (flagIf (natEq (natMod r 3) 1) 2 0)) (trunc1 Nat 2)
+-- The fold sends trunc1 a to trunc1 (f a) and squash1 to squash1. map1
+-- is at Nat (Q-S4-9 (a)), as map0 in quot.lang.
+def map1 : (f : Nat -> Nat) -> Trunc1 Nat -> Trunc1 Nat :=
+  fun (f : Nat -> Nat) => fun (t : Trunc1 Nat) =>
+    fold (fun (a : Nat) => trunc1 Nat (f a)) (fun (x : Trunc1 Nat) (y : Trunc1 Nat) => fun (i : I) => squash1 Nat x y i) t
+def map1At : Path (Trunc1 Nat) (map1 (fun (r : Nat) => flagIf (natEq (natMod r 3) 0) 1 (flagIf (natEq (natMod r 3) 1) 2 0)) (trunc1 Nat 2)) (trunc1 Nat 0) := refl
+def truncMapped : Trunc1 Nat := map1 (fun (r : Nat) => flagIf (natEq (natMod r 3) 0) 1 (flagIf (natEq (natMod r 3) 1) 2 0)) (trunc1 Nat 2)
 -- The ua path of r + 1 at Fin 3.
 def rot3 : Path (Type 0) (Fin 3) (Fin 3) :=
   ua (Fin 3) (Fin 3) (isoToEquiv (Fin 3) (Fin 3) (fun (r : Fin 3) => finAdd 3 r 1)

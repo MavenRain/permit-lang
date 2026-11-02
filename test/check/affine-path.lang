@@ -1,0 +1,2 @@
+def p : (@1 b : Budget) -> Path Budget b b := fun b => fun (i : I) => b
+def run : (@1 b : Budget) -> Unit := fun b => (fun (@1 q : Path Budget b b) => unit) (p b)

@@ -1,0 +1,1 @@
+def two : (@1 b : Budget) -> (Budget -o Budget -o Unit) -> Unit := fun b k => k b b

@@ -1,0 +1,1 @@
+def keep : Option (Prod Nat Budget) -> Nat := fun o => 0

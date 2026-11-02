@@ -1,0 +1,1 @@
+def drop : (@0 n : Nat) -> Nat := fun n => n

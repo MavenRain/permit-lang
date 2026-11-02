@@ -1,0 +1,6 @@
+def cb : (Budget -o FreeMon Unit) -> FreeMon Budget -o FreeMon Unit := fun k t =>
+  fold (fun (a : Budget) => fmMul Unit (k a) (k a)) (fmUnit Unit) (fun (x : FreeMon Unit) (y : FreeMon Unit) => fmMul Unit x y)
+    (fun (x : FreeMon Unit) (y : FreeMon Unit) (z : FreeMon Unit) => fun (i : I) => fmAssoc Unit x y z i)
+    (fun (x : FreeMon Unit) => fun (i : I) => fmUnitL Unit x i)
+    (fun (x : FreeMon Unit) => fun (i : I) => fmUnitR Unit x i)
+    (fun (x : FreeMon Unit) (y : FreeMon Unit) (p : Path (FreeMon Unit) x y) (q : Path (FreeMon Unit) x y) => fun (i : I) => fun (j : I) => fmSquash Unit x y p q i j) t

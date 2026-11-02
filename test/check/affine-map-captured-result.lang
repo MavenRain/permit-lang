@@ -1,0 +1,2 @@
+def leak : Budget -o Option (Unit -> Budget) := fun b => map (fun (u : Unit) => fun (v : Unit) => b) (some unit)
+def dup : Budget -o Option (Prod Budget Budget) := fun b => option none (fun f => some (pair (f unit) (f unit))) (leak b)

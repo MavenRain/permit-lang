@@ -91,19 +91,35 @@ def propSquare : (X : Type 0) -> (P : X -> Type 0) -> ((x : X) -> isProp (P x)) 
 -- Two maps into a set agree on OrbitN when they agree at orbitNOf (the orbitExt shape of dao.lang), and two
 -- maps of bags agree when they agree at choiceNil and the choiceCons case follows. The set proofs and the maps
 -- are variables, so the motive does not unfold them at the squash case.
-def orbitNExt : (T : Size -> Type 0) -> ((n : Size) -> isSet (T n)) -> (L : (n : Size) -> OrbitN n -> T n) -> (M : (n : Size) -> OrbitN n -> T n) ->
-  ((n : Size) -> (c : Pos n -> Choice) -> Path (T n) (L n (orbitNOf n c)) (M n (orbitNOf n c))) -> (k : Size) -> (x : OrbitN k) -> Path (T k) (L k x) (M k x) :=
-  fun (T : Size -> Type 0) (sT : (n : Size) -> isSet (T n)) (L : (n : Size) -> OrbitN n -> T n) (M : (n : Size) -> OrbitN n -> T n)
-    (h : (n : Size) -> (c : Pos n -> Choice) -> Path (T n) (L n (orbitNOf n c)) (M n (orbitNOf n c))) (k : Size) (x : OrbitN k) =>
-    elim (fun (n : Size) (z : OrbitN n) => Path (T n) (L n z) (M n z))
+-- The target is OrbitN (g n) (orbitNExt) or ChoiceBag (g n) (orbitNExtBag), not a type variable (Q-S4-9 (a)):
+-- the IH at a type variable binds at 1, and propSquare takes it at omega.
+def orbitNExt : (g : Size -> Size) -> ((n : Size) -> isSet (OrbitN (g n))) -> (L : (n : Size) -> OrbitN n -> OrbitN (g n)) -> (M : (n : Size) -> OrbitN n -> OrbitN (g n)) ->
+  ((n : Size) -> (c : Pos n -> Choice) -> Path (OrbitN (g n)) (L n (orbitNOf n c)) (M n (orbitNOf n c))) -> (k : Size) -> (x : OrbitN k) -> Path (OrbitN (g k)) (L k x) (M k x) :=
+  fun (g : Size -> Size) (sT : (n : Size) -> isSet (OrbitN (g n))) (L : (n : Size) -> OrbitN n -> OrbitN (g n)) (M : (n : Size) -> OrbitN n -> OrbitN (g n))
+    (h : (n : Size) -> (c : Pos n -> Choice) -> Path (OrbitN (g n)) (L n (orbitNOf n c)) (M n (orbitNOf n c))) (k : Size) (x : OrbitN k) =>
+    elim (fun (n : Size) (z : OrbitN n) => Path (OrbitN (g n)) (L n z) (M n z))
       (fun (n : Size) (c : Pos n -> Choice) => h n c)
       (fun (n : Size) (a : Pos n -> Choice) (b : Pos n -> Choice) (r : swapR n a b) => fun (i : I) =>
-        propOver (OrbitN n) (fun (z : OrbitN n) => Path (T n) (L n z) (M n z)) (fun (z : OrbitN n) => sT n (L n z) (M n z))
+        propOver (OrbitN n) (fun (z : OrbitN n) => Path (OrbitN (g n)) (L n z) (M n z)) (fun (z : OrbitN n) => sT n (L n z) (M n z))
           (orbitNOf n a) (orbitNOf n b) (fun (e : I) => orbitNEq n a b r e) (h n a) (h n b) @ i)
-      (fun (n : Size) (w : OrbitN n) (ihw : Path (T n) (L n w) (M n w)) (y : OrbitN n) (ihy : Path (T n) (L n y) (M n y))
-        (p : Path (OrbitN n) w y) (ihp : PathP (fun (j : I) => Path (T n) (L n (p @ j)) (M n (p @ j))) ihw ihy)
-        (q : Path (OrbitN n) w y) (ihq : PathP (fun (j : I) => Path (T n) (L n (q @ j)) (M n (q @ j))) ihw ihy) =>
-        fun (i : I) => fun (j : I) => (propSquare (OrbitN n) (fun (z : OrbitN n) => Path (T n) (L n z) (M n z)) (fun (z : OrbitN n) => sT n (L n z) (M n z))
+      (fun (n : Size) (w : OrbitN n) (ihw : Path (OrbitN (g n)) (L n w) (M n w)) (y : OrbitN n) (ihy : Path (OrbitN (g n)) (L n y) (M n y))
+        (p : Path (OrbitN n) w y) (ihp : PathP (fun (j : I) => Path (OrbitN (g n)) (L n (p @ j)) (M n (p @ j))) ihw ihy)
+        (q : Path (OrbitN n) w y) (ihq : PathP (fun (j : I) => Path (OrbitN (g n)) (L n (q @ j)) (M n (q @ j))) ihw ihy) =>
+        fun (i : I) => fun (j : I) => (propSquare (OrbitN n) (fun (z : OrbitN n) => Path (OrbitN (g n)) (L n z) (M n z)) (fun (z : OrbitN n) => sT n (L n z) (M n z))
+          w y p q (fun (m : I) => fun (o : I) => orbitNSquash n w y p q m o) ihw ihy ihp ihq @ i) @ j) x
+def orbitNExtBag : (g : Size -> Size) -> ((n : Size) -> isSet (ChoiceBag (g n))) -> (L : (n : Size) -> OrbitN n -> ChoiceBag (g n)) -> (M : (n : Size) -> OrbitN n -> ChoiceBag (g n)) ->
+  ((n : Size) -> (c : Pos n -> Choice) -> Path (ChoiceBag (g n)) (L n (orbitNOf n c)) (M n (orbitNOf n c))) -> (k : Size) -> (x : OrbitN k) -> Path (ChoiceBag (g k)) (L k x) (M k x) :=
+  fun (g : Size -> Size) (sT : (n : Size) -> isSet (ChoiceBag (g n))) (L : (n : Size) -> OrbitN n -> ChoiceBag (g n)) (M : (n : Size) -> OrbitN n -> ChoiceBag (g n))
+    (h : (n : Size) -> (c : Pos n -> Choice) -> Path (ChoiceBag (g n)) (L n (orbitNOf n c)) (M n (orbitNOf n c))) (k : Size) (x : OrbitN k) =>
+    elim (fun (n : Size) (z : OrbitN n) => Path (ChoiceBag (g n)) (L n z) (M n z))
+      (fun (n : Size) (c : Pos n -> Choice) => h n c)
+      (fun (n : Size) (a : Pos n -> Choice) (b : Pos n -> Choice) (r : swapR n a b) => fun (i : I) =>
+        propOver (OrbitN n) (fun (z : OrbitN n) => Path (ChoiceBag (g n)) (L n z) (M n z)) (fun (z : OrbitN n) => sT n (L n z) (M n z))
+          (orbitNOf n a) (orbitNOf n b) (fun (e : I) => orbitNEq n a b r e) (h n a) (h n b) @ i)
+      (fun (n : Size) (w : OrbitN n) (ihw : Path (ChoiceBag (g n)) (L n w) (M n w)) (y : OrbitN n) (ihy : Path (ChoiceBag (g n)) (L n y) (M n y))
+        (p : Path (OrbitN n) w y) (ihp : PathP (fun (j : I) => Path (ChoiceBag (g n)) (L n (p @ j)) (M n (p @ j))) ihw ihy)
+        (q : Path (OrbitN n) w y) (ihq : PathP (fun (j : I) => Path (ChoiceBag (g n)) (L n (q @ j)) (M n (q @ j))) ihw ihy) =>
+        fun (i : I) => fun (j : I) => (propSquare (OrbitN n) (fun (z : OrbitN n) => Path (ChoiceBag (g n)) (L n z) (M n z)) (fun (z : OrbitN n) => sT n (L n z) (M n z))
           w y p q (fun (m : I) => fun (o : I) => orbitNSquash n w y p q m o) ihw ihy ihp ihq @ i) @ j) x
 def bagExt : (sB : (k : Size) -> isSet (ChoiceBag k)) -> (L : (k : Size) -> ChoiceBag k -> ChoiceBag k) -> (M : (k : Size) -> ChoiceBag k -> ChoiceBag k) ->
   Path (ChoiceBag sz0) (L sz0 (choiceNil)) (M sz0 (choiceNil)) ->
@@ -135,7 +151,7 @@ def SwapCase : Type 0 := (m : Size) -> (a : Choice) -> (b : Choice) -> (x : Orbi
   Path (OrbitN (szS (szS m))) (consO (szS m) a (consO m b x)) (consO (szS m) b (consO m a x))
 def swapO : SwapCase :=
   fun (m : Size) (a : Choice) (b : Choice) (x : OrbitN m) =>
-    orbitNExt (fun (n : Size) => OrbitN (szS (szS n))) (fun (n : Size) => isSetOrbitN (szS (szS n)))
+    orbitNExt (fun (n : Size) => szS (szS n)) (fun (n : Size) => isSetOrbitN (szS (szS n)))
       (fun (n : Size) (z : OrbitN n) => consO (szS n) a (consO n b z)) (fun (n : Size) (z : OrbitN n) => consO (szS n) b (consO n a z))
       (fun (n : Size) (c : Pos n -> Choice) => fun (i : I) => orbitNEq (szS (szS n))
         (consP (szS n) a (consP n b c)) (consP (szS n) b (consP n a c)) (pack (wordSwap n (wordNil (szS (szS n)))) refl) i) m x
@@ -171,12 +187,12 @@ def fromToQuot : (G : (k : Size) -> ChoiceBag k -> OrbitN k) -> NilRule G -> Con
           (fun (i : I) => orbitNOf (szS m) (rebuildPath (szS m) c @ i)))) k
 def fromTo : (G : (k : Size) -> ChoiceBag k -> OrbitN k) -> NilRule G -> ConsRule G -> (k : Size) -> (x : OrbitN k) -> Path (OrbitN k) (G k (toBag k x)) x :=
   fun (G : (k : Size) -> ChoiceBag k -> OrbitN k) (hN : NilRule G) (hC : ConsRule G) (k : Size) (x : OrbitN k) =>
-    orbitNExt (fun (n : Size) => OrbitN n) isSetOrbitN (fun (n : Size) (z : OrbitN n) => G n (toBag n z)) (fun (n : Size) (z : OrbitN n) => z) (fromToQuot G hN hC) k x
+    orbitNExt (fun (n : Size) => n) isSetOrbitN (fun (n : Size) (z : OrbitN n) => G n (toBag n z)) (fun (n : Size) (z : OrbitN n) => z) (fromToQuot G hN hC) k x
 
 -- toBag after fromBag is the identity: toBag of consO is choiceCons (refl at orbitNOf), then bagExt.
 def toCons : (m : Size) -> (a : Choice) -> (x : OrbitN m) -> Path (ChoiceBag (szS m)) (toBag (szS m) (consO m a x)) (choiceCons m a (toBag m x)) :=
   fun (m : Size) (a : Choice) (x : OrbitN m) =>
-    orbitNExt (fun (n : Size) => ChoiceBag (szS n)) (fun (n : Size) => isSetBag (szS n))
+    orbitNExtBag (fun (n : Size) => szS n) (fun (n : Size) => isSetBag (szS n))
       (fun (n : Size) (z : OrbitN n) => toBag (szS n) (consO n a z)) (fun (n : Size) (z : OrbitN n) => choiceCons n a (toBag n z)) (fun (n : Size) (c : Pos n -> Choice) => refl) m x
 def toFrom : (G : (k : Size) -> ChoiceBag k -> OrbitN k) -> NilRule G -> ConsRule G -> (k : Size) -> (y : ChoiceBag k) -> Path (ChoiceBag k) (toBag k (G k y)) y :=
   fun (G : (k : Size) -> ChoiceBag k -> OrbitN k) (hN : NilRule G) (hC : ConsRule G) (k : Size) (y : ChoiceBag k) =>
@@ -237,13 +253,22 @@ def mkEqO : (n : Size) -> (a : Pos n -> Choice) -> (b : Pos n -> Choice) -> swap
     (fun (k : Size) (a : Pos (size4 k) -> Choice) (b : Pos (size4 k) -> Choice) (r : swapR (size4 k) a b) => fun (i : I) => orbitNEq (size4 k) a b r i)
 def isSetAt : (n : Size) -> isSet (OrbAt n) :=
   sel5 (fun (n : Size) => isSet (OrbAt n)) (isSetOrbitN sz0) (isSetOrbitN (szS sz0)) (isSetOrbitN (szS (szS sz0))) isSetOrbit (fun (k : Size) => isSetOrbitN (size4 k))
+-- isSetAtLin is isSetAt with the ends and the paths at 1 (isSetLin, Q-S4-10 (a)), per size an eta at a copyable type
+-- (Q-S4-7). OrbAt t is not copyable, so the IH of fromAt binds at 1; the squash case gives it to isSetAtLin
+-- with no interval binder (Q-S4-8).
+def isSetLinN : (k : Size) -> isSetLin (OrbitN k) :=
+  fun (k : Size) (x : OrbitN k) (y : OrbitN k) (p : Path (OrbitN k) x y) (q : Path (OrbitN k) x y) => isSetOrbitN k x y p q
+def isSetLinO : isSetLin Orbit :=
+  fun (x : Orbit) (y : Orbit) (p : Path Orbit x y) (q : Path Orbit x y) => isSetOrbit x y p q
+def isSetAtLin : (n : Size) -> isSetLin (OrbAt n) :=
+  sel5 (fun (n : Size) => isSetLin (OrbAt n)) (isSetLinN sz0) (isSetLinN (szS sz0)) (isSetLinN (szS (szS sz0))) isSetLinO (fun (k : Size) => isSetLinN (size4 k))
 def fromAt : (n : Size) -> OrbitN n -> OrbAt n :=
   fun (n : Size) (z : OrbitN n) => elim (fun (t : Size) (x : OrbitN t) => OrbAt t)
     (fun (t : Size) (c : Pos t -> Choice) => mkO t c)
     (fun (t : Size) (a : Pos t -> Choice) (b : Pos t -> Choice) (r : swapR t a b) => fun (i : I) => mkEqO t a b r @ i)
     (fun (t : Size) (w : OrbitN t) (ihw : OrbAt t) (v : OrbitN t) (ihv : OrbAt t)
       (p : Path (OrbitN t) w v) (ihp : Path (OrbAt t) ihw ihv) (q : Path (OrbitN t) w v) (ihq : Path (OrbAt t) ihw ihv) =>
-      fun (i : I) => fun (j : I) => (isSetAt t ihw ihv ihp ihq @ i) @ j) z
+      isSetAtLin t ihw ihv ihp ihq) z
 def fromOrbitN : OrbitN n0 -> Orbit := fromAt n0
 def backAt : (n : Size) -> OrbAt n -> OrbitN n :=
   sel5 (fun (n : Size) => OrbAt n -> OrbitN n) (fun (x : OrbitN sz0) => x) (fun (x : OrbitN (szS sz0)) => x) (fun (x : OrbitN (szS (szS sz0))) => x) toOrbitN
@@ -267,7 +292,7 @@ def orbitFromTo : (x : Orbit) -> Path Orbit (fromOrbitN (toOrbitN x)) x :=
         fun (i : I) => fun (j : I) => (propSquare Orbit (fun (z : Orbit) => Path Orbit (fromOrbitN (toOrbitN z)) z) (fun (z : Orbit) => isSetOrbit (fromOrbitN (toOrbitN z)) z)
           w y p q (fun (m : I) => fun (n : I) => orbitSquash w y p q m n) ihw ihy ihp ihq @ i) @ j) x
 def orbitToFrom : (y : OrbitN n0) -> Path (OrbitN n0) (toOrbitN (fromOrbitN y)) y :=
-  orbitNExt (fun (n : Size) => OrbitN n) isSetOrbitN (fun (n : Size) (z : OrbitN n) => backAt n (fromAt n z)) (fun (n : Size) (z : OrbitN n) => z) backFrom n0
+  orbitNExt (fun (n : Size) => n) isSetOrbitN (fun (n : Size) (z : OrbitN n) => backAt n (fromAt n z)) (fun (n : Size) (z : OrbitN n) => z) backFrom n0
 
 def orbitRow : Path (Type 0) Orbit (OrbitN n0) :=
   ua Orbit (OrbitN n0) (isoToEquiv Orbit (OrbitN n0) toOrbitN fromOrbitN orbitToFrom orbitFromTo)

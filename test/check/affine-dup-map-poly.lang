@@ -1,0 +1,1 @@
+def dup : (A : Type 0) -> A -o Option (Prod A A) := fun A x => map (fun y => pair y y) (some x)

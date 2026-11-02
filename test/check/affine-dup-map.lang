@@ -1,0 +1,1 @@
+def dup : Option Budget -o Option (Prod Budget Budget) := fun o => map (fun l => pair l l) o

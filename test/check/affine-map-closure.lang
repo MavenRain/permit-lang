@@ -1,0 +1,2 @@
+def mp : (@1 bs : List Budget) -> (Budget -o Unit) -> Unit := fun bs k =>
+  fold (fun (g : Unit -> Unit) (acc : Unit) => g (g acc)) unit (map (fun (@1 b : Budget) => fun (u : Unit) => k b) bs)

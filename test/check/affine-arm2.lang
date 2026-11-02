@@ -1,0 +1,3 @@
+def mk : (@1 b : Budget) -> (Budget -o Unit) -> Sum Unit (Unit -> Unit) := fun b k => inr (fun u => k b)
+def dup : (@1 s : Sum Unit (Unit -> Unit)) -> Unit := fun s => either (fun x => x) (fun g => g (g unit)) s
+def main : (@1 b : Budget) -> (Budget -o Unit) -> Unit := fun b k => dup (mk b k)

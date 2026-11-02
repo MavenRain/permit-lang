@@ -1,0 +1,2 @@
+def apply : (Unit -> Budget) -> Budget := fun f => f unit
+def spend : Budget -o Budget := fun l => apply (fun u => l)

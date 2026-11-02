@@ -1,17 +1,23 @@
 # AGENTS.md
 
-How an agent works in permit-lang. This file is true at S3 (R0 in the
-kernel and the Wasm writer). The final form comes at slice S15
-(`docs/PLAN.md` section 9, A5).
+How an agent works in permit-lang. This file is true at S4 (the affine
+layer). The final form comes at slice S15 (`docs/PLAN.md` section 9,
+A5).
 
-## State at S3
+## State at S4
 
 - The code is the Cubical TT kernel of intent-lang (67445ae), ported from
   relay-lang 05dd63b without the crypto code: `langc` (C99, TinyCC) and
   its domain in `domain/`. S3 adds R0 from relay-lang 5c386bb: the Wasm
   writer `src/wasm.c` is in the build and emits no trap form, and
   `test/notraptool.c` checks each built module.
-- The permit-lang types, refusals and targets are a plan only:
+- S4 adds the affine layer from leaf-lang 47a6f36 (`docs/PLAN.md`
+  section 6): the marks `@0` and `@1` on binders, `A -o B`, `unpack`,
+  the resource sorts `Budget` and `Approval`, and the codes
+  `REFUSE_AFFINE_REUSE`, `REFUSE_AFFINE_OMEGA`, `REFUSE_AFFINE_FIX` and
+  `REFUSE_AFFINE_PATH`. A `Budget` or an `Approval` is used at most one
+  time.
+- The other permit-lang types, refusals and targets are a plan only:
   `docs/PLAN.md` sections 4 to 8.
 - `design/DESIGN.md` is verbatim. Do not edit it. A design change is a
   new paste and an open item.

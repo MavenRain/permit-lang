@@ -1,0 +1,1 @@
+def pick : Flag -> Budget -o Prod Budget Budget := fun b l => flagIf b (pair l l) (pair l l)

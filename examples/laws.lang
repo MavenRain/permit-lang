@@ -6,7 +6,7 @@ def freeXs : FreeMon Nat := fmCons Nat 1 (fmCons Nat 2 (fmUnit Nat))
 def leftFour : Sum Nat Nat := inl 4
 def beta : Path (Option Nat) ((fun (n : Nat) => natAdd n n) 6) (some 12) := refl
 def eta : Path ((n : Nat) -> Option Nat) (fun (n : Nat) => natAdd n 1) (fun (m : Nat) => natAdd m 1) := refl
-def mapId : Path (FreeMon Nat) (fmMap Nat Nat (fun (n : Nat) => n) freeXs) freeXs := refl
+def mapId : Path (FreeMon Nat) (fmMapNat Nat (fun (n : Nat) => n) freeXs) freeXs := refl
 def leftUnit : Path (Option Nat) (bind (pure 4) (fun (n : Nat) => natAdd n 1)) (some 5) := refl
 def rightUnit : Path (Option Nat) (bind (some 4) (fun (n : Nat) => pure n)) (some 4) := refl
 def foldNil : Path (Option Nat) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) noNats) (some 0) := refl

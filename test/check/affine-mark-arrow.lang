@@ -1,0 +1,2 @@
+def f : Nat -o Nat := fun n => n
+def g : Nat -> Nat := f

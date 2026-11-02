@@ -1,0 +1,2 @@
+def lw : (@0 n : Nat) -> Path Nat n n := fun n => refl
+def leak : (@0 n : Nat) -> Nat := fun n => lw n @ i0

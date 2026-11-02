@@ -468,6 +468,105 @@ int main(void) {
      is wrong. */
   ok &= guest("def keep : Sum Unit Unit -> Sum Unit Unit := fun c => c", NULL);
   ok &= guest("def three : Nat := 3", "REFUSE_KIT");
+  /* PLAN 6 (S4): the affine rows that check. */
+  ok &= checked("def mp : (@1 bs : List Budget) -> List Budget := fun bs => map (fun (@1 b : Budget) => b) bs", ORIGIN_PROGRAM, CHECK_KIT, NULL);
+  ok &= guest("def mp : (@1 c : Budget) -> (@1 o : Option Unit) -> Option Budget := fun c o => map (fun (u : Unit) => c) o", NULL);
+  ok &= guest("def p : (@1 b : Budget) -> Path Budget b b := fun b => fun (i : I) => b\n"
+    "def lw : (@1 b : Budget) -> Path Budget b b := fun b => p b", NULL);
+  ok &= guest("def mk : (Budget -o Unit) -> Sum Unit (Unit -> Unit) := fun k => inr (fun u => u)\n"
+    "def dup : (@1 s : Sum Unit (Unit -> Unit)) -> Unit := fun s => either (fun x => x) (fun g => g (g unit)) s\n"
+    "def main : (Budget -o Unit) -> Unit := fun k => dup (mk k)", NULL);
+  ok &= guest("def one : (@1 b : Budget) -> (Budget -o Unit) -> Unit := fun b k => k b", NULL);
+  ok &= guest("def p : (@1 b : Budget) -> Path Budget b b := fun b => fun (i : I) => b", NULL);
+  ok &= guest("def u : (@1 p : Sigma (x : Budget) Budget) -> (Budget -o Budget -o Unit) -> Unit := fun p k => unpack p (fun a b => k a b)", NULL);
+  ok &= guest("def e : (@1 b : Budget) -> Sum Unit Unit -> (Budget -o Unit) -> Unit := fun b s k => either (fun x => k b) (fun y => k b) s", NULL);
+  /* A case in a fold step after b is used: the counts of the arms give the max, not the sum (mutant MS1). */
+  ok &= checked("def p : (@1 b : Budget) -> (Budget -o Unit) -> List Unit -> Prod Unit Unit := fun b k xs => "
+    "pair (k b) (fold (fun (x : Unit) (acc : Unit) => option acc (fun (y : Unit) => y) (some x)) unit xs)", ORIGIN_PROGRAM, CHECK_KIT, NULL);
+  ok &= guest("def r : (@1 b : Budget) -> Path Budget b b := fun b => refl", NULL);
+  ok &= checked("def h : (Nat -o Nat -o Unit) -> Nat -o Unit := fun k => fun n => k n n", ORIGIN_PROGRAM, CHECK_KIT, NULL);
+  ok &= checked("def h : (Nat -> Unit) -> Nat -o Unit := fun g => fun n => g n", ORIGIN_PROGRAM, CHECK_KIT, NULL);
+  ok &= checked("def h : (Nat -o Unit) -> Nat -o Unit := fun g => fun n => g n", ORIGIN_PROGRAM, CHECK_KIT, NULL);
+  ok &= checked("def h : (Nat -> Nat -> Nat) -> Nat -o Nat -o Nat := fun g => fun x y => g x y", ORIGIN_PROGRAM, CHECK_KIT, NULL);
+  ok &= checked("def pz : (@1 n : Nat) -> Path Nat n n := fun n => fun (i : I) => n", ORIGIN_PROGRAM, CHECK_KIT, NULL);
+  ok &= checked("def rz : (@1 n : Nat) -> Path Nat n n := fun n => refl", ORIGIN_PROGRAM, CHECK_KIT, NULL);
+  /* PLAN 6 (S4): a Q-S4-4 form that checks: an Option bind runs f at most one time. */
+  ok &= checked("def bo : (@1 b : Budget) -> (Budget -o Option Nat) -> Option Unit -> Option Nat := fun b k o => bind o (fun (u : Unit) => k b)", ORIGIN_PROGRAM, CHECK_KIT, NULL);
+  /* PLAN 6 (S4): the leaf affine rows that check (Budget for the leaf Leaf). */
+  ok &= guest("def keep : Option Budget -o Option Budget := fun o => map (fun l => l) o", NULL);
+  ok &= guest("def keep : Option Budget -o Option Budget := fun o => option none (fun l => some l) o", NULL);
+  ok &= guest("def lw : (@0 l : Budget) -> Path Budget l l := fun l => refl", NULL);
+  ok &= guest("def apply1 : (Budget -o Budget) -> Budget -o Budget := fun f l => f l\n"
+    "def spend : Budget -o Budget := fun l => apply1 (fun x => x) l", NULL);
+  ok &= checked("def pick : Flag -> Budget -o Budget := fun b l => flagIf b l l", ORIGIN_PROGRAM, CHECK_KIT, NULL);
+  ok &= guest("def swap : Sigma (x : Budget) Budget -o Sigma (y : Budget) Budget := fun p => unpack p (fun a b => pack b a)", NULL);
+  ok &= checked("def burn : Budget -o Nat := fun l => 0\n"
+    "def spend : Budget -o Nat -> Nat := fun l n => fold (fun r => r) (burn l) n", ORIGIN_PROGRAM, CHECK_KIT, NULL);
+  ok &= checked("def hold : (@1 l : Budget) -> Prod (Path Nat 0 0) Nat := fun l => pair (fun (i : I) => 0) 0", ORIGIN_PROGRAM, CHECK_KIT, NULL);
+  ok &= checked("def inc : Nat -> Option Nat := fun n => natAdd n 1\n"
+    "def use : Option Nat -> Option Nat := fun o => bind o inc", ORIGIN_PROGRAM, CHECK_KIT, NULL);
+  ok &= guest("def id : (A : Type 0) -> A -> A := fun A x => x\n"
+    "def use : (@0 A : Type 0) -> A -> A := fun A x => id A x", NULL);
+  ok &= guest("def move : (@0 A : Type 0) -> A -> A := fun A x => transp (fun (i : I) => A) i0 x", NULL);
+  ok &= checked("def hold : (@0 A : Type 0) -> Prod (Type 0) Nat := fun A => pair A 0", ORIGIN_PROGRAM, CHECK_KIT, NULL);
+  ok &= guest("def keep : (A : Type 0) -> Option A -o Option A := fun A o => map (fun x => x) o", NULL);
+  ok &= checked("def p : Path Nat 1 1 := refl\n"
+    "def n : Nat := p @ i0", ORIGIN_PROGRAM, CHECK_KIT, NULL);
+  ok &= guest("def idz : (@0 A : Type 0) -> A -> A := fun A => fun (y : A) => y", NULL);
+  /* PLAN 6 (S4): the leaf affine family rows (rule R1: a family row is a domain row). */
+  ok &= domain("family Stack := bottom | push (top : Nat) (rest : Stack)\n"
+    "def burn : Budget -o Nat := fun l => 0\n"
+    "def size : Budget -o Stack -> Nat := fun l s => fold 0 (fun t r => burn l) s", "REFUSE_AFFINE_FIX");
+  ok &= domain("family Stack := bottom | push (top : Nat) (rest : Stack)\n"
+    "def burn : Budget -o Nat := fun l => 0\n"
+    "def size : Budget -o Stack -> Nat := fun l s => fold (burn l) (fun t r => r) s", NULL);
+  ok &= domain("family Pile (size : Nat) := base (baseOf : Nat) | more (on : Nat) (below : Pile size)", NULL);
+  ok &= domain("family Box := boxed (item : Budget)\n"
+    "def dup : Box -> Prod Box Box := fun b => pair b b", "REFUSE_AFFINE_OMEGA");
+  /* Resource fields propagate across sibling sorts, including cycles. */
+  ok &= domain("family Outer := wrap (inner : Inner) and Inner := leaf (budget : Budget)\n"
+    "def dup : Outer -> Prod Outer Outer := fun o => pair o o", "REFUSE_AFFINE_OMEGA");
+  ok &= domain("family Outer := wrap (inner : Inner) and Inner := leaf (budget : Budget) | again (outer : Outer)\n"
+    "def dup : Outer -o Prod Outer Outer := fun o => pair o o", "REFUSE_AFFINE_REUSE");
+  ok &= domain("family Outer := wrap (inner : Inner) and Inner := middle (last : Last) and Last := leaf (approval : Approval)\n"
+    "def dup : Outer -> Prod Outer Outer := fun o => pair o o", "REFUSE_AFFINE_OMEGA");
+  /* Copyable arguments that retain closures charge captures at omega. */
+  ok &= guest("def twice : (@1 p : Prod (Unit -> Budget) Unit) -> Prod Budget Budget := fun p => pair (first p unit) (first p unit)\n"
+    "def dup : Budget -o Prod Budget Budget := fun b => twice (pair (fun u => b) unit)", "REFUSE_AFFINE_OMEGA");
+  ok &= guest("def twice : (@1 f : Unit -> Unit) -> Prod Unit Unit := fun f => pair (f unit) (f unit)\n"
+    "def result : Prod Unit Unit := twice (fun u => u)", NULL);
+  /* A scalar result cannot retain a resource consumed to compute it. */
+  ok &= guest("def burn : Budget -o Unit := fun b => unit\n"
+    "def twice : Unit -o Prod Unit Unit := fun u => pair u u\n"
+    "def use : Budget -o Prod Unit Unit := fun b => twice (burn b)", NULL);
+  ok &= guest("def hold : Budget -o Sigma (a : Budget) (Unit -> Unit) := fun b => pack b (fun (u : Unit) => u)\n"
+    "def use : Budget -o Prod Unit Unit := fun b => unpack (hold b) (fun a f => pair (f unit) (f unit))", NULL);
+  /* Unknown payloads must not conceal a resource under instantiation. */
+  ok &= guest("def wrap : (A : Type 0) -> (Budget -o A) -> Budget -o Sum A Unit := fun A f b => inl (f b)", "REFUSE_AFFINE_OMEGA");
+  ok &= guest("def wrap : (A : Type 0) -> (Budget -o A) -> Budget -o Option A := fun A f b => pure (f b)", "REFUSE_AFFINE_OMEGA");
+  ok &= domain("family Box (A : Type 0) := box (item : A)\n"
+    "def wrap : (A : Type 0) -> (Budget -o A) -> Budget -o Box A := fun A f b => box A (f b)", "REFUSE_AFFINE_OMEGA");
+  ok &= guest("def wrap : (A : Type 0) -> (Budget -o A) -> Budget -o Sigma (a : A) Unit := fun A f b => pack (f b) unit", "REFUSE_AFFINE_OMEGA");
+  ok &= guest("def wrap : (A : Type 0) -> (Budget -o A) -> Budget -o Sigma (u : Unit) A := fun A f b => pack unit (f b)", "REFUSE_AFFINE_OMEGA");
+  ok &= guest("def wrap : (A : Type 0) -> A -o Option A := fun A x => some x\n"
+    "def wrapF : (A : Type 0) -> (A -o A) -> A -o Option A := fun A f x => some (f x)", NULL);
+  ok &= guest("def burn : Budget -o Unit := fun b => unit\n"
+    "def use : Budget -o Option Unit := fun b => map (fun (u : Unit) => burn b) (some unit)", NULL);
+  ok &= guest("def leak : Budget -o Sum Unit (Unit -> Budget) := fun b => map (fun (u : Unit) => fun (v : Unit) => b) (inr unit)", "REFUSE_AFFINE_OMEGA");
+  /* A branching fold or elim can run its leaf case more than once. */
+  ok &= domain("family Tree := leaf | node (left : Tree) (right : Tree)\n"
+    "family Carry := blank | one (item : Budget) | both (cLeft : Carry) (cRight : Carry)\n"
+    "def twins : Tree := node leaf leaf\n"
+    "def copyLeaves : Budget -o Carry := fun b => fold (one b) (fun x y => both x y) twins", "REFUSE_AFFINE_FIX");
+  ok &= domain("family Tree := leaf | node (left : Tree) (right : Tree)\n"
+    "family Carry := blank | one (item : Budget) | both (cLeft : Carry) (cRight : Carry)\n"
+    "def twins : Tree := node leaf leaf\n"
+    "def copyLeaves : Budget -o Carry := fun b => elim (fun (t : Tree) => Carry) (one b) "
+    "(fun (l : Tree) (li : Carry) (r : Tree) (ri : Carry) => both li ri) twins", "REFUSE_AFFINE_FIX");
+  ok &= domain("family Even := ez | es (odd : Odd) and Odd := os (left : Even) (right : Even)\n"
+    "family Carry := blank | one (item : Budget) | both (cLeft : Carry) (cRight : Carry)\n"
+    "def twins : Even := es (os ez ez)\n"
+    "def copyLeaves : Budget -o Carry := fun b => fold Carry Carry (one b) (fun o => o) (fun l r => both l r) twins", "REFUSE_AFFINE_FIX");
   if (ok) puts("domain regressions: passed");
   return ok ? 0 : 1;
 }

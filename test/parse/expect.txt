@@ -14,3 +14,7 @@ irrelevant-dot.lang LEX_CHAR
 irrelevant-brace.lang LEX_CHAR
 irrelevant-at.lang PARSE_EXPECT
 irrelevant-attr.lang LEX_CHAR
+affine-alias-ident.lang LEX_CHAR
+mark-range.lang PARSE_EXPECT
+affine-param-mark.lang PARSE_EXPECT
+affine-field-mark.lang PARSE_EXPECT

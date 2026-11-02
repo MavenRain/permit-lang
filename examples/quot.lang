@@ -3,11 +3,13 @@
 -- paritySquash) between any two paths with the same ends, a fold into
 -- Trunc0 B, and a quotient of Size by parity.
 -- The fold sends trunc0 a to trunc0 (f a) and squash0 to squash0. The
--- squash0 case has the type isSet (Trunc0 B).
-def map0 : (A : Type 0) -> (B : Type 0) -> (f : A -> B) -> Trunc0 A -> Trunc0 B :=
-  fun (A : Type 0) (B : Type 0) (f : A -> B) (t : Trunc0 A) => fold (fun (a : A) => trunc0 B (f a))
-    (fun (x : Trunc0 B) (y : Trunc0 B) (p : Path (Trunc0 B) x y) (q : Path (Trunc0 B) x y) => fun (i : I) => fun (j : I) => squash0 B x y p q i j) t
-def map0At : Path (Trunc0 Nat) (map0 Nat Nat (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (trunc0 Nat 0)) (trunc0 Nat 1) := refl
+-- squash0 case has the type isSet (Trunc0 Nat). map0 is at Nat (Q-S4-9
+-- (a)): a case binder of a type variable binds at 1, and f takes it at
+-- omega.
+def map0 : (f : Nat -> Nat) -> Trunc0 Nat -> Trunc0 Nat :=
+  fun (f : Nat -> Nat) (t : Trunc0 Nat) => fold (fun (a : Nat) => trunc0 Nat (f a))
+    (fun (x : Trunc0 Nat) (y : Trunc0 Nat) (p : Path (Trunc0 Nat) x y) (q : Path (Trunc0 Nat) x y) => fun (i : I) => fun (j : I) => squash0 Nat x y p q i j) t
+def map0At : Path (Trunc0 Nat) (map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (trunc0 Nat 0)) (trunc0 Nat 1) := refl
 -- refl and trans refl refl are not equal by conversion (there is no
 -- regularity), but squash0 gives a square between them.
 def sq0 : Path (Path (Trunc0 Nat) (trunc0 Nat 0) (trunc0 Nat 0)) refl
@@ -17,11 +19,11 @@ def sq0 : Path (Path (Trunc0 Nat) (trunc0 Nat 0) (trunc0 Nat 0)) refl
 -- The fold of a squash0 square folds the path fields too: p goes to
 -- fun k => map0 (p @ k).
 def map0Sq : (x : Trunc0 Nat) -> (p : Path (Trunc0 Nat) x x) ->
-  Path (Path (Path (Trunc0 Nat) (map0 Nat Nat (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) x) (map0 Nat Nat (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) x))
-      (fun (k : I) => map0 Nat Nat (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (p @ k)) (fun (k : I) => map0 Nat Nat (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (p @ k)))
-    (fun (i : I) => fun (j : I) => map0 Nat Nat (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (squash0 Nat x x p p i j))
-    (fun (i : I) => fun (j : I) => squash0 Nat (map0 Nat Nat (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) x) (map0 Nat Nat (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) x)
-      (fun (k : I) => map0 Nat Nat (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (p @ k)) (fun (k : I) => map0 Nat Nat (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (p @ k)) i j) :=
+  Path (Path (Path (Trunc0 Nat) (map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) x) (map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) x))
+      (fun (k : I) => map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (p @ k)) (fun (k : I) => map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (p @ k)))
+    (fun (i : I) => fun (j : I) => map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (squash0 Nat x x p p i j))
+    (fun (i : I) => fun (j : I) => squash0 Nat (map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) x) (map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) x)
+      (fun (k : I) => map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (p @ k)) (fun (k : I) => map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (p @ k)) i j) :=
   fun (x : Trunc0 Nat) (p : Path (Trunc0 Nat) x x) => refl
 -- Parity on Size (domain.lang): parityEq relates two points with the
 -- same sizeEven.

@@ -17,6 +17,8 @@ typedef enum {
   TOK_STAR,
   TOK_BAR,
   TOK_AT,       /* @ */
+  TOK_LOLLI,    /* -o (S4) */
+  TOK_MARK,     /* @0 or @1; `nat` is 0 or 1 (S4) */
   TOK_TILDE,    /* ~ */
   TOK_MEET,     /* /\ */
   TOK_JOIN,     /* \/ */

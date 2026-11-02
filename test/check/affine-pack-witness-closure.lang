@@ -1,0 +1,2 @@
+def twice : (@1 p : Sigma (f : Unit -> Budget) Budget) -> Prod Budget Budget := fun p => unpack p (fun f a => pair (f unit) (f unit))
+def dup : Budget -o Budget -o Prod Budget Budget := fun b a => twice (pack (fun u => b) a)

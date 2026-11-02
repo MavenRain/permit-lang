@@ -19,7 +19,9 @@ Status: S0 DONE (seed 1e69513): the tcc-wasm kit and this plan. S1 DONE:
 the USER took each recommendation of section 14 (section 1). S2 DONE: the
 Cubical TT kernel, ported from relay-lang 05dd63b (section 8.1). S3 DONE:
 R0 in the kernel and the Wasm writer, ported from relay-lang 5c386bb
-(section 2, "S3 result"). Next: S4 (the affine layer, section 6).
+(section 2, "S3 result"). S4 DONE: the affine layer, ported from
+leaf-lang 47a6f36 (section 6, "S4 result"). Next: S5 (`Resource`,
+`Scope`, `StepBound` and `Reason`, section 12).
 
 ## 1. Rulings
 
@@ -48,6 +50,18 @@ R0 in the kernel and the Wasm writer, ported from relay-lang 5c386bb
 | 2026-11-01 | Q-S3-1 Port source: "(a) Port relay S7 (Recommended)". Port the relay-lang 5c386bb R0 and Wasm hunks, without the relay domain (relay S3 to S6) and `REFUSE_CLOCK`. Edit: section 2, "S3 result". | USER, S3 |
 | 2026-11-01 | Q-S3-2 Lost gate lines (O12): "(b) Notrap rows only". Reading: S3 keeps the writer rows that run no node and no wasmtime (the ir rows, the build rows, `notrap modules`, `notrap bad rows`). The `differential cases` row and the `wasm runs` row run node, so they are out of the S3 gate and come back at S8. The S3 changes of `test/grid.awk` and `test/run-wasm.mjs` are in the repo, out of the gate. Edit: sections 12 and 13. | USER, S3 |
 | 2026-11-01 | Q-S3-3 The kernel `state` form in the Wasm host: "(b) Lower as a plain family". Reading: `build`, `ir` and `abi` lower a `state` family as an ordinary family. Result: `langc build examples/state-no-history.lang` exits 0, and `wasm-validate` and `build/notraptool` accept the module, with no change to the writer. Its differential row waits for S8 (Q-S3-2 (b)). | USER, S3 |
+| 2026-11-01 | Q-S4-1 Port route: "(a) Hand port, U1a+U1b (Recommended)". Port the TAKE hunks of leaf-lang 47a6f36 by hand at the permit sites, with the four codes `REFUSE_AFFINE_REUSE`, `REFUSE_AFFINE_OMEGA`, `REFUSE_AFFINE_FIX` and `REFUSE_AFFINE_PATH` and ASCII messages that cite section 6. Part U1a is the multiplicity plumbing with no refusal. Part U1b is the counts, the refusals and the rows. No blob is shared, so `git apply` is not possible. Edit: section 6, "S4 result". | USER, S4 |
+| 2026-11-01 | Q-S4-2 Resource sorts: "(a) Kernel Ops, no ctor (Recommended)". `Budget : Type 0` and `Approval : Type 0` are kernel Ops with no constructor, as the leaf `Leaf`. A program cannot make one. S6 and S7 add the ops (`spend`, `split`, the approval digest). `Capability` stays an S6 family in `domain/domain.lang`, and the family-field rule makes it a resource type. Edit: section 6. | USER, S4 |
+| 2026-11-01 | Q-S4-3 `unpack`: "(a) Take unpack at S4 (Recommended)". `unpack p (fun a b => t)` uses `p` one time and binds `a` and `b` at 1. `split` (S6) gives a pair of budgets, and `witness` and `payload` each use the pair, so a program needs `unpack` to use both budgets. Edit: section 6. | USER, S4 |
+| 2026-11-01 | Q-S4-4 Permit forms with no leaf rule: "(a) Sound fallback now (Recommended)". A part that can run more than one time (the step of `fold_block`, `elim` and `unfold`, the eta closure, the `filter` predicate, a Map op function) is checked at omega, so a 1-variable in it is `REFUSE_AFFINE_FIX` or `REFUSE_AFFINE_OMEGA`. The arms of `either` and finAll take the max, as `option`. `funExt` goes through the path rule. `first` and `second` use the pair. A precise rule comes only when a demo row needs one. Edit: section 6; section 13, O16. | USER, S4 |
+| 2026-11-01 | Q-S4-5 A function type: (a+). A Pi is copyable (`RESOURCE_NONE`), and arm 2 of `either` is a case arrow. Each introduction that an eliminator can copy (`inl`, `inr`, `some`, `cons`, `pure`, a constructor field) checks its payload at omega when the payload type is copyable. Reason: before the ruling, a closure that captures a `Budget` could go through `inr` and run two times (a double spend). Edit: section 6. | USER, S4 |
+| 2026-11-01 | Q-S4-6 A field of a type variable: "(a) Sound: 1, fix prelude". A field or an induction binder whose type is a type variable binds at 1, as in leaf. This is sound at each instantiation. The prelude changes: `fmFold` takes `f : A -o M`. Not chosen: a type variable at omega (a polymorphic fold that copies its field spends a `Budget` two times). Edit: section 6. | USER, S4 |
+| 2026-11-01 | Q-S4-7 A copyable 1-variable: "(a) Copyable exempt". A use at omega does not refuse a 1-variable whose type is copyable. Edit: section 6. | USER, S4 |
+| 2026-11-01 | Q-S4-8 `fmBind` and the path rule: "(a) Mono B + path exempt". `fmFold` stays polymorphic and linear. The Q-S4-7 rule also covers `REFUSE_AFFINE_PATH`: a copyable 1-variable free under an interval binder is not refused. `fmBindNat`, `fmBindSize`, `fmMapNat` and `fmMapSize` replace `fmBind` and `fmMap`. `B` is `Nat` or `Size`, so `FreeMon B` is copyable. Edit: section 6. | USER, S4 |
+| 2026-11-01 | Q-S4-9 The examples with a polymorphic map: (a) mono. `map0` and `map1` are at `A = B = Nat` (`f : Nat -> Nat`). `truncExt` is at `T = Trunc0 Size`. `orbitNExt` has `T` fixed for each caller, and `orbitNExtBag` is new. Edit: section 6. | USER, S4 |
+| 2026-11-01 | Q-S4-10 The set proof of `fromAt`: (a). `isSetAtLin : (n : Size) -> isSetLin (OrbAt n)` is a `sel5` of the set proofs for each size (`isSetLinN k` and `isSetLinO`: etas of `isSetOrbitN k` and `isSetOrbit` at copyable types, Q-S4-7). No checker change. Edit: section 6. | USER, S4 |
+| 2026-11-01 | Q-S4-11 Erased definitions: "(a) keep leaf H". A definition of an erased type is checked at 0, as in leaf. A second check at 1 records its refusal (`runtime_refusal`), and a run-time reference to the definition gives that code. So `p : (@1 b : Budget) -> Path Budget b b := fun b => fun (i : I) => b` checks, and a non-linear law still cannot run. Not chosen: (b) erasure of universe types only; (c) no erasure. Edit: section 6. | USER, S4 |
+| 2026-11-01 | Q-S4-12 A family with no parameters: (a). `resource_shape` stopped its field loop on a NULL env, but an empty env is NULL (a family without parameters). So `family Box := boxed (item : Budget)` was copyable, and `dup : Box -> Prod Box Box` checked ok. Fix: only a failed push stops the loop. Row F09 in `test/fronttool.c` wants `REFUSE_AFFINE_OMEGA`. Edit: section 6. | USER, S4 |
 
 The seed is `bin/new-lang.sh permit-lang tcc-wasm` from lang-template
 5265a2a. The kit gives the parser, the checker, the evaluator, the lowering
@@ -296,6 +310,112 @@ context split, weakening allowed, contraction refused, and
   budget left (Q-S0-8). A second use of an approval is `deny approvalUsed`.
   The static check helps the author; the run-time check is the enforcement.
 
+S4 result (2026-11-01). Port source: leaf-lang 47a6f36 "S3: affine
+layer, Durable and the sealed Keystore" (Q-S4-1 (a)). No src/front blob
+is shared, so the port reads each leaf hunk and writes it at the permit
+site. Taken: the marks `@0` and `@1` on binders, `A -o B` (a function
+that uses its argument one time), the QTT context split, `unpack`
+(Q-S4-3 (a)), `runtime_refusal`, and four codes: `REFUSE_AFFINE_REUSE`,
+`REFUSE_AFFINE_OMEGA`, `REFUSE_AFFINE_FIX` and `REFUSE_AFFINE_PATH`. Each
+message cites section 6. Dropped: the leaf `Leaf` sort, `Durable`,
+`Stream`, the sealed `Keystore` (`REFUSE_SEALED`), the Agda clauses,
+`langc fmt` (S12) and the `check --json` progress field (S13).
+
+`Budget : Type 0` and `Approval : Type 0` are kernel sorts with no
+constructor (Q-S4-2 (a)). A program cannot make one. `resource_shape`
+finds the resource types: a type that holds a `Budget` or an `Approval`
+in a pair, a sum, an option, a list or a family field. A function type
+is copyable (Q-S4-5 (a+)). A type variable is not copyable, so a field
+of a type variable binds at 1 (Q-S4-6 (a)). `resource_shape` also reads
+the fields of a family with no parameters, so
+`family Box := boxed (item : Budget)` is a resource type (Q-S4-12 (a);
+fronttool row F09 gives `REFUSE_AFFINE_OMEGA`).
+It follows recursive fields through sibling sorts too. A cycle stops
+when it returns to a sort already on the current path.
+
+The arms of a case give the max of their counts, not the sum: `option`,
+`either`, `flagIf`, finAll, and `elim` on `Sum` and `Unit`. A fronttool
+row has a fold step with an `option` case after `b` is used, and it
+checks. A part that can run more than one time is checked at omega
+(Q-S4-4 (a)):
+
+- the step of `fold` and `fold_block`, and a recursive case of
+  `elim_on_family`: a 1-variable in it is `REFUSE_AFFINE_FIX`;
+- every case of a branching family fold or elimination, including a
+  leaf case: two recursive children can repeat that leaf case;
+- the step of `unfold`, the eta closure, the `filter` predicate, and the
+  function of a List `map` or a List `bind`: a 1-variable in it is
+  `REFUSE_AFFINE_OMEGA`;
+- an Option `bind` and an Option or Sum `map` run their function at most
+  one time, so they check it at the level of the term.
+
+The KMap ops run no function for each entry, and `first` and `second`
+use the pair one time, so they need no change.
+
+Each introduction that an eliminator can copy (`inl`, `inr`, `some`,
+`cons`, `pure`, either field of `pack` and a constructor field) checks its payload at omega when
+the payload type is copyable (Q-S4-5 (a+)). A closure that captures a
+`Budget` is copyable, so it cannot go into such a slot. The map element
+test follows the same rule: when `map f` puts `f x` in a copyable type
+and `x` has a resource type, `map` gives `REFUSE_AFFINE_OMEGA`. The test
+reads the types only, so it also covers an `f` that is not a lambda. It
+also refuses an `f` that drops its element (O16).
+
+A copyable argument that can hold a closure checks at omega even at an
+explicit 1-binder. A scalar result cannot retain a resource consumed to
+compute it, so it still checks at 1. An Option or Sum `map` also checks
+its function at omega when the result can hold a copyable closure.
+
+An unknown payload can become copyable when instantiated. It can move
+an affine input of that same type, as in `some x` or `some (f x)` with
+`x : A` and `f : A -o A`. It cannot retain an affine input of a different
+type. The same rule covers the captures and element of `map` when its
+result type is unknown.
+
+A 1-variable of a copyable type is not refused at omega (Q-S4-7 (a)) or
+under an interval binder (Q-S4-8 (a)). In a fold step it is still
+`REFUSE_AFFINE_FIX`.
+
+A definition of an erased type (a universe or a path type) is checked at
+0 (Q-S4-11 (a)). A second check at 1 records its refusal code in
+`runtime_refusal`. A run-time reference to the definition gives that
+code: `test/check/affine-path.lang` gives `REFUSE_AFFINE_PATH`.
+
+The prelude and the examples follow the linear rules. `isSetLin A` is
+the linear form of `isSet A`. `fmFold` takes `isSetLin M`,
+`op : M -o M -o M` and `f : A -o M`. `fmBindNat`, `fmBindSize`,
+`fmMapNat` and `fmMapSize` replace `fmBind` and `fmMap`. `fmEtaNat` and
+`fmEtaSize` give `f a` to the `FreeMon` eta at a copyable type
+(Q-S4-8 (a)). `map0` and `map1` are at `Nat`, `truncExt` is at
+`Trunc0 Size`, and `orbitNExtBag` is new (Q-S4-9 (a)). `isSetAtLin`
+gives the set proof of `fromAt` (Q-S4-10 (a)). The eta
+`fun n x y p q => isSetAt n x y p q` at `isSetLin (OrbAt n)` checks:
+`OrbAt n` holds no resource, so it is copyable.
+
+The S4 rows: 45 `test/check/affine-*.lang` rows, 4 `test/parse` rows and
+54 `test/fronttool.c` rows. The leaf rows use `Budget` for the leaf
+`Leaf`, and a family row is a fronttool `domain()` row (rule R1). These
+rows differ from leaf-lang:
+
+- D08 (`affine-dup-closure.lang`) gives `REFUSE_AFFINE_OMEGA`. In
+  leaf-lang it gives `REFUSE_AFFINE_REUSE`.
+- F30, the family `Pile` with a `Nat` parameter, checks in permit-lang.
+- The two marked-field parse rows (`affine-param-mark.lang` and
+  `affine-field-mark.lang`) give `PARSE_EXPECT`. In leaf-lang they give
+  `PARSE_CTOR_RESULT`. The permit-lang parser has one `parse_fields`.
+- `mark-range.lang` (`@2`) gives `PARSE_EXPECT`. In leaf-lang it gives
+  `LEX_CHAR`. In permit-lang, `@` is also path application.
+
+| Row | At S4 |
+|---|---|
+| Resource sorts | Partly. `Budget` and `Approval` are kernel sorts with no constructor (Q-S4-2 (a)). `Capability` comes at S6; the family-field rule makes it a resource type. |
+| `spend` | Not yet. The `-o` type and the resource rule of `Option` are in. The op comes at S6. |
+| `split` | Partly. A pair of budgets is a resource type, and `unpack` uses both parts (Q-S4-3 (a)). The op and L2 come at S6. |
+| A copy of a budget | Covered. `REFUSE_AFFINE_REUSE` ("used 2, allowed 1"); also `REFUSE_AFFINE_OMEGA`, `REFUSE_AFFINE_FIX` and `REFUSE_AFFINE_PATH`. |
+| `execute` | Partly. A 1-binder uses an `Approval` one time. `execute` comes at S7. |
+| Weakening | Covered. A program can drop a budget (`burn : Budget -o Nat := fun l => 0`). |
+| The run-time check | Not S4. `decide` comes at S7 and `permitd` at S9. |
+
 ## 7. Laws
 
 Each law is a guest-language term with a `Path` type. A law on closed rows
@@ -440,8 +560,8 @@ One session for each slice: scope, gate, mutants, docs, close.
 | S1 | The USER rules section 14. Record the rulings here. Each question takes (a) (section 1). Reading edits in sections 2, 4, 7 and 8.1; review clarifies the approval bytes and adds D10 and D11 (sections 4, 7, 8.3 and 10). No code change; gate EXIT 0 with the S0 counts. | DONE |
 | S2 | Port the Cubical TT kernel (8.1, Q-S0-2). Survey first. Ported from relay-lang 05dd63b (Q-S2-1 to Q-S2-3 (a)); gate EXIT 0: 29 examples, 16 parse refusals, 151 check refusals, 10 kit-only refusals, 1 time hint, 78 evals, 1 build refusal, review, domain and path regressions passed; mutants of `REFUSE_CELL` and `REFUSE_TIME` killed. | DONE |
 | S3 | R0 in the kernel and the Wasm writer: N1 to N5, `REFUSE_PARTIAL`, `test/notraptool.c`, no `unreachable`, static memory; the kit trap row (O2). Ported from relay-lang 5c386bb (Q-S3-1 to Q-S3-3); gate EXIT 0: 30 examples, 16 parse refusals, 155 check refusals, 10 kit-only refusals, 1 time hint, 79 evals, 1 build, 1 ir lowered, 5 ir refusals, 2 ir lowerings, 4 notrap modules, 7 notrap bad rows, 10 spine evals, review, domain and path regressions passed; mutants of `REFUSE_PARTIAL` and `test/notraptool.c` killed. | DONE |
-| S4 | The affine layer (section 6): multiplicities, `REFUSE_AFFINE_REUSE`, the resource sorts. | NEXT |
-| S5 | `Resource`, `Action`, `Scope`, `StepBound`, `Allowance` (CC), `Decision`, `Reason`; `REFUSE_TIME`; L4, L6. | |
+| S4 | The affine layer (section 6): multiplicities, `REFUSE_AFFINE_REUSE`, the resource sorts. Ported from leaf-lang 47a6f36 (Q-S4-1 to Q-S4-12); gate EXIT 0: 30 examples, 20 parse refusals, 200 check refusals, 10 kit-only refusals, 1 time hint, 79 evals, 1 build, 1 ir lowered, 5 ir refusals, 2 ir lowerings, 4 notrap modules, 7 notrap bad rows, 10 spine evals, review, domain and path regressions passed; mutants of `REFUSE_AFFINE_REUSE`, the context split of a case, the family field loop (Q-S4-12) and `mult_scale` killed. | DONE |
+| S5 | `Resource`, `Action`, `Scope`, `StepBound`, `Allowance` (CC), `Decision`, `Reason`; `REFUSE_TIME`; L4, L6. | NEXT |
 | S6 | `Budget`, `spend`, `split`, `Capability`, `delegate`; `REFUSE_DELEGATE_WIDEN`, `REFUSE_BUDGET_OVERSPEND`; L1, L2. | |
 | S7 | `Payload`, `Mutation`, `canon`, `Digest`, `hash`, `Approval`, `Call`, `Plan` (CM), `Trace` (CC), `decide`; `REFUSE_EXECUTE_UNAPPROVED`; L3, L5, L7. | |
 | S8 | T1 part 1: the Wasm module of `decide`, the binding (Q-S0-5), the notrap rows; the differential and wasm runs lines (Q-S3-2 (b)). | |
@@ -495,6 +615,12 @@ One session for each slice: scope, gate, mutants, docs, close.
   relay `DeadReason`, and a test program cannot declare a family (rule
   R1, `REFUSE_DATA`). The row comes back when the domain has a sum with
   no fields (the deny `Reason`, S5).
+- O16 The S4 rule for the permit forms with no leaf rule is a sound
+  fallback (Q-S4-4 (a)). A part that can run more than one time is
+  checked at omega. So the checker refuses some sound programs: a `map`
+  whose `f` drops a resource element, and a `map` from `Option Budget`
+  to `Option Unit`. A precise rule for a form comes only when a demo row
+  needs one.
 
 ## 14. Questions for the USER (S0)
 

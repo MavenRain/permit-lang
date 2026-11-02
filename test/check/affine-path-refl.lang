@@ -1,0 +1,1 @@
+def hold : (@1 l : Budget) -> Prod (Path Budget l l) Nat := fun l => pair refl 0

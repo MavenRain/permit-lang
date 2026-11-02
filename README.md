@@ -31,14 +31,21 @@ trap: a denial is a value with a reason code.
 
 ## Status
 
-S3: no trap. The repo holds the Cubical TT kernel of intent-lang
+S4: the affine layer. The repo holds the Cubical TT kernel of intent-lang
 (67445ae), ported from relay-lang 05dd63b without the crypto code, on the
 tcc-wasm host, and the plan. S3 adds R0 from relay-lang 5c386bb: total
 Nat operations, `REFUSE_PARTIAL`, and a Wasm writer that emits no trap
-form (`test/notraptool.c` checks each built module). The permit-lang
-types, the permit refusals, the gate and the three targets do not exist
-yet. `docs/PLAN.md` gives the readings, the route, the slices and the
-open questions.
+form (`test/notraptool.c` checks each built module). S4 adds the affine
+layer from leaf-lang 47a6f36: the marks `@0` and `@1`, `A -o B`,
+`unpack`, the resource sorts `Budget` and `Approval`, and the codes
+`REFUSE_AFFINE_REUSE`, `REFUSE_AFFINE_OMEGA`, `REFUSE_AFFINE_FIX` and
+`REFUSE_AFFINE_PATH`. The prelude has `fmBindNat`, `fmBindSize`,
+`fmMapNat`, `fmMapSize`, `fmEtaNat` and `fmEtaSize` in place of `fmBind`
+and `fmMap`. The examples have `orbitNExtBag` and `isSetAtLin`, and
+`map0`, `map1` and `truncExt` are at fixed types. The other permit-lang
+types and refusals, the gate and the three targets do not exist yet.
+`docs/PLAN.md` gives the readings, the route, the slices and the open
+questions.
 
 ## Layout
 

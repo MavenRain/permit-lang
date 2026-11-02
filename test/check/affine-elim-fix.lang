@@ -1,0 +1,1 @@
+def e : (@1 b : Budget) -> Size -> (Budget -o Unit) -> Unit := fun b s k => elim (fun (t : Size) => Unit) (k b) (fun (t : Size) (ih : Unit) => k b) s

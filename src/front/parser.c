@@ -31,10 +31,12 @@ typedef struct {
   int depth;
 } Parser;
 
-/* One binder group: `(x y : A)` gives two names that share one type. */
+/* One binder group: `(x y : A)` gives two names that share one type.
+   `(@1 x y : A)` gives the two names one multiplicity. */
 typedef struct {
   const char **names;
   size_t count;
+  Mult mult;
   const Term *type;
   const Token *tok;
 } Binders;
@@ -110,6 +112,7 @@ static Term *make_term(Parser *p, TermKind kind, int line, int col) {
   term->kind = kind;
   term->line = line;
   term->col = col;
+  term->mult = MULT_OMEGA;
   return term;
 }
 
@@ -145,6 +148,8 @@ static int starts_atom(TokKind kind) {
     case TOK_STAR:
     case TOK_BAR:
     case TOK_AT:
+    case TOK_LOLLI:
+    case TOK_MARK:
     case TOK_MEET:
     case TOK_JOIN:
     case TOK_LBRACKET:
@@ -165,10 +170,11 @@ static int starts_atom(TokKind kind) {
   return 0;
 }
 
-/* `(` NAME+ `:` starts a binder group. `(f x)` does not. */
+/* `(` [MARK] NAME+ `:` starts a binder group. `(f x)` does not. */
 static int at_binder_group(const Parser *p) {
-  if (!at(p, TOK_LPAREN) || peek_at(p, 1)->kind != TOK_IDENT) return 0;
-  size_t ahead = 2;
+  size_t first = peek_at(p, 1)->kind == TOK_MARK ? 2 : 1;
+  if (!at(p, TOK_LPAREN) || peek_at(p, first)->kind != TOK_IDENT) return 0;
+  size_t ahead = first + 1;
   while (peek_at(p, ahead)->kind == TOK_IDENT) ahead++;
   return peek_at(p, ahead)->kind == TOK_COLON;
 }
@@ -176,6 +182,8 @@ static int at_binder_group(const Parser *p) {
 static int parse_group(Parser *p, Binders *out) {
   out->tok = cur(p);
   if (!expect(p, TOK_LPAREN, "'('")) return 0;
+  const Token *mark = cur(p);
+  out->mult = !eat(p, TOK_MARK) ? MULT_OMEGA : mark->nat == 1 ? MULT_ONE : MULT_ZERO;
   size_t start = p->pos;
   while (at(p, TOK_IDENT)) bump(p);
   out->count = p->pos - start;
@@ -198,6 +206,7 @@ static int parse_bare(Parser *p, Binders *out) {
   if (out->names == NULL) return oom(p);
   out->names[0] = take_name(p, "a binder");
   out->count = 1;
+  out->mult = MULT_OMEGA;
   out->type = NULL;
   return out->names[0] != NULL;
 }
@@ -209,6 +218,7 @@ static const Term *wrap(Parser *p, TermKind kind, const Binders *b, const Term *
     Term *node = make_term(p, kind, b->tok->line, b->tok->col);
     if (node == NULL) return NULL;
     node->name = b->names[i - 1];
+    node->mult = b->mult;
     node->left = b->type;
     node->right = acc;
     acc = node;
@@ -381,6 +391,8 @@ static const Term *parse_atom(Parser *p) {
     case TOK_STAR:
     case TOK_BAR:
     case TOK_AT:
+    case TOK_LOLLI:
+    case TOK_MARK:
     case TOK_MEET:
     case TOK_JOIN:
     case TOK_LBRACKET:
@@ -449,13 +461,15 @@ static const Term *parse_term_body(Parser *p) {
   if (at(p, TOK_KW_FUN)) return parse_fun(p);
   if (at_binder_group(p)) return parse_binder_type(p);
   const Term *head = parse_join(p);
-  if (head == NULL || !at(p, TOK_ARROW)) return head;
+  if (head == NULL || (!at(p, TOK_ARROW) && !at(p, TOK_LOLLI))) return head;
   const Token *arrow = cur(p);
   bump(p);
   const Term *body = parse_term(p);
   Term *pi = body == NULL ? NULL : make_term(p, TERM_PI, arrow->line, arrow->col);
   if (pi == NULL) return NULL;
   pi->name = NULL;
+  /* `A -o B` is a Pi with a binder at 1. */
+  pi->mult = arrow->kind == TOK_LOLLI ? MULT_ONE : MULT_OMEGA;
   pi->left = head;
   pi->right = body;
   return pi;
@@ -485,6 +499,7 @@ static int parse_fields(Parser *p, int marks, const Field **out, size_t *out_cou
     int history = marks && at_history(p);
     if (history) bump(p);
     if (!parse_group(p, &b)) return 0;
+    if (b.mult != MULT_OMEGA) return fail_at(p, b.tok, "an unmarked parameter or field");
     for (size_t i = 0; i < b.count; i++) {
       items = grow(p, items, count, &cap, sizeof *items);
       if (items == NULL) return 0;
@@ -615,6 +630,8 @@ static int parse_decl(Parser *p, Decl *d) {
     case TOK_STAR:
     case TOK_BAR:
     case TOK_AT:
+    case TOK_LOLLI:
+    case TOK_MARK:
     case TOK_TILDE:
     case TOK_MEET:
     case TOK_JOIN:

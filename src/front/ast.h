@@ -25,6 +25,14 @@ typedef enum {
   TERM_BRANCH /* left -> right: left the key, right the branch */
 } TermKind;
 
+/* The multiplicity of a binder (S4, PLAN section 6). A binder with no mark
+   is omega. `A -o B` is a TERM_PI at MULT_ONE with no name. */
+typedef enum {
+  MULT_OMEGA, /* no mark */
+  MULT_ZERO,  /* @0 */
+  MULT_ONE    /* @1, or the binder of -o */
+} Mult;
+
 typedef struct Term Term;
 struct Term {
   TermKind kind;
@@ -32,6 +40,7 @@ struct Term {
   int col;
   const char *name;
   uint64_t nat;
+  Mult mult; /* TERM_LAM, TERM_PI and TERM_SIGMA only */
   const Term *left;
   const Term *right;
 };

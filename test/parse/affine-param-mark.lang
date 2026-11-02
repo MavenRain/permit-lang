@@ -1,0 +1,1 @@
+family Box (@0 A : Type 0) := box (item : A)

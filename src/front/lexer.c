@@ -47,6 +47,8 @@ const char *tok_kind_name(TokKind kind) {
     case TOK_STAR: return "'*'";
     case TOK_BAR: return "'|'";
     case TOK_AT: return "'@'";
+    case TOK_LOLLI: return "'-o'";
+    case TOK_MARK: return "a multiplicity mark";
     case TOK_TILDE: return "'~'";
     case TOK_MEET: return "'/\\'";
     case TOK_JOIN: return "'\\/'";
@@ -172,7 +174,12 @@ static int lex_symbol(Lexer *lx) {
     case ')': kind = TOK_RPAREN; break;
     case '*': kind = TOK_STAR; break;
     case '|': kind = TOK_BAR; break;
-    case '@': kind = TOK_AT; break;
+    case '@':
+      /* `@0` and `@1` are marks only when no name character follows; each
+         other `@` is path application. */
+      kind = (next == '0' || next == '1') && !is_ident_char(peek(lx, 2)) ? TOK_MARK : TOK_AT;
+      width = kind == TOK_MARK ? 2 : 1;
+      break;
     case '~': kind = TOK_TILDE; break;
     case '[': kind = TOK_LBRACKET; break;
     case ']': kind = TOK_RBRACKET; break;
@@ -190,7 +197,9 @@ static int lex_symbol(Lexer *lx) {
       width = next == '=' ? 2 : 1;
       break;
     case '-':
-      kind = next == '>' ? TOK_ARROW : TOK_EOF;
+      /* `-o` is the affine arrow only when no name character follows, so
+         `-ops` is not `-o ps`. */
+      kind = next == '>' ? TOK_ARROW : next == 'o' && !is_ident_char(peek(lx, 2)) ? TOK_LOLLI : TOK_EOF;
       width = 2;
       break;
     case '=':
@@ -203,7 +212,7 @@ static int lex_symbol(Lexer *lx) {
     return diag_fail(lx->diag, "LEX_CHAR", NULL, "%s:%d:%d: unexpected byte 0x%02x", lx->source, line, col, (unsigned)(unsigned char)c);
   }
   advance(lx, width);
-  push(lx, kind, start, line, col);
+  push(lx, kind, start, line, col)->nat = kind == TOK_MARK ? (uint64_t)(next - '0') : 0;
   return 1;
 }
 

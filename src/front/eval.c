@@ -9,7 +9,7 @@
 #define VARIES 0xffu
 
 static const char *const OP_NAMES[] = {
-  [OP_NAT] = "Nat", [OP_FLAG] = "Flag", [OP_UNIT] = "Unit", [OP_PROD] = "Prod",
+  [OP_NAT] = "Nat", [OP_FLAG] = "Flag", [OP_UNIT] = "Unit", [OP_BUDGET] = "Budget", [OP_APPROVAL] = "Approval", [OP_PROD] = "Prod",
   [OP_SUM] = "Sum", [OP_OPTION] = "Option", [OP_LIST] = "List",
   [OP_FAMILY] = "?", [OP_UNIT_VAL] = "unit", [OP_FLAG_YES] = "flagYes",
   [OP_FLAG_NO] = "flagNo", [OP_PAIR] = "pair", [OP_INL] = "inl", [OP_INR] = "inr",
@@ -35,7 +35,7 @@ static const char *const OP_NAMES[] = {
 /* The number of arguments of each operation. VARIES: it comes from the
    family tables. */
 static const unsigned char OP_ARITY[] = {
-  [OP_NAT] = 0, [OP_FLAG] = 0, [OP_UNIT] = 0, [OP_PROD] = 2, [OP_SUM] = 2,
+  [OP_NAT] = 0, [OP_FLAG] = 0, [OP_UNIT] = 0, [OP_BUDGET] = 0, [OP_APPROVAL] = 0, [OP_PROD] = 2, [OP_SUM] = 2,
   [OP_OPTION] = 1, [OP_LIST] = 1, [OP_FAMILY] = VARIES,
   [OP_UNIT_VAL] = 0, [OP_FLAG_YES] = 0, [OP_FLAG_NO] = 0, [OP_PAIR] = 2,
   [OP_INL] = 1, [OP_INR] = 1, [OP_NONE] = 0, [OP_SOME] = 1, [OP_NIL] = 0,
@@ -439,7 +439,7 @@ static const Value *flag(Machine *m, int yes) {
   return constant(m, yes ? OP_FLAG_YES : OP_FLAG_NO);
 }
 
-const Value *val_arrow(Machine *m, const Value *dom, const Value *cod) {
+const Value *val_arrow_mult(Machine *m, Mult mult, const Value *dom, const Value *cod) {
   Value *v;
   if (dom == NULL || cod == NULL)
     return NULL;
@@ -448,10 +448,15 @@ const Value *val_arrow(Machine *m, const Value *dom, const Value *cod) {
     return NULL;
   v->dom = dom;
   v->arg = cod;
+  v->mult = mult;
   return v;
 }
 
-const Value *val_closure(Machine *m, ValKind kind, const char *name, const Value *dom, const Env *env, const Core *body) {
+const Value *val_arrow(Machine *m, const Value *dom, const Value *cod) {
+  return val_arrow_mult(m, MULT_OMEGA, dom, cod);
+}
+
+const Value *val_binder(Machine *m, ValKind kind, Mult mult, const char *name, const Value *dom, const Env *env, const Core *body) {
   Value *v;
   if (body == NULL || (dom == NULL && kind != VAL_LAM && kind != VAL_PLAM))
     return NULL;
@@ -459,10 +464,28 @@ const Value *val_closure(Machine *m, ValKind kind, const char *name, const Value
   if (v == NULL)
     return NULL;
   v->name = name;
+  v->mult = mult;
   v->dom = dom;
   v->env = env;
   v->body = body;
   return v;
+}
+
+const Value *val_closure(Machine *m, ValKind kind, const char *name, const Value *dom, const Env *env, const Core *body) {
+  return val_binder(m, kind, MULT_OMEGA, name, dom, env, body);
+}
+
+/* The binder mark of the printer (S4, PLAN section 6). */
+static const char *mult_mark(Mult mult) {
+  switch (mult) {
+  case MULT_OMEGA:
+    return "";
+  case MULT_ZERO:
+    return "@0 ";
+  case MULT_ONE:
+    return "@1 ";
+  }
+  return "";
 }
 
 int val_is(const Value *v, Op op) {
@@ -1883,6 +1906,8 @@ static const Value *transp_data(Machine *m, const Value *head, const Value *line
   case OP_NAT: /* R27: a base former has no path structure */
   case OP_FIN:
   case OP_FLAG:
+  case OP_BUDGET:
+  case OP_APPROVAL:
   case OP_UNIT:
   case OP_KMAP:
   case OP_NONZERO:
@@ -2838,6 +2863,8 @@ static const Value *reduce_op(Machine *m, Op op, uint32_t inst, uint32_t field, 
   case OP_NAT:
   case OP_FIN:
   case OP_FLAG:
+  case OP_BUDGET:
+  case OP_APPROVAL:
   case OP_UNIT:
   case OP_PROD:
   case OP_SUM:
@@ -2981,11 +3008,11 @@ static const Value *eval_inner(Machine *m, const Env *env, const Core *c) {
   case CORE_UNIV:
     return val_univ(m, c->nat);
   case CORE_LAM:
-    return val_closure(m, VAL_LAM, c->name, NULL, env, c->b);
+    return val_binder(m, VAL_LAM, c->mult, c->name, NULL, env, c->b);
   case CORE_PI:
-    return val_closure(m, VAL_PI, c->name, eval_core(m, env, c->a), env, c->b);
+    return val_binder(m, VAL_PI, c->mult, c->name, eval_core(m, env, c->a), env, c->b);
   case CORE_SIGMA:
-    return val_closure(m, VAL_SIGMA, c->name, eval_core(m, env, c->a), env, c->b);
+    return val_binder(m, VAL_SIGMA, c->mult, c->name, eval_core(m, env, c->a), env, c->b);
   case CORE_APP:
     return apply_value(m, eval_core(m, env, c->a), eval_core(m, env, c->b));
   case CORE_OP:
@@ -3099,7 +3126,7 @@ static int conv_loop(Machine *m, uint32_t level, const Value *a, const Value *b)
       return 0;
     case VAL_PI:
     case VAL_SIGMA:
-      return conv_binder(m, level, a, b);
+      return a->mult == b->mult && conv_binder(m, level, a, b); /* no subsumption: -o and -> do not convert */
     case VAL_PATHP:
       return conv_pathp(m, level, a, b);
     case VAL_IVAL:
@@ -3223,6 +3250,7 @@ static const Core *quote_binder(Machine *m, uint32_t level, const Value *v, Core
   if (c == NULL)
     return NULL;
   c->name = v->name;
+  c->mult = v->mult;
   c->a = dom;
   c->b = body;
   c->args = ends;
@@ -3465,19 +3493,21 @@ static void print_binder(Printer *p, const Value *v) {
     put(p, " => ");
     break;
   case VAL_PI:
-    if (v->name == NULL) {
+    if (v->name == NULL && v->mult != MULT_ZERO) {
       print_value(p, v->dom, binder_dom);
-      put(p, " -> ");
+      put(p, v->mult == MULT_ONE ? " -o " : " -> ");
       break;
     }
     put(p, "(");
-    put(p, name);
+    put(p, mult_mark(v->mult));
+    put(p, v->name == NULL ? "_" : name);
     put(p, " : ");
     print_value(p, v->dom, 0);
     put(p, ") -> ");
     break;
   case VAL_SIGMA:
     put(p, "Sigma (");
+    put(p, mult_mark(v->mult));
     put(p, name);
     put(p, " : ");
     print_value(p, v->dom, 0);

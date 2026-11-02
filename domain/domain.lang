@@ -27,6 +27,10 @@ def isProp : (A : Type 0) -> Type 0 :=
   fun (A : Type 0) => (x : A) -> (y : A) -> Path A x y
 def isSet : (A : Type 0) -> Type 0 :=
   fun (A : Type 0) => (x : A) -> (y : A) -> isProp (Path A x y)
+-- The linear isSet (Q-S4-7 (a)): the ends and the paths bind at 1, so a
+-- polymorphic fold can give its folded ends to it (fmFold).
+def isSetLin : (A : Type 0) -> Type 0 :=
+  fun (A : Type 0) => (@1 x : A) -> (@1 y : A) -> (@1 p : Path A x y) -> (@1 q : Path A x y) -> Path (Path A x y) p q
 
 -- The circle, a higher inductive family (S4a, R1 (a)). The path
 -- constructor loop goes from base to base.
@@ -111,21 +115,42 @@ def fmCons : (A : Type 0) -> A -> FreeMon A -> FreeMon A :=
 def fmIsSet : (A : Type 0) -> isSet (FreeMon A) :=
   fun (A : Type 0) (x : FreeMon A) (y : FreeMon A) (p : Path (FreeMon A) x y) (q : Path (FreeMon A) x y) => fun (i : I) => fun (j : I) => fmSquash A x y p q i j
 -- The universal property: a map from A into a monoid M that is a set
--- extends to FreeMon A. The fold cases are the laws of M.
-def fmFold : (A : Type 0) -> (M : Type 0) -> isSet M -> (e : M) -> (op : M -> M -> M) -> ((x : M) -> (y : M) -> (z : M) -> Path M (op (op x y) z) (op x (op y z))) -> ((x : M) -> Path M (op e x) x) -> ((x : M) -> Path M (op x e) x) -> (A -> M) -> FreeMon A -> M :=
-  fun (A : Type 0) (M : Type 0) (s : isSet M) (e : M) (op : M -> M -> M) (assoc : (x : M) -> (y : M) -> (z : M) -> Path M (op (op x y) z) (op x (op y z))) (unitL : (x : M) -> Path M (op e x) x) (unitR : (x : M) -> Path M (op x e) x) (f : A -> M) (t : FreeMon A) =>
+-- extends to FreeMon A. The fold cases are the laws of M. A and M are
+-- type variables, so the field and the folded ends bind at 1 and the
+-- map, the operation and the laws are linear (-o, @1; PLAN 6).
+def fmFold : (A : Type 0) -> (M : Type 0) -> isSetLin M -> (e : M) -> (op : M -o M -o M) -> ((@1 x : M) -> (@1 y : M) -> (@1 z : M) -> Path M (op (op x y) z) (op x (op y z))) -> ((@1 x : M) -> Path M (op e x) x) -> ((@1 x : M) -> Path M (op x e) x) -> (A -o M) -> FreeMon A -> M :=
+  fun (A : Type 0) (M : Type 0) (s : isSetLin M) (e : M) (op : M -o M -o M) (assoc : (@1 x : M) -> (@1 y : M) -> (@1 z : M) -> Path M (op (op x y) z) (op x (op y z))) (unitL : (@1 x : M) -> Path M (op e x) x) (unitR : (@1 x : M) -> Path M (op x e) x) (f : A -o M) (t : FreeMon A) =>
     fold (fun (a : A) => f a) e (fun (x : M) (y : M) => op x y)
-      (fun (x : M) (y : M) (z : M) => fun (i : I) => assoc x y z @ i)
-      (fun (x : M) => fun (i : I) => unitL x @ i)
-      (fun (x : M) => fun (i : I) => unitR x @ i)
-      (fun (x : M) (y : M) (p : Path M x y) (q : Path M x y) => fun (i : I) => fun (j : I) => (s x y p q @ i) @ j) t
-def fmBind : (A : Type 0) -> (B : Type 0) -> (A -> FreeMon B) -> FreeMon A -> FreeMon B :=
-  fun (A : Type 0) (B : Type 0) (k : A -> FreeMon B) => fmFold A (FreeMon B) (fmIsSet B) (fmUnit B) (fmMul B)
-    (fun (x : FreeMon B) (y : FreeMon B) (z : FreeMon B) => fun (i : I) => fmAssoc B x y z i)
-    (fun (x : FreeMon B) => fun (i : I) => fmUnitL B x i)
-    (fun (x : FreeMon B) => fun (i : I) => fmUnitR B x i) k
-def fmMap : (A : Type 0) -> (B : Type 0) -> (A -> B) -> FreeMon A -> FreeMon B :=
-  fun (A : Type 0) (B : Type 0) (f : A -> B) => fmBind A B (fun (a : A) => fmEta B (f a))
+      (fun (x : M) (y : M) (z : M) => assoc x y z)
+      (fun (x : M) => unitL x)
+      (fun (x : M) => unitR x)
+      (fun (x : M) (y : M) (p : Path M x y) (q : Path M x y) => s x y p q) t
+-- The bind and the map at B = Nat and at B = Size (Q-S4-8 (a)). FreeMon B
+-- is copyable, so the law wrappers can use their 1-variables under
+-- fun i. At a resource B, both path ends hold x: no bind over a type
+-- variable B is typed. The field of fmEta at a copyable B is at omega
+-- (Q-S4-5 (a+)), so the map gives f a to fmEtaNat or fmEtaSize, whose
+-- binder is at 1.
+def fmBindNat : (A : Type 0) -> (A -o FreeMon Nat) -> FreeMon A -> FreeMon Nat :=
+  fun (A : Type 0) (k : A -o FreeMon Nat) => fmFold A (FreeMon Nat)
+    (fun (x : FreeMon Nat) (y : FreeMon Nat) (p : Path (FreeMon Nat) x y) (q : Path (FreeMon Nat) x y) => fun (i : I) => fun (j : I) => fmSquash Nat x y p q i j)
+    (fmUnit Nat) (fun (x : FreeMon Nat) (y : FreeMon Nat) => fmMul Nat x y)
+    (fun (x : FreeMon Nat) (y : FreeMon Nat) (z : FreeMon Nat) => fun (i : I) => fmAssoc Nat x y z i)
+    (fun (x : FreeMon Nat) => fun (i : I) => fmUnitL Nat x i)
+    (fun (x : FreeMon Nat) => fun (i : I) => fmUnitR Nat x i) k
+def fmBindSize : (A : Type 0) -> (A -o FreeMon Size) -> FreeMon A -> FreeMon Size :=
+  fun (A : Type 0) (k : A -o FreeMon Size) => fmFold A (FreeMon Size)
+    (fun (x : FreeMon Size) (y : FreeMon Size) (p : Path (FreeMon Size) x y) (q : Path (FreeMon Size) x y) => fun (i : I) => fun (j : I) => fmSquash Size x y p q i j)
+    (fmUnit Size) (fun (x : FreeMon Size) (y : FreeMon Size) => fmMul Size x y)
+    (fun (x : FreeMon Size) (y : FreeMon Size) (z : FreeMon Size) => fun (i : I) => fmAssoc Size x y z i)
+    (fun (x : FreeMon Size) => fun (i : I) => fmUnitL Size x i)
+    (fun (x : FreeMon Size) => fun (i : I) => fmUnitR Size x i) k
+def fmEtaNat : Nat -o FreeMon Nat := fun (n : Nat) => fmEta Nat n
+def fmMapNat : (A : Type 0) -> (A -o Nat) -> FreeMon A -> FreeMon Nat :=
+  fun (A : Type 0) (f : A -o Nat) => fmBindNat A (fun (a : A) => fmEtaNat (f a))
+def fmEtaSize : Size -o FreeMon Size := fun (n : Size) => fmEta Size n
+def fmMapSize : (A : Type 0) -> (A -o Size) -> FreeMon A -> FreeMon Size :=
+  fun (A : Type 0) (f : A -o Size) => fmBindSize A (fun (a : A) => fmEtaSize (f a))
 -- The trace position (S3, USER ruling Q-S3-3 (a)): a position is an op
 -- count. `len A r` is a C builtin (OP_FM_LEN): the domain cannot prove the
 -- Nat monoid laws that fmFold needs (S3 survey section 7).

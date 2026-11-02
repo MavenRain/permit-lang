@@ -19,6 +19,8 @@ typedef enum {
   OP_NAT,
   OP_FLAG,
   OP_UNIT,
+  OP_BUDGET,   /* Budget : Type 0, a resource sort with no constructor (PLAN 6) */
+  OP_APPROVAL, /* Approval : Type 0, a resource sort with no constructor (PLAN 6) */
   OP_PROD,
   OP_SUM,
   OP_OPTION,
@@ -123,6 +125,7 @@ struct Core {
   uint32_t inst;
   uint32_t field; /* OP_PROJ: the field number */
   const char *name;
+  Mult mult; /* LAM, PI, SIGMA: the binder multiplicity */
   const Core *a;
   const Core *b;
   const Core *const *args;
@@ -216,6 +219,7 @@ struct Value {
   const Value *const *args;
   uint32_t argc;
   const char *name; /* LAM, PI, SIGMA: the binder */
+  Mult mult;        /* LAM, PI, SIGMA: the binder multiplicity */
   const Value *dom; /* PI, SIGMA: the domain. APP, PAPP: the function. */
   const Value *arg; /* APP, PAPP: the argument. A PI with no body: the codomain. */
   const Env *env;   /* LAM, PI, SIGMA, PLAM, PATHP: the closure */
@@ -292,6 +296,7 @@ typedef struct {
   /* A law-only def (S5, rule O7): a `law def` of the domain, or a guest def
      that uses one outside a Trunc1 argument. */
   int law_only;
+  const char *runtime_refusal; /* an erased definition that is unsafe at 1 */
 } DefInfo;
 
 /* The checked program and the evaluation state. No global state: every
@@ -361,7 +366,9 @@ const Value *val_make(Machine *m, Op op, uint32_t inst, uint32_t argc, const Val
 const Value *val_ctor(Machine *m, uint32_t inst, const Value *const *a, uint32_t n);
 /* A non-dependent function type. */
 const Value *val_arrow(Machine *m, const Value *dom, const Value *cod);
+const Value *val_arrow_mult(Machine *m, Mult mult, const Value *dom, const Value *cod);
 const Value *val_closure(Machine *m, ValKind kind, const char *name, const Value *dom, const Env *env, const Core *body);
+const Value *val_binder(Machine *m, ValKind kind, Mult mult, const char *name, const Value *dom, const Env *env, const Core *body);
 int val_is(const Value *v, Op op);
 const Env *env_push(Machine *m, const Env *env, const Value *value);
 const Value *def_value(Machine *m, uint32_t index);

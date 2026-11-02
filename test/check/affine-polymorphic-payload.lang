@@ -1,0 +1,2 @@
+def wrap : (A : Type 0) -> (Budget -o A) -> Budget -o Option A := fun A f b => some (f b)
+def dup : Budget -o Option (Prod Budget Budget) := fun b => option none (fun f => some (pair (f unit) (f unit))) (wrap (Unit -> Budget) (fun (@1 x : Budget) => fun (u : Unit) => x) b)
