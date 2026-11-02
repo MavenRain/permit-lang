@@ -1,0 +1,4 @@
+-- REFUSE_AFFINE_REUSE (S5 U2): the Prod pair from alOpen sits at a 1 binder; unpack
+-- reads it two times, so the second unpack is a reuse of p.
+def twice : (A : Type 0) -> (@1 p : Prod A (Call -o Allowance A)) -> Prod A A := fun A p => unpack p (fun a k => unpack p (fun b j => pair a b))
+def unpackTwice : (A : Type 0) -> Allowance A -o Prod A A := fun A x => twice A (alOpen A x)

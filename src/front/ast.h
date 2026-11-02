@@ -90,6 +90,7 @@ typedef struct {
   int is_rec;
   int is_state; /* the state form, a family with the keyword state (slice K3a) */
   int is_sealed; /* `sealed family` (S5): guest elim and fold are law-only */
+  int is_affine; /* `affine cofamily` (permit S5 item 4): its type D A is a resource */
   int is_law;    /* `law def` (S5): the def is law-only (rule O7) */
   int line;
   int col;

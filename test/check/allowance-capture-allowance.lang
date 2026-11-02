@@ -1,0 +1,4 @@
+-- An Allowance position closure must not capture another Allowance.
+def duplicate : Call -> Allowance Unit -o Prod (Allowance Unit) (Allowance Unit) :=
+  fun c x => unpack (alOpen (Allowance Unit) (fun p => x))
+    (fun a k => pair a (eps (Allowance Unit) (k c)))

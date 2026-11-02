@@ -1,0 +1,5 @@
+-- REFUSE_KIT (S5, Q-S5-3 (a)): resRoot and resChild are kit-only intros of
+-- the kernel Resource; a guest program gets a Resource from the host. The
+-- Nat comes from len (a guest word), so resRoot is the only kit item in the
+-- row (a Nat literal is a kit item too: kit-literal-nat.lang).
+def r : Resource := resRoot (len Size (fmUnit Size))

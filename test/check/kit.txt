@@ -81,6 +81,10 @@ time-timestamp.lang
 time-time.lang
 time-clock.lang
 time-epoch.lang
+time-date.lang
+time-ttl.lang
+time-deadline.lang
+time-expires.lang
 partial-name.lang
 partial-option.lang
 partial-option-arg.lang

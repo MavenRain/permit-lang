@@ -18,3 +18,4 @@ glue.lang
 univ.lang
 elim.lang
 history-bind.lang
+scope.lang

@@ -1,10 +1,10 @@
 # AGENTS.md
 
-How an agent works in permit-lang. This file is true at S4 (the affine
-layer). The final form comes at slice S15 (`docs/PLAN.md` section 9,
+How an agent works in permit-lang. This file is true at S5 (the domain
+types). The final form comes at slice S15 (`docs/PLAN.md` section 9,
 A5).
 
-## State at S4
+## State at S5
 
 - The code is the Cubical TT kernel of intent-lang (67445ae), ported from
   relay-lang 05dd63b without the crypto code: `langc` (C99, TinyCC) and
@@ -17,8 +17,21 @@ A5).
   `REFUSE_AFFINE_REUSE`, `REFUSE_AFFINE_OMEGA`, `REFUSE_AFFINE_FIX` and
   `REFUSE_AFFINE_PATH`. A `Budget` or an `Approval` is used at most one
   time.
-- The other permit-lang types, refusals and targets are a plan only:
-  `docs/PLAN.md` sections 4 to 8.
+- S5 adds the domain types (`docs/PLAN.md` sections 4 and 5): `Action`,
+  `Reason`, `Decision`, `StepBound := Size`, the `Call` stand-in, `Scope`
+  with `grants`, `allows` and `scopeWithin`, and `affine cofamily
+  Allowance` with the generated `AllowanceOpen` behind `alOpen`. The
+  kernel has the copyable sort `Resource` with `resEq`, `within` and the
+  kit-only `resRoot` and `resChild`. `REFUSE_TIME` names 10 words. An
+  `affine` cofamily is a resource type: `resource_shape` marks a Pi on
+  its `D.pos` family, and a `-o` Pi whose codomain is one. `unpack` opens
+  a `Prod` pair one time. A guest position closure cannot capture an
+  affine value: `alOpen` observes distinct positions. Generated destructors
+  preserve positions and can move their input. `examples/scope.lang` holds
+  the L4 and L6 rows and the copyable-capture and linear-continuation checks.
+- The other permit-lang types, refusals and targets (`spend`, `split`,
+  `Capability`, `delegate`, the approval forms, the gate) are a plan
+  only: `docs/PLAN.md` sections 4 to 8.
 - `design/DESIGN.md` is verbatim. Do not edit it. A design change is a
   new paste and an open item.
 

@@ -20,8 +20,10 @@ the USER took each recommendation of section 14 (section 1). S2 DONE: the
 Cubical TT kernel, ported from relay-lang 05dd63b (section 8.1). S3 DONE:
 R0 in the kernel and the Wasm writer, ported from relay-lang 5c386bb
 (section 2, "S3 result"). S4 DONE: the affine layer, ported from
-leaf-lang 47a6f36 (section 6, "S4 result"). Next: S5 (`Resource`,
-`Scope`, `StepBound` and `Reason`, section 12).
+leaf-lang 47a6f36 (section 6, "S4 result"). S5 DONE: `Resource`,
+`Action`, `Scope`, `StepBound`, the affine `Allowance`, `Decision` and
+`Reason` (sections 4 and 5; the S5 row of section 12). Next: S6
+(`Budget` ops, `Capability`, `delegate`, section 12).
 
 ## 1. Rulings
 
@@ -62,6 +64,14 @@ leaf-lang 47a6f36 (section 6, "S4 result"). Next: S5 (`Resource`,
 | 2026-11-01 | Q-S4-10 The set proof of `fromAt`: (a). `isSetAtLin : (n : Size) -> isSetLin (OrbAt n)` is a `sel5` of the set proofs for each size (`isSetLinN k` and `isSetLinO`: etas of `isSetOrbitN k` and `isSetOrbit` at copyable types, Q-S4-7). No checker change. Edit: section 6. | USER, S4 |
 | 2026-11-01 | Q-S4-11 Erased definitions: "(a) keep leaf H". A definition of an erased type is checked at 0, as in leaf. A second check at 1 records its refusal (`runtime_refusal`), and a run-time reference to the definition gives that code. So `p : (@1 b : Budget) -> Path Budget b b := fun b => fun (i : I) => b` checks, and a non-linear law still cannot run. Not chosen: (b) erasure of universe types only; (c) no erasure. Edit: section 6. | USER, S4 |
 | 2026-11-01 | Q-S4-12 A family with no parameters: (a). `resource_shape` stopped its field loop on a NULL env, but an empty env is NULL (a family without parameters). So `family Box := boxed (item : Budget)` was copyable, and `dup : Box -> Prod Box Box` checked ok. Fix: only a failed push stops the loop. Row F09 in `test/fronttool.c` wants `REFUSE_AFFINE_OMEGA`. Edit: section 6. | USER, S4 |
+| 2026-11-01 | Q-S5-1 `Action`: "(a) Domain family (Recommended)". `family Action` with the arms `inspect`, `propose` and `execute` in `domain/domain.lang`. A program cannot declare a family (rule R1), so the sum is a domain sum. `actEq` is equality; there is no action order. Edit: section 4. | USER, S5 |
+| 2026-11-01 | Q-S5-2 Time words: "(a) Union of 10 (Recommended)". `REFUSE_TIME` names 10 words: `now`, `block`, `timestamp`, `time`, `clock`, `epoch`, `date`, `ttl`, `deadline` and `expires`. The hint says to count operations: a deadline is a `StepBound` (a count of later operations). Edit: section 5; section 13, O14 CLOSED. | USER, S5 |
+| 2026-11-01 | Q-S5-3 `Resource`: "(a) Sort + kit-only intro (Recommended)". `Resource` is a kernel sort as `Budget`, but copyable. The kernel ops are `resEq` and `within : Resource -> Resource -> Flag`. The introductions `resRoot : Nat -> Resource` and `resChild : Resource -> Nat -> Resource` are kit-only (`REFUSE_KIT` in guest mode). `within r s` is `flagYes` when the segments of `s` are a prefix of the segments of `r`. Edit: section 4. | USER, S5 |
+| 2026-11-01 | Q-S5-4 `Allowance`: "(b) Affine Allowance". `StepBound := Size`. `cofamily Allowance (A : Type 0) := alCorec (eps : A) (advance : Call -> Allowance A)`. A new `resource_shape` rule makes the cofamily a resource type, so a value is used at most one time, and `advance` takes it with `-o`. The S5 stand-in is `family Call := call (target : Resource) (action : Action)`; S7 widens it. Eval and check only; Wasm at S8. Edit: section 4. | USER, S5 |
+| 2026-11-01 | Q-S5-5 Laws: "(a) Closed-row parts now (Recommended)". Refl laws plus eval rows in `examples/scope.lang`: L4 on `advance` with a saturating `tick` (`countdown`, `lawAdvance`, `lawSaturate`), L6 on `scopeGate` (`lawScopeIn`, `lawScopeOut`, `lawActionOut`). The `decide` forms come at S7. Edit: section 12. | USER, S5 |
+| 2026-11-01 | Q-S5-6 `alOpen`: "(a) One affine `alOpen` (Recommended)". `alOpen : Allowance A -o Prod A (Call -o Allowance A)`. `eps` and `advance` stay one-use views. `alCorec` stays guest-visible: the gate holds the one live value. A kit-only corecursor is a later question, if a row needs it. Edit: section 4; section 13, O17. | USER, S5 |
+| 2026-11-02 | Q-S5-7 The affine marker: "(a) opt-in modifier (Recommended)". The keyword `affine` before `cofamily` (`affine cofamily Allowance ...`) sets `affine_pos` on the `D.pos` family. `resource_shape` has a new arm, `affine_arrow`: a Pi on an `affine_pos` family is PRESENT, and so is a `-o` Pi whose codomain is such a Pi. `Stream` is unchanged. The checker emits no `AllowanceBisim` for an affine cofamily, because its `D A` binders are omega (O18). Edit: section 4; section 13, O18. | USER, S5 U1c |
+| 2026-11-02 | Q-S5-8 The `alOpen` pair: "(a) PRESENT + split builtin (Recommended)". `Prod A (Call -o Allowance A)` is PRESENT (the `-o` arm of `affine_arrow`), so the pair is affine. The checker generates a trusted `AllowanceOpen` (`fun .A .x => pair (eps .A .x) (fun .e => advance .A .x .e)`), and `alOpen` is that name. `unpack p f` on a `Prod` pair gives `f (first p) (second p)` and charges `p` one time; no new builtin. Edit: section 4. | USER, S5 U1c |
 
 The seed is `bin/new-lang.sh permit-lang tcc-wasm` from lang-template
 5265a2a. The kit gives the parser, the checker, the evaluator, the lowering
@@ -212,11 +222,11 @@ The lines of pasted 1 (DESIGN.md 1):
 
 | Name | Kind | Line | Note |
 |---|---|---|---|
-| `Resource` | opaque base type; `resEq`, `within : Resource -> Resource -> Flag` | P3 | A path of segments (for example `deploy/prod/web`). `within` is prefix containment by segments, with no wildcard. The gate interns the segments. A program never parses a string (Q-S0-3 (a)). |
-| `Action` | a user sum, declared in each program | P2, P8 | For example `inspect`, `propose`, `execute`. |
+| `Resource` | kernel sort, copyable (Q-S5-3 (a)); `resEq`, `within : Resource -> Resource -> Flag`; kit-only `resRoot : Nat -> Resource`, `resChild : Resource -> Nat -> Resource` | P3 | A path of segments (for example `deploy/prod/web`). `within` is prefix containment by segments, with no wildcard. The gate interns the segments. A program never parses a string (Q-S0-3 (a)). A guest `resRoot` or `resChild` is `REFUSE_KIT`: the gate makes the values (S8). |
+| `Action` | a domain sum: `family Action` with the arms `inspect`, `propose` and `execute` in `domain/domain.lang` (Q-S5-1 (a)) | P2, P8 | A program cannot declare a family (rule R1). `actEq` is equality; there is no action order. |
 | `needsApproval` | a mark on an `Action` | P7, P8 | Q-S0-11. |
-| `Scope` | `FreeMon (Resource * Action)`; `allows`, `scopeWithin` | P3, P5 | Finite. `scopeWithin child parent` is decidable. |
-| `StepBound` | a `Nat` count of calls left | P4 | Expiry under the time ruling (section 5). |
+| `Scope` | `FreeMon (Prod Resource Action)`; `grants`, `allows`, `scopeWithin` | P3, P5 | Finite. `scopeWithin child parent` is decidable. S5: `allows` and `scopeWithin` count the grants that match (`fmBindNat`, then `len`) and test the count with `natEq 0`. They do not fold into `Flag`: the domain cannot prove the `Flag` monoid laws of `fmFold` at an open `Flag` (permit has no `fmRun`). `within` does the resource test. |
+| `StepBound` | `Size` (Q-S5-4 (b)): a count of calls left | P4 | Expiry under the time ruling (section 5). A tick is `sizePred`; it stops at `sz0` (L4). |
 | `Budget` | a `Nat` count of units, affine; `spend`, `split` | P6 | Section 6. `spend` and `split` give an `Option`. |
 | `Capability` | record: scope, steps, budget | P1, P5 | A resource type, because it holds a `Budget`. |
 | `delegate` | `Capability -o Scope -> StepBound -> Nat -> Option (Capability * Capability)` | P5 | Attenuation only: the child scope is within the parent scope, the child steps are not more than the parent steps, and the child budget is split from the parent budget (L1). |
@@ -225,9 +235,10 @@ The lines of pasted 1 (DESIGN.md 1):
 | `canon` | `Mutation -> Bytes`: the canonical bytes of (target, payload) | P9 | Q-S0-4; the target envelope below. |
 | `Digest`, `hash` | opaque; `digestEq`; `hash : Bytes -> Digest` with laws only | P7, P9 | v1 binds SHA-256 (ruling). |
 | `Approval` | record: one `Digest`; affine | P7 | Section 6. The gate records who approved; the program does not read it. |
-| `Call` | record: `Mutation`, cost `Nat`, an optional `Approval` | P2, P10 | One request from the agent. |
-| `Decision`, `Reason` | `permit` or `deny Reason`; `Reason` is the closed sum of section 2 | P3 to P9 | A denial is a value (R0). |
-| `decide` | `Allowance -> Call -> Decision * Allowance` | P10 | The one entry of the T1 module. |
+| `Call` | record: `Mutation`, cost `Nat`, an optional `Approval` | P2, P10 | One request from the agent. S5 stand-in: `family Call := call (target : Resource) (action : Action)`; S7 widens it to the record (Q-S5-4 (b)). |
+| `Decision`, `Reason` | `permit` or `deny Reason`; `Reason` is the closed sum of section 2 | P3 to P9 | A denial is a value (R0). S5: both are domain families; `Reason` has the 8 arms of section 2. |
+| `Allowance` | `affine cofamily Allowance (A : Type 0) := alCorec (eps : A) (advance : Call -> Allowance A)`; `alOpen : Allowance A -o Prod A (Call -o Allowance A)` | P2, P4, P10 | Affine (Q-S5-4 (b), Q-S5-7 (a)): a value is used at most one time, and a second use is `REFUSE_AFFINE_REUSE`. `eps` and `advance` are one-use views. `alOpen` gives both parts; `unpack` on the pair binds each part at 1 (Q-S5-6 (a), Q-S5-8 (a)). Section 3 gives the CC reading. |
+| `decide` | `Allowance -> Call -> Decision * Allowance` | P10 | The one entry of the T1 module (S7). |
 
 Review clarification of Q-S0-4 (a) under the S0 approval ruling (L3):
 
@@ -282,9 +293,12 @@ later operations, never a clock value.
 - Expiry is the `StepBound` of a capability. `eps` of the `Allowance` gives
   the steps left. Each call that the gate decides takes one step (Q-S0-6).
   The steps never increase (L4). At 0, each call gives `deny boundSpent`.
-- New refusal code `REFUSE_TIME`: a program names a clock word (`now`,
-  `clock`, `time`, `timestamp`, `date`, `epoch`, `ttl`, `deadline`,
-  `expires`). The fix hint names `StepBound` (Q-S0-9).
+  `StepBound` is `Size` (S5): a tick is `sizePred`, and it stops at `sz0`.
+- New refusal code `REFUSE_TIME`: a program names one of 10 clock words
+  (`now`, `block`, `timestamp`, `time`, `clock`, `epoch`, `date`, `ttl`,
+  `deadline`, `expires`; Q-S5-2 (a)). The fix hint says to count
+  operations: a deadline is a `StepBound` (a count of later operations)
+  (Q-S0-9).
 - The gate never reads a clock to make a decision. The T2 report has no
   time field in v1.
 
@@ -540,11 +554,13 @@ it read.
 | Repo | Hash | What | Where |
 |---|---|---|---|
 | lang-template | 5265a2a | the tcc-wasm kit, `bin/new-lang.sh` | whole kit |
-| relay-lang | 5c386bb (seed 145f58f) | R0 rules N1 to N6, `test/notraptool.c`, the Wasm engine ruling, the C host shape | seed docs/PLAN.md sections 2 and 12 (Q-S0-1); docs/PLAN.md line 51 (S1 ruling) |
+| relay-lang | 5c386bb (seed 145f58f) | R0 rules N1 to N6, `test/notraptool.c`, the Wasm engine ruling, the C host shape; S5: the natops case-split row `reasonCode` (O15) | seed docs/PLAN.md sections 2 and 12 (Q-S0-1); docs/PLAN.md line 51 (S1 ruling); test/ir/natops.lang lines 11 to 13 |
 | accrue-lang | d1017f1 | R0 and R1 readings, the A1 to A6 table, `REFUSE_PARTIAL` | docs/PLAN.md lines 160 to 214, 374 to 397 |
+| accrue-lang | 20852a1 | S5: the `cofamily Books` shape with its refl laws, read for the `Allowance` cofamily and the L4 rows | domain/domain.lang lines 680 to 690 |
 | cairn-lang | 60768e8 | the no-time reading and `REFUSE_TIME`; the kernel source; `test/shatool.c` | docs/PLAN.md lines 235 to 248 |
 | leaf-lang | 5ccc494 | the affine layer and `REFUSE_AFFINE_REUSE`; the dash skip for DESIGN.md | docs/PLAN.md lines 561 to 600; test/gate.sh line 889 |
-| mandate-lang | 33556e9 | the budget law (`spent` does not decrease, `spent <= cap`); the `autoLimit` confirmation rule as a reading for Q-S0-11 | docs/PLAN.md line 583; lines 410 to 415 |
+| mandate-lang | 33556e9 | the budget law (`spent` does not decrease, `spent <= cap`); the `autoLimit` confirmation rule as a reading for Q-S0-11; S5: the `cofamily Machine` shape (`eps`, `mStep : Req -> Machine A`), the shape of `Allowance` with `Call` for `Req` | docs/PLAN.md line 583; lines 410 to 415; domain/domain.lang lines 70 to 71 |
+| tranche-lang | 9aafbf8 | S5: the idiom of a prefix test over a `FreeMon` (`prefix`, `fmRun`), read for `scopeWithin`; permit counts the matches with `fmBindNat` and `len` instead, because it has no `fmRun` | domain/domain.lang lines 201 to 222 |
 | zkpolicy-lang | 1d263fb | overlap only (DESIGN.md 3.1); the later target | none in v1 |
 
 The overlap note in DESIGN.md 3 names mandate-lang d368d5f. Its HEAD is
@@ -561,8 +577,8 @@ One session for each slice: scope, gate, mutants, docs, close.
 | S2 | Port the Cubical TT kernel (8.1, Q-S0-2). Survey first. Ported from relay-lang 05dd63b (Q-S2-1 to Q-S2-3 (a)); gate EXIT 0: 29 examples, 16 parse refusals, 151 check refusals, 10 kit-only refusals, 1 time hint, 78 evals, 1 build refusal, review, domain and path regressions passed; mutants of `REFUSE_CELL` and `REFUSE_TIME` killed. | DONE |
 | S3 | R0 in the kernel and the Wasm writer: N1 to N5, `REFUSE_PARTIAL`, `test/notraptool.c`, no `unreachable`, static memory; the kit trap row (O2). Ported from relay-lang 5c386bb (Q-S3-1 to Q-S3-3); gate EXIT 0: 30 examples, 16 parse refusals, 155 check refusals, 10 kit-only refusals, 1 time hint, 79 evals, 1 build, 1 ir lowered, 5 ir refusals, 2 ir lowerings, 4 notrap modules, 7 notrap bad rows, 10 spine evals, review, domain and path regressions passed; mutants of `REFUSE_PARTIAL` and `test/notraptool.c` killed. | DONE |
 | S4 | The affine layer (section 6): multiplicities, `REFUSE_AFFINE_REUSE`, the resource sorts. Ported from leaf-lang 47a6f36 (Q-S4-1 to Q-S4-12); gate EXIT 0: 30 examples, 20 parse refusals, 200 check refusals, 10 kit-only refusals, 1 time hint, 79 evals, 1 build, 1 ir lowered, 5 ir refusals, 2 ir lowerings, 4 notrap modules, 7 notrap bad rows, 10 spine evals, review, domain and path regressions passed; mutants of `REFUSE_AFFINE_REUSE`, the context split of a case, the family field loop (Q-S4-12) and `mult_scale` killed. | DONE |
-| S5 | `Resource`, `Action`, `Scope`, `StepBound`, `Allowance` (CC), `Decision`, `Reason`; `REFUSE_TIME`; L4, L6. | NEXT |
-| S6 | `Budget`, `spend`, `split`, `Capability`, `delegate`; `REFUSE_DELEGATE_WIDEN`, `REFUSE_BUDGET_OVERSPEND`; L1, L2. | |
+| S5 | `Resource`, `Action`, `Scope`, `StepBound`, the affine `Allowance` (CC), `Decision`, `Reason`; `REFUSE_TIME` with 10 words; L4 and L6 as refl laws and eval rows in `examples/scope.lang`. Rulings Q-S5-1 to Q-S5-8 (section 1); sources in section 11; gate EXIT 0: 31 examples, 21 parse refusals, 213 check refusals, 11 kit-only refusals, 1 time hint, 85 evals, 1 build, 1 ir lowered, 5 ir refusals, 2 ir lowerings, 4 notrap modules, 7 notrap bad rows, 10 spine evals, 2 natops evals, review, domain and path regressions passed. New rows: `test/check/time-{date,ttl,deadline,expires}.lang`, `kit-res-root.lang`, `allowance-{reuse,omega,open-twice,open-parts,unpack-twice,capture-budget,capture-allowance,capture-polymorphic}.lang`, `test/parse/affine-no-cofamily.lang`, 6 eval rows of `examples/scope.lang`, the `natops evals` line (O15). The original 17-mutant run killed 16; the live one (`trusted` for each generated decl of a cofamily, not only the last) is equivalent, because no other generated decl uses a 1-variable two times. Review adds three capture refusals: each rejects the checker before the review fix. Position closures cannot capture affine values, since `alOpen` observes more than one position. The generated destructors preserve positions; their other affine use checks still apply. Copyable captures and linear continuations still check (`lawConstant`, `lawKeep` in `examples/scope.lang`). | DONE |
+| S6 | `Budget`, `spend`, `split`, `Capability`, `delegate`; `REFUSE_DELEGATE_WIDEN`, `REFUSE_BUDGET_OVERSPEND`; L1, L2. Takes O17 (a second `alCorec` remakes an affine `Allowance`), O18 (no `AllowanceBisim` for an affine cofamily) and O19 (the `?` in the message for `Allowance A`). | NEXT |
 | S7 | `Payload`, `Mutation`, `canon`, `Digest`, `hash`, `Approval`, `Call`, `Plan` (CM), `Trace` (CC), `decide`; `REFUSE_EXECUTE_UNAPPROVED`; L3, L5, L7. | |
 | S8 | T1 part 1: the Wasm module of `decide`, the binding (Q-S0-5), the notrap rows; the differential and wasm runs lines (Q-S3-2 (b)). | |
 | S9 | T1 part 2: `permitd`: the Wasm engine, SHA-256, the canonical bytes, the approver channel, the state, the stdio MCP proxy, `fakedeploy`, N6; the demo D1 to D11; L8. | |
@@ -607,20 +623,37 @@ One session for each slice: scope, gate, mutants, docs, close.
   line run node: they stay open until S8.
 - O13 CLOSED at S3. The port source is relay-lang 5c386bb (Q-S3-1 (a));
   section 2, "S3 result".
-- O14 The kernel `REFUSE_TIME` has the cairn word list (`now`, `block`,
-  `timestamp`, `time`, `clock`, `epoch`). S5 adds `ttl`, `deadline` and
-  `expires` (Q-S0-9).
-- O15 The natops row with a run-time case split (`reasonCode` of
-  relay-lang 5c386bb `test/ir/natops.lang`) is not in S3. It folds a
-  relay `DeadReason`, and a test program cannot declare a family (rule
-  R1, `REFUSE_DATA`). The row comes back when the domain has a sum with
-  no fields (the deny `Reason`, S5).
+- O14 CLOSED at S5 (Q-S5-2 (a)). `REFUSE_TIME` has 10 words: the cairn
+  list (`now`, `block`, `timestamp`, `time`, `clock`, `epoch`) and
+  `date`, `ttl`, `deadline`, `expires`. The hint says to count
+  operations: a deadline is a `StepBound`. Rows:
+  `test/check/time-{date,ttl,deadline,expires}.lang` and 4 rows in
+  `test/fronttool.c`.
+- O15 CLOSED at S5. `reasonCode` in `test/ir/natops.lang` folds the 8
+  arms of the domain `Reason` on `flagIf (natEq n 0) scopeMiss
+  boundSpent`. `test/ir/natops.ir` grew from 92 to 120 lines (the old
+  text is a prefix). The gate line `natops evals: 2 checked` runs
+  `reasonCode 0` and `reasonCode 1`.
 - O16 The S4 rule for the permit forms with no leaf rule is a sound
   fallback (Q-S4-4 (a)). A part that can run more than one time is
   checked at omega. So the checker refuses some sound programs: a `map`
   whose `f` drops a resource element, and a `map` from `Option Budget`
   to `Option Unit`. A precise rule for a form comes only when a demo row
   needs one.
+- O17 A second `alCorec` can remake an affine `Allowance`. `alCorec`
+  stays guest-visible (Q-S5-6 (a)), so a program can build a fresh value
+  from the parts of an opened one. The affine rule stops a second use of
+  one value, not a rebuild. The gate holds the one live value (S8, S9).
+  A kit-only corecursor is a later question, if a row needs it. For S6.
+- O18 The checker emits no `AllowanceBisim` for an affine cofamily: the
+  `D A` binders of the bisimulation are omega, and an affine value cannot
+  be used at omega. A bisimulation form for an affine cofamily waits for
+  a row that needs one. For S6.
+- O19 The `REFUSE_AFFINE_OMEGA` message prints the type `Allowance A`
+  as `?`. `print_op_name` in `src/front/eval.c` prints `?` and stops on
+  a dotted generated name (`Allowance.pos`); `Allowance A` is the Pi
+  `Allowance.pos -> A`. Fix: a Pi printer case that prints `D cod` for
+  a domain named `D.pos`. For S6.
 
 ## 14. Questions for the USER (S0)
 

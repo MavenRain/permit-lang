@@ -31,7 +31,7 @@ trap: a denial is a value with a reason code.
 
 ## Status
 
-S4: the affine layer. The repo holds the Cubical TT kernel of intent-lang
+S5: the domain types. The repo holds the Cubical TT kernel of intent-lang
 (67445ae), ported from relay-lang 05dd63b without the crypto code, on the
 tcc-wasm host, and the plan. S3 adds R0 from relay-lang 5c386bb: total
 Nat operations, `REFUSE_PARTIAL`, and a Wasm writer that emits no trap
@@ -42,8 +42,15 @@ layer from leaf-lang 47a6f36: the marks `@0` and `@1`, `A -o B`,
 `REFUSE_AFFINE_PATH`. The prelude has `fmBindNat`, `fmBindSize`,
 `fmMapNat`, `fmMapSize`, `fmEtaNat` and `fmEtaSize` in place of `fmBind`
 and `fmMap`. The examples have `orbitNExtBag` and `isSetAtLin`, and
-`map0`, `map1` and `truncExt` are at fixed types. The other permit-lang
-types and refusals, the gate and the three targets do not exist yet.
+`map0`, `map1` and `truncExt` are at fixed types. S5 adds the domain
+types in `domain/domain.lang`: `Action`, `Reason`, `Decision`,
+`StepBound := Size`, the `Call` stand-in, `Scope` with `allows` and
+`scopeWithin`, and the affine `cofamily Allowance` with `alOpen`. The
+kernel has the sort `Resource` with `resEq` and `within`, and
+`REFUSE_TIME` names 10 time words. `examples/scope.lang` is the S5
+demo (L4, L6). The other permit-lang types and refusals (the `Budget`
+ops, `Capability`, `delegate`, the approval forms), the gate and the
+three targets do not exist yet.
 `docs/PLAN.md` gives the readings, the route, the slices and the open
 questions.
 

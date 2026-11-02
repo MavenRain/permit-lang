@@ -1,0 +1,1 @@
+def omega : (A : Type 0) -> Allowance A -> A := fun A x => eps A x

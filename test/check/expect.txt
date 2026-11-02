@@ -81,6 +81,7 @@ kit-type-flag.lang REFUSE_KIT
 kit-type-map.lang REFUSE_KIT
 kit-op-nat.lang REFUSE_KIT
 kit-map-op.lang REFUSE_KIT
+kit-res-root.lang REFUSE_KIT
 kit-literal-nat.lang REFUSE_KIT
 kit-literal-nat-infer.lang REFUSE_KIT
 kit-state.lang REFUSE_KIT
@@ -149,6 +150,10 @@ time-timestamp.lang REFUSE_TIME
 time-time.lang REFUSE_TIME
 time-clock.lang REFUSE_TIME
 time-epoch.lang REFUSE_TIME
+time-date.lang REFUSE_TIME
+time-ttl.lang REFUSE_TIME
+time-deadline.lang REFUSE_TIME
+time-expires.lang REFUSE_TIME
 partial-name.lang REFUSE_PARTIAL
 partial-option.lang REFUSE_PARTIAL
 partial-option-arg.lang REFUSE_PARTIAL
@@ -198,3 +203,11 @@ affine-map-captured-result.lang REFUSE_AFFINE_OMEGA
 affine-polymorphic-payload.lang REFUSE_AFFINE_OMEGA
 affine-map-polymorphic-result.lang REFUSE_AFFINE_OMEGA
 affine-map-polymorphic-input.lang REFUSE_AFFINE_OMEGA
+allowance-reuse.lang REFUSE_AFFINE_REUSE
+allowance-omega.lang REFUSE_AFFINE_OMEGA
+allowance-open-twice.lang REFUSE_AFFINE_REUSE
+allowance-open-parts.lang REFUSE_AFFINE_REUSE
+allowance-unpack-twice.lang REFUSE_AFFINE_REUSE
+allowance-capture-budget.lang REFUSE_AFFINE_OMEGA
+allowance-capture-allowance.lang REFUSE_AFFINE_OMEGA
+allowance-capture-polymorphic.lang REFUSE_AFFINE_OMEGA

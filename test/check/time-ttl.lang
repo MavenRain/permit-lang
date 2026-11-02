@@ -1,0 +1,2 @@
+-- REFUSE_TIME (S5, Q-S5-2): `ttl` is a time word; no binder can take it.
+def keep : Nat -> Nat := fun ttl => ttl

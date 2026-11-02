@@ -590,6 +590,7 @@ static int lower_canon(Low *l, Buf *b, const Value *v, Operand *out) {
   case OP_FLAG:
   case OP_BUDGET:
   case OP_APPROVAL:
+  case OP_RESOURCE:
   case OP_UNIT:
   case OP_PROD:
   case OP_SUM:
@@ -648,6 +649,11 @@ static int lower_canon(Low *l, Buf *b, const Value *v, Operand *out) {
     return closure(l);
   case OP_NONZERO:
     return give(l, out, 0);
+  case OP_RES_ROOT:
+  case OP_RES_CHILD:
+  case OP_RES_EQ:
+  case OP_RES_WITHIN:
+    return refuse(l, "a Resource at run time (S8)");
   case OP_FM_LEN:
     return refuse(l, "len (the op count of a FreeMon trace at run time)");
   case OP_ELIM:
@@ -1144,6 +1150,7 @@ static int lower_stuck(Low *l, Buf *b, const Value *v, Operand *out) {
   case OP_FLAG:
   case OP_BUDGET:
   case OP_APPROVAL:
+  case OP_RESOURCE:
   case OP_UNIT:
   case OP_PROD:
   case OP_SUM:
@@ -1215,6 +1222,11 @@ static int lower_stuck(Low *l, Buf *b, const Value *v, Operand *out) {
     return lower(l, b, v->args[0], out);
   case OP_NONZERO:
     return internal(l, "a stuck canonical value");
+  case OP_RES_ROOT:
+  case OP_RES_CHILD:
+  case OP_RES_EQ:
+  case OP_RES_WITHIN:
+    return refuse(l, "a Resource at run time (S8)");
   case OP_FM_LEN:
     return refuse(l, "len (the op count of a FreeMon trace at run time)");
   case OP_ELIM:

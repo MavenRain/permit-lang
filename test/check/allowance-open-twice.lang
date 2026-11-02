@@ -1,0 +1,1 @@
+def openTwice : (A : Type 0) -> Call -> Allowance A -o Prod (Allowance A) (Allowance A) := fun A c x => unpack (alOpen A x) (fun a k => pair (k c) (k c))

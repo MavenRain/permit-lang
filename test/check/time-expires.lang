@@ -1,0 +1,2 @@
+-- REFUSE_TIME (S5, Q-S5-2): `expires` is a time word; no Pi binder can take it.
+def bad : (expires : Nat) -> Nat := fun x => x

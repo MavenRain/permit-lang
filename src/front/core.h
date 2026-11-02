@@ -21,6 +21,7 @@ typedef enum {
   OP_UNIT,
   OP_BUDGET,   /* Budget : Type 0, a resource sort with no constructor (PLAN 6) */
   OP_APPROVAL, /* Approval : Type 0, a resource sort with no constructor (PLAN 6) */
+  OP_RESOURCE, /* S5: Resource : Type 0, a copyable sort with no guest constructor (PLAN 4) */
   OP_PROD,
   OP_SUM,
   OP_OPTION,
@@ -84,7 +85,12 @@ typedef enum {
      Nat is a Nat that is not 0: the type carries the fact. */
   OP_NONZERO,      /* NonZero Nat: a type */
   OP_NONZERO_OF,   /* nonZero x: some x, or none when x is 0 */
-  OP_NONZERO_VALUE /* nonZeroValue x: the base value; stuck on an open x */
+  OP_NONZERO_VALUE, /* nonZeroValue x: the base value; stuck on an open x */
+  /* S5: the kit-only Resource values and the two tests (PLAN 4). */
+  OP_RES_ROOT,  /* resRoot n: the root segment n */
+  OP_RES_CHILD, /* resChild r n: the segment n under r */
+  OP_RES_EQ,    /* resEq r s: a Flag */
+  OP_RES_WITHIN /* within r s: a Flag, flagYes when s is r or an ancestor of r */
 } Op;
 
 /* The instance of pure, map, bind and filter (formers F5 and F8). */
@@ -285,6 +291,9 @@ typedef struct {
   uint32_t block_count;
   /* A sealed family (S5, rule O7): a guest elim or fold of it is law-only. */
   int sealed;
+  /* The positions family D.pos of an affine cofamily (permit S5 item 4):
+     a Pi on it, the value of `D A`, is a resource. */
+  int affine_pos;
 } FamilyInfo;
 
 typedef struct {

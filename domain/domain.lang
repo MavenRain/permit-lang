@@ -296,3 +296,40 @@ family Signal := sigQuiet | sigLoud (loudLevel : Nat)
 and Window := winOpen | winShut (shutFor : Nat)
 family Hop := hopEnd | hopNext (nextEcho : Echo)
 and Echo := echoBack (backHop : Hop)
+
+-- The capability domain (S5, Q-S5-1, Q-S5-4 (b)). A Resource is a kernel
+-- chain of segments (resRoot, resChild). `within r g` is flagYes when g
+-- is r or an ancestor of r.
+family Action := inspect | propose | execute
+family Reason := scopeMiss | boundSpent | budgetShort | noApproval | digestDiffers | approvalUsed | widen | malformed
+family Decision := permit | deny (why : Reason)
+-- A deadline is a StepBound: a count of later operations (Q-S5-2 (a)).
+def StepBound : Type 0 := Size
+-- A call at the tool boundary (a stand-in until S6): a target and an action.
+family Call := call (target : Resource) (action : Action)
+def actEq : Action -> Action -> Flag :=
+  fun (a : Action) (b : Action) => elim (fun (x : Action) => Flag)
+    (elim (fun (y : Action) => Flag) flagYes flagNo flagNo b)
+    (elim (fun (y : Action) => Flag) flagNo flagYes flagNo b)
+    (elim (fun (y : Action) => Flag) flagNo flagNo flagYes b) a
+-- A scope is a FreeMon of grants. The grant (g, b) allows the action b on
+-- g and on each resource below g. allows and scopeWithin count the
+-- grants that match (fmBindNat, a fold by fmFold; len): the domain cannot
+-- prove the Flag monoid laws that a fold into Flag needs.
+def Scope : Type 0 := FreeMon (Prod Resource Action)
+def grants : Resource -> Action -> Prod Resource Action -> Flag :=
+  fun (r : Resource) (a : Action) (g : Prod Resource Action) => flagIf (within r (first g)) (actEq a (second g)) flagNo
+def allows : Scope -> Resource -> Action -> Flag :=
+  fun (s : Scope) (r : Resource) (a : Action) =>
+    flagIf (natEq (len Nat (fmBindNat (Prod Resource Action) (fun (g : Prod Resource Action) => flagIf (grants r a g) (fmEtaNat 0) (fmUnit Nat)) s)) 0) flagNo flagYes
+-- scopeWithin s t is flagYes when t allows each grant of s (a delegated
+-- scope can only narrow; else the Reason is widen).
+def scopeWithin : Scope -> Scope -> Flag :=
+  fun (s : Scope) (t : Scope) =>
+    natEq (len Nat (fmBindNat (Prod Resource Action) (fun (g : Prod Resource Action) => flagIf (allows t (first g) (second g)) (fmUnit Nat) (fmEtaNat 0)) s)) 0
+-- The allowance (Q-S5-4 (b)): eps is the value that the allowance holds
+-- now and advance is the allowance after one call.
+affine cofamily Allowance (A : Type 0) := alCorec (eps : A) (advance : Call -> Allowance A)
+-- alOpen gives the value now and the allowance after one call, as one
+-- pair (Q-S5-8 (a)). The pair is a resource: split it with unpack.
+def alOpen : (A : Type 0) -> Allowance A -o Prod A (Call -o Allowance A) := AllowanceOpen

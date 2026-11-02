@@ -67,6 +67,19 @@ cannot make one. A use that the multiplicity does not allow gives
 `REFUSE_AFFINE_REUSE`, `REFUSE_AFFINE_OMEGA`, `REFUSE_AFFINE_FIX` or
 `REFUSE_AFFINE_PATH`.
 
+S5 (`docs/PLAN.md` sections 4 and 5) adds these forms. `Resource` is a
+kernel sort, copyable. `resEq` and `within : Resource -> Resource ->
+Flag` test two values. The introductions `resRoot : Nat -> Resource`
+and `resChild : Resource -> Nat -> Resource` are kit-only. The domain
+keyword `affine` before `cofamily` makes the cofamily a resource type: a
+value of `Allowance A` is used at most one time. `unpack p (fun a b =>
+t)` also opens a `Prod` pair `p` one time. The domain gives `Action`,
+`Reason`, `Decision`, `StepBound`, `Call`, `Scope` and `Allowance` with
+`alOpen`. A guest position closure cannot capture a resource or an
+unknown payload: `alOpen` can observe more than one position. Such a
+capture gives `REFUSE_AFFINE_OMEGA`. Copyable captures and linear
+continuations that move an Allowance are allowed.
+
 The compiler enforces these rules:
 
 | Rule | Code | The compiler refuses |
@@ -75,7 +88,7 @@ The compiler enforces these rules:
 | R2 | `REFUSE_AXIOM` | an `axiom` declaration |
 | R3 | `REFUSE_REC` | `def rec`, or a definition that refers to itself or to a later definition |
 | R4 | `REFUSE_NAME` | a core name, a domain name, a reserved name or a repeated name as a new definition |
-| R4 | `REFUSE_TIME` | a time word (`now`, `block`, `timestamp`, `time`, `clock`, `epoch`) as a name or a use; the message says to count operations (`len r`, an `OpPos`) |
+| R4 | `REFUSE_TIME` | one of 10 time words (`now`, `block`, `timestamp`, `time`, `clock`, `epoch`, `date`, `ttl`, `deadline`, `expires`) as a name or a use; the message says to count operations: a deadline is a `StepBound` (a count of later operations) |
 
 ## CLI
 
@@ -185,12 +198,12 @@ how to replace the sample domain.
 
 | Line | What the gate does |
 |---|---|
-| `examples: 30 checked, 0 failed` | `langc check` accepts each `examples/*.lang` file |
-| `parse refusals: 20 checked` | each `test/parse` file fails with the code in `test/parse/expect.txt`; one file has 1100 nested parentheses. 4 files (S4) have a bad mark (`@2`, a marked parameter, a marked field) or `-ops` |
-| `check refusals: 200 checked` | each `test/check` file fails with the code in `test/check/expect.txt`; the `TYPE_REFL` message shows both normal forms. The 45 `affine-*.lang` files (S4) give `REFUSE_AFFINE_REUSE` (11), `REFUSE_AFFINE_OMEGA` (24), `REFUSE_AFFINE_FIX` (3), `REFUSE_AFFINE_PATH` (4) or `TYPE_MISMATCH` (3). 16 of them are in `test/check/kit.txt`, so they run with `--kit` |
-| `kit-only refusals: 10 checked` | each `REFUSE_KIT` row refuses a kit item in guest mode only: `langc --kit check` accepts the file |
-| `time hint: 1 checked` | a `REFUSE_TIME` refusal names the op-count form (`len r`, an `OpPos`) |
-| `evals: 79 checked` | `langc eval` gives each result in `test/eval/expect.txt` |
+| `examples: 31 checked, 0 failed` | `langc check` accepts each `examples/*.lang` file; the files in `examples/kit.txt` run with `--kit` (`scope.lang`, the S5 demo, is one of them) |
+| `parse refusals: 21 checked` | each `test/parse` file fails with the code in `test/parse/expect.txt`; one file has 1100 nested parentheses. 4 files (S4) have a bad mark (`@2`, a marked parameter, a marked field) or `-ops`. 1 file (S5, `affine-no-cofamily.lang`) has `affine` with no `cofamily` after it |
+| `check refusals: 213 checked` | each `test/check` file fails with the code in `test/check/expect.txt`; the `TYPE_REFL` message shows both normal forms. The 45 `affine-*.lang` files (S4) give `REFUSE_AFFINE_REUSE` (11), `REFUSE_AFFINE_OMEGA` (24), `REFUSE_AFFINE_FIX` (3), `REFUSE_AFFINE_PATH` (4) or `TYPE_MISMATCH` (3). 16 of them are in `test/check/kit.txt`, so they run with `--kit`. The 13 S5 files: `time-{date,ttl,deadline,expires}.lang` (`REFUSE_TIME`), `kit-res-root.lang` (`REFUSE_KIT`), `allowance-{reuse,open-twice,open-parts,unpack-twice}.lang` (`REFUSE_AFFINE_REUSE`: a second use of an `Allowance`, of its opened pair, or of its parts) and `allowance-{omega,capture-budget,capture-allowance,capture-polymorphic}.lang` (`REFUSE_AFFINE_OMEGA`: an omega binder or a position closure that captures a resource or an unknown payload) |
+| `kit-only refusals: 11 checked` | each `REFUSE_KIT` row refuses a kit item in guest mode only: `langc --kit check` accepts the file (`kit-res-root.lang`, S5, is a guest `resRoot`) |
+| `time hint: 1 checked` | a `REFUSE_TIME` refusal says to count operations: a deadline is a `StepBound` (a count of later operations) |
+| `evals: 85 checked` | `langc eval` gives each result in `test/eval/expect.txt`; 6 rows (S5) run `examples/scope.lang` with `--kit`: `within` and `resEq` (yes and no), `afterOne` and `openAfterOne` (L4) |
 | `builds: 1 checked` | `langc build examples/functions.lang` writes a module that `wasm-validate` accepts |
 | `ir: 1 lowered` | `langc ir examples/functions.lang` gives one `func` line for each `abi` line |
 | `ir refusals: 5 checked` | `langc --kit ir` refuses `test/ir/closure.lang`, `kmap.lang`, `tree.lang`, `spine.lang` and `hop.lang`, each with its code |
@@ -198,9 +211,10 @@ how to replace the sample domain.
 | `notrap modules: 4 checked` | `langc build` writes the modules of `test/ir/natops.lang`, `test/ir/block.lang` and `examples/state-no-history.lang`, and `wasm-validate` accepts each one. `build/notraptool` (`test/notraptool.c`) accepts these three modules and the module of `examples/functions.lang`: no `unreachable`, no `memory.grow`, only the opcodes of `src/wasmop.h`, a divisor guard before each `i64.div_u` and `i64.rem_u`, and memory 0 with maximum = minimum. `build` lowers the `state` family of `examples/state-no-history.lang` as a plain family (Q-S3-3 (b)) |
 | `notrap bad rows: 7 checked` | `build/notraptool` refuses each module of `test/notrap/bad/` (`wat2wasm` makes it from its `.wat` file): exit 1 and the message of its line in `test/notrap/bad/expect.txt`. The 7 modules have `unreachable`, `memory.grow`, an `i64.div_u` and an `i64.rem_u` with no guard, a memory maximum above the minimum, a memory with no maximum, and `i32.add` (an opcode that is not in `src/wasmop.h`) |
 | `spine evals: 10 checked` | `langc --kit eval` gives each eval of `test/ir/spine.lang` at 4 |
+| `natops evals: 2 checked` | `langc --kit eval` gives 1 for `reasonCode 0` and 2 for `reasonCode 1` of `test/ir/natops.lang` (the run-time case split over the domain `Reason`, O15) |
 | `gate: 0 failures` | the sum of all failures of `test/gate.sh` |
 | `review regressions: passed` | `test/review.sh` passes |
-| `domain regressions: passed` | `build/fronttool` (the domain declaration rows and the 54 affine rows of S4) passes |
+| `domain regressions: passed` | `build/fronttool` (the domain declaration rows, the 54 affine rows of S4 and the 4 time rows and 3 affine cofamily rows of S5) passes |
 | `path regressions: passed` | `build/pathtool` (the path rows) passes |
 
 The gate also checks the usage and IO exit codes, five `eval` refusals and

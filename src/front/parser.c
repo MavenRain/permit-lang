@@ -164,6 +164,7 @@ static int starts_atom(TokKind kind) {
     case TOK_KW_AND:
     case TOK_KW_COFAMILY:
     case TOK_KW_SEALED:
+    case TOK_KW_AFFINE:
     case TOK_KW_LAW:
       return 0;
   }
@@ -407,6 +408,7 @@ static const Term *parse_atom(Parser *p) {
     case TOK_KW_AND:
     case TOK_KW_COFAMILY:
     case TOK_KW_SEALED:
+    case TOK_KW_AFFINE:
     case TOK_KW_LAW:
       break;
   }
@@ -589,6 +591,7 @@ static int parse_and(Parser *p, Decl *d) {
   d->col = tok->col;
   d->is_state = 0;
   d->is_sealed = 0;
+  d->is_affine = 0;
   d->is_law = 0;
   return parse_family(p, d);
 }
@@ -601,14 +604,19 @@ static int parse_decl(Parser *p, Decl *d) {
   d->col = tok->col;
   d->is_state = tok->kind == TOK_KW_STATE;
   d->is_sealed = 0;
+  d->is_affine = 0;
   d->is_law = 0;
   switch (tok->kind) {
-    /* `sealed family` and `law def` (S5): domain-only modifiers; the
-       checker refuses them in a program (REFUSE_DATA). */
+    /* `sealed family`, `affine cofamily` and `law def` (S5): domain-only
+       modifiers; the checker refuses them in a program (REFUSE_DATA). */
     case TOK_KW_SEALED:
       bump(p);
       d->is_sealed = 1;
       return at(p, TOK_KW_FAMILY) ? parse_family(p, d) : fail_at(p, cur(p), "'family' after 'sealed'");
+    case TOK_KW_AFFINE:
+      bump(p);
+      d->is_affine = 1;
+      return at(p, TOK_KW_COFAMILY) ? parse_family(p, d) : fail_at(p, cur(p), "'cofamily' after 'affine'");
     case TOK_KW_LAW:
       bump(p);
       d->is_law = 1;

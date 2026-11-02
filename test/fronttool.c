@@ -143,6 +143,10 @@ int main(void) {
   ok &= domain("def bad : Path Nat 0 0 := fun (block : I) => 0", "REFUSE_TIME");
   ok &= domain("family Test (timestamp : Type 0) := makeTest (payload : timestamp)", "REFUSE_TIME");
   ok &= domain("def bad : Path Nat 0 0 := fun epoch => 0", "REFUSE_TIME");
+  ok &= domain("def bad : Nat -> Nat := fun date => date", "REFUSE_TIME");
+  ok &= domain("def bad : (ttl : Nat) -> Nat := fun x => x", "REFUSE_TIME");
+  ok &= domain("family Test (deadline : Type 0) := makeTest (payload : deadline)", "REFUSE_TIME");
+  ok &= domain("def bad : Path Nat 0 0 := fun (expires : I) => 0", "REFUSE_TIME");
   /* Counting an open higher cell must preserve its path boundaries. */
   ok &= len_roundtrip(
     "(r : FreeMon Unit) -> (p : Path (FreeMon Unit) (fmUnit Unit) r) -> Path Nat 0 (len Unit r)",
@@ -391,6 +395,14 @@ int main(void) {
   ok &= domain("family Lab := l0 | l1\n"
                "cofamily Br (A : Type 0) := brCorec (brHere : A) (brNext : Lab -> Br A)", NULL);
   ok &= domain("cofamily Ident (A : Type 0) := identCorec (identOut : A)", NULL);
+  /* Trusted affine destructors cover both cofield forms and field orders.
+     The trust must end before checking the next user declaration. */
+  ok &= domain("affine cofamily AffStrm (A : Type 0) := affCorec (affHead : A) (affTail : AffStrm A)\n"
+               "def tailOnce : (A : Type 0) -> AffStrm A -o AffStrm A := fun A x => affTail A x", NULL);
+  ok &= domain("affine cofamily Rev (A : Type 0) := revCorec (revNext : Unit -> Rev A) (revHere : A)\n"
+               "def openRev : (A : Type 0) -> Rev A -o Prod A (Unit -o Rev A) := RevOpen", NULL);
+  ok &= domain("affine cofamily Rev (A : Type 0) := revCorec (revNext : Unit -> Rev A) (revHere : A)\n"
+               "def duplicate : Budget -o Prod Budget Budget := fun b => pair b b", "REFUSE_AFFINE_REUSE");
   /* Closed labels are judged after normalization. Erased references to
      the parameter, self and earlier observations need no local context. */
   ok &= domain("family Lab := l0 | l1\n"
@@ -552,8 +564,7 @@ int main(void) {
     "def wrapF : (A : Type 0) -> (A -o A) -> A -o Option A := fun A f x => some (f x)", NULL);
   ok &= guest("def burn : Budget -o Unit := fun b => unit\n"
     "def use : Budget -o Option Unit := fun b => map (fun (u : Unit) => burn b) (some unit)", NULL);
-  ok &= guest("def leak : Budget -o Sum Unit (Unit -> Budget) := fun b => map (fun (u : Unit) => fun (v : Unit) => b) (inr unit)", "REFUSE_AFFINE_OMEGA");
-  /* A branching fold or elim can run its leaf case more than once. */
+  ok &= guest("def leak : Budget -o Sum Unit (Unit -> Budget) := fun b => map (fun (u : Unit) => fun (v : Unit) => b) (inr unit)", "REFUSE_AFFINE_OMEGA");  /* A branching fold or elim can run its leaf case more than once. */
   ok &= domain("family Tree := leaf | node (left : Tree) (right : Tree)\n"
     "family Carry := blank | one (item : Budget) | both (cLeft : Carry) (cRight : Carry)\n"
     "def twins : Tree := node leaf leaf\n"

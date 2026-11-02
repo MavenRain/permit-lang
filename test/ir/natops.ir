@@ -90,3 +90,31 @@ func flagPick (flag, nat, nat) -> nat, 4 locals, 0 heap words
     l3 := l2
   }
   return l3
+func reasonCode (nat) -> nat, 6 locals, 1 heap words
+  l3 := eq(l0, 0)
+  if l3 {
+    l4 := alloc [0]
+    l2 := l4
+  } else {
+    l5 := alloc [1]
+    l2 := l5
+  }
+  switch load(l2, 0) {
+  arm 0:
+    l1 := 1
+  arm 1:
+    l1 := 2
+  arm 2:
+    l1 := 3
+  arm 3:
+    l1 := 4
+  arm 4:
+    l1 := 5
+  arm 5:
+    l1 := 6
+  arm 6:
+    l1 := 7
+  arm 7:
+    l1 := 8
+  }
+  return l1

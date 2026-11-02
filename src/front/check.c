@@ -60,9 +60,12 @@ typedef struct {
   int field_rec;
   CheckMode mode; /* orbit-lang S3: guest or kit */
   Mult at;        /* the level of the current term: 0 in a type position, else 1 (PLAN 6) */
+  int trusted;    /* the kernel text D.Open of an affine cofamily (S5 item 4): use counts are not checked */
+  int position_view; /* a generated affine destructor preserves positions */
 } Checker;
 
 static int resource_type(Checker *c, const Value *v);
+static int affine_positions(Checker *c, const Value *v);
 static int copyable_type(Checker *c, const Value *v);
 static int copyable_capture_type(Checker *c, const Value *v);
 static Mult field_mult(Checker *c, const Value *v, uint32_t level);
@@ -112,6 +115,8 @@ typedef enum {
   RULE_TRANSP,
   RULE_HCOMP,
   RULE_NAT2,
+  RULE_RES2,      /* S5: resEq, within */
+  RULE_RES_CHILD, /* S5: resChild r n */
   RULE_LEN, /* S3: len A r (survey section 7) */
   RULE_FLAG_IF,
   RULE_NONZERO,       /* S3: NonZero Nat */
@@ -144,6 +149,7 @@ static const Builtin BUILTINS[] = {
   {"Unit", 0, RULE_TYPE0, OP_UNIT, OP_NAT, 0, VIS_GUEST},
   {"Budget", 0, RULE_TYPE0, OP_BUDGET, OP_NAT, 0, VIS_GUEST},
   {"Approval", 0, RULE_TYPE0, OP_APPROVAL, OP_NAT, 0, VIS_GUEST},
+  {"Resource", 0, RULE_TYPE0, OP_RESOURCE, OP_NAT, 0, VIS_GUEST},
   {"Prod", 2, RULE_TYPE2, OP_PROD, OP_NAT, 0, VIS_GUEST},
   {"Sum", 2, RULE_TYPE2, OP_SUM, OP_NAT, 0, VIS_GUEST},
   {"Option", 1, RULE_TYPE1, OP_OPTION, OP_NAT, 0, VIS_GUEST},
@@ -194,6 +200,10 @@ static const Builtin BUILTINS[] = {
   {"natSub", 2, RULE_NAT2, OP_NAT_SUB, OP_NAT, 0, VIS_INTERNAL},
   {"natEq", 2, RULE_NAT2, OP_NAT_EQ, OP_FLAG, 0, VIS_INTERNAL},
   {"natLe", 2, RULE_NAT2, OP_NAT_LE, OP_FLAG, 0, VIS_INTERNAL},
+  {"resEq", 2, RULE_RES2, OP_RES_EQ, OP_FLAG, 0, VIS_INTERNAL},
+  {"within", 2, RULE_RES2, OP_RES_WITHIN, OP_FLAG, 0, VIS_INTERNAL},
+  {"resRoot", 1, RULE_NAT2, OP_RES_ROOT, OP_RESOURCE, 0, VIS_INTERNAL},
+  {"resChild", 2, RULE_RES_CHILD, OP_RES_CHILD, OP_RESOURCE, 0, VIS_INTERNAL},
   {"flagIf", 3, RULE_FLAG_IF, OP_FLAG_IF, OP_FLAG, 0, VIS_INTERNAL},
   {"Map", 2, RULE_KMAP, OP_KMAP, OP_NAT, 0, VIS_INTERNAL},
   {"mapEmpty", 0, RULE_EMPTY, OP_KMAP_OF, OP_KMAP, 0, VIS_INTERNAL},
@@ -215,11 +225,12 @@ static const Builtin BUILTINS[] = {
    universe. */
 static const char *const RESERVED[] = {"Bool", "Text", "Prop", "SProp"};
 
-/* Time words (S3, O3): no declaration can take one and no name can use
-   one (REFUSE_TIME). A program counts operations instead. */
-static const char *const TIME_WORDS[] = {"now", "block", "timestamp", "time", "clock", "epoch"};
+/* Time words (S3, O3; S5 adds date, ttl, deadline, expires): no
+   declaration can take one and no name can use one (REFUSE_TIME). A
+   program counts operations instead. */
+static const char *const TIME_WORDS[] = {"now", "block", "timestamp", "time", "clock", "epoch", "date", "ttl", "deadline", "expires"};
 
-#define TIME_HINT "%s is a time word; count operations: a position is `len r` (an OpPos) and a deadline is a count of later operations"
+#define TIME_HINT "%s is a time word; count operations: a deadline is a StepBound (a count of later operations)"
 
 static int time_word(const char *name) {
   size_t i;
@@ -525,6 +536,8 @@ static Mult mult_scale(Mult at, Mult m) {
 static int use_local(Checker *c, Scope *s) {
   uint32_t add = mult_bound(c->at);
   uint32_t bound = mult_bound(s->mult);
+  if (c->trusted)
+    return 1;
   s->uses = add > UINT32_MAX - s->uses ? UINT32_MAX : s->uses + add;
   if (s->uses <= bound)
     return 1;
@@ -567,17 +580,21 @@ static void uses_max(Checker *c, const uint32_t *most) {
 
 /* A closure at omega can run more than one time (PLAN 6). Its body counts
    at 1 for one call; then each variable that it captures (its count is not
-   the count in SAVED) is used at omega. c->at is MULT_OMEGA. */
+   the count in SAVED) is used at omega. Position closures of an affine
+   cofamily also need this check: D.Open observes more than one position. */
 static int uses_omega(Checker *c, const uint32_t *saved) {
+  Mult at = c->at;
   Scope *s;
   uint32_t i = 0;
   int ok = 1;
+  c->at = mult_scale(at, MULT_OMEGA);
   for (s = c->scope; s != NULL && saved != NULL && ok; s = s->next, i++) {
     if (s->uses != saved[i]) {
       s->uses = saved[i];
       ok = use_local(c, s);
     }
   }
+  c->at = at;
   return ok;
 }
 
@@ -1063,25 +1080,28 @@ static const Core *rule_sigma_part(Call *k) {
 /* unpack p f (Q-S4-3): p : Sigma (x : A) B is used one time, and f takes
    the two parts at 1: (@1 a : A) -o (@1 b : B a) -o C, where C is the
    declared type. The Core applies f to witness p and payload p, so the
-   lowering does not change. */
+   lowering does not change. A pair p : Prod A B is split the same way
+   with first p and second p (S5 item 4, Q-S5-8 (a)): the linear split of
+   the alOpen pair. */
 static const Core *rule_unpack(Call *k) {
   Checker *c = k->c;
   const Value *st = NULL;
   const Core *s = infer(c, k->args[0], &st);
+  int prod = val_is(st, OP_PROD);
   const Core *ft;
   const Core *f;
   if (s == NULL)
     return NULL;
-  if (st == NULL || st->kind != VAL_SIGMA)
-    return nul(FAIL(c, "TYPE_MISMATCH", "unpack needs a Sigma value, found a term of type %s", show(c, st)));
+  if (!prod && (st == NULL || st->kind != VAL_SIGMA))
+    return nul(FAIL(c, "TYPE_MISMATCH", "unpack needs a Sigma value or a pair, found a term of type %s", show(c, st)));
   if (k->hint == NULL)
     return need_type(k, "C for the result of its function");
-  ft = core_binder(c, CORE_PI, MULT_ONE, "a", quote_value(c->m, c->level, st->dom),
-                   core_binder(c, CORE_PI, MULT_ONE, "b", quote_value(c->m, c->level + 1u, closure_apply(c->m, st, val_var(c->m, c->level))),
+  ft = core_binder(c, CORE_PI, MULT_ONE, "a", quote_value(c->m, c->level, prod ? st->args[0] : st->dom),
+                   core_binder(c, CORE_PI, MULT_ONE, "b", quote_value(c->m, c->level + 1u, prod ? st->args[1] : closure_apply(c->m, st, val_var(c->m, c->level))),
                                quote_value(c->m, c->level + 2u, k->hint)));
   f = ft == NULL ? NULL : check(c, k->args[1], here(c, ft));
   k->type = k->hint;
-  return f == NULL ? NULL : core_app(c, core_app(c, f, op3(c, OP_WITNESS, 0, 1, s, NULL, NULL)), op3(c, OP_PAYLOAD, 0, 1, s, NULL, NULL));
+  return f == NULL ? NULL : core_app(c, core_app(c, f, op3(c, prod ? OP_FIRST : OP_WITNESS, 0, 1, s, NULL, NULL)), op3(c, prod ? OP_SECOND : OP_PAYLOAD, 0, 1, s, NULL, NULL));
 }
 
 /* either f g s */
@@ -2659,6 +2679,16 @@ static const Core *rule_div(Call *k) {
 }
 
 /* flagIf b yes no */
+/* S5: resChild r n, the segment n under the resource r (kit only). */
+static const Core *rule_res_child(Call *k) {
+  Checker *c = k->c;
+  const Value *t = tyop(c, OP_RESOURCE, 0, NULL, NULL, NULL);
+  const Core *r = check(c, k->args[0], t);
+  const Core *n = r == NULL ? NULL : check(c, k->args[1], tyop(c, OP_NAT, 0, NULL, NULL, NULL));
+  k->type = t;
+  return op3(c, OP_RES_CHILD, 0, 2, r, n, NULL);
+}
+
 static const Core *rule_flag_if(Call *k) {
   Checker *c = k->c;
   const Value *res = k->hint;
@@ -2798,6 +2828,10 @@ static const Core *rule(Call *k) {
     return path_rule(k, rule_unglue);
   case RULE_NAT2:
     return rule_prim(k, OP_NAT);
+  case RULE_RES2:
+    return rule_prim(k, OP_RESOURCE);
+  case RULE_RES_CHILD:
+    return rule_res_child(k);
   case RULE_LEN:
     return rule_len(k);
   case RULE_FIN_OP:
@@ -3400,7 +3434,7 @@ static const Core *check_lam(Checker *c, const Term *t, const Value *hint, const
     body = check_fin_all(c, t, hint, fin_cases(hint->dom));
     c->at = at;
   }
-  if (body != NULL && at == MULT_OMEGA && !uses_omega(c, uses))
+  if (body != NULL && (at == MULT_OMEGA || (!c->position_view && hint->mult == MULT_OMEGA && affine_positions(c, hint->dom))) && !uses_omega(c, uses))
     return NULL;
   *type = hint;
   return core_binder(c, CORE_LAM, hint->mult, t->name, ann, body);
@@ -3414,7 +3448,7 @@ static const Core *infer_lam(Checker *c, const Term *t, const Value **type) {
   const Core *quoted;
   const Core *ann;
   Mult at = c->at;
-  uint32_t *uses = at == MULT_OMEGA ? uses_save(c) : NULL;
+  uint32_t *uses = uses_save(c);
   if (t->left == NULL)
     return nul(FAIL(c, "TYPE_INFER", "fun %s => ... needs a binder type here", t->name));
   if (is_interval(c, t->left))
@@ -3428,7 +3462,7 @@ static const Core *infer_lam(Checker *c, const Term *t, const Value **type) {
   c->at = at;
   quoted = body == NULL ? NULL : quote_value(c->m, c->level, bt);
   pop(c);
-  if (body != NULL && at == MULT_OMEGA && !uses_omega(c, uses))
+  if (body != NULL && (at == MULT_OMEGA || (!c->position_view && t->mult == MULT_OMEGA && affine_positions(c, dom))) && !uses_omega(c, uses))
     return NULL;
   if (body != NULL && t->mult == MULT_OMEGA && resource_type(c, dom))
     return nul(FAIL(c, "REFUSE_AFFINE_OMEGA", "the binder %s has the resource type %s at omega; bind it at 1 (@1 or -o) or at 0 (@0) (PLAN 6)", t->name != NULL ? t->name : "_", show(c, dom)));
@@ -3456,6 +3490,24 @@ struct ResourceVisit {
   const ResourceVisit *next;
 };
 
+/* The value of an affine cofamily type `D A` is the Pi `D.pos -> A` on a
+   positions family marked affine_pos (S5 item 4, Q-S5-7 (a)). A `-o` Pi
+   whose codomain is one is a resource too (Q-S5-8 (a)): the continuation
+   of alOpen. */
+static int affine_positions(Checker *c, const Value *v) {
+  return v != NULL && v->kind == VAL_OP && v->op == OP_FAMILY && v->inst < c->m->family_count && c->m->families[v->inst].affine_pos;
+}
+
+static int affine_arrow(Checker *c, const Value *v, uint32_t level) {
+  const Value *b;
+  if (affine_positions(c, v->dom))
+    return 1;
+  if (v->mult != MULT_ONE)
+    return 0;
+  b = closure_apply(c->m, v, val_var(c->m, level));
+  return b != NULL && b->kind == VAL_PI && affine_arrow(c, b, level + 1u);
+}
+
 static Resource resource_shape_in(Checker *c, const Value *v, uint32_t level, const ResourceVisit *seen, int captures) {
   const FamilyInfo *f;
   const Env *env;
@@ -3473,12 +3525,12 @@ static Resource resource_shape_in(Checker *c, const Value *v, uint32_t level, co
   if (v->kind == VAL_SIGMA)
     return resource_join(resource_shape_in(c, v->dom, level, seen, captures), resource_shape_in(c, closure_apply(c->m, v, val_var(c->m, level)), level + 1u, seen, captures));
   if (v->kind == VAL_PI)
-    return captures ? RESOURCE_PRESENT : RESOURCE_NONE;
+    return captures || affine_arrow(c, v, level) ? RESOURCE_PRESENT : RESOURCE_NONE;
   if (v->kind != VAL_OP)
     return RESOURCE_UNKNOWN;
   if (v->op == OP_BUDGET || v->op == OP_APPROVAL)
     return RESOURCE_PRESENT;
-  if (v->op == OP_NAT || v->op == OP_FLAG || v->op == OP_UNIT || v->op == OP_INTERVAL || v->op == OP_FIN || v->op == OP_NONZERO)
+  if (v->op == OP_NAT || v->op == OP_FLAG || v->op == OP_UNIT || v->op == OP_INTERVAL || v->op == OP_FIN || v->op == OP_NONZERO || v->op == OP_RESOURCE)
     return RESOURCE_NONE;
   if ((v->op == OP_OPTION || v->op == OP_LIST) && v->argc == 1u)
     return resource_shape_in(c, v->args[0], level, seen, captures);
@@ -4204,8 +4256,10 @@ static int check_family(Checker *c, const Decl *d) {
   /* A sealed family is a cell monad (S5, rule O7). */
   if (d->is_sealed && (count != 1u || !has_type_param(&m->families[first])))
     return FAIL(c, "REFUSE_CELL", "%s is sealed but is not a cell monad: a sealed family has a type parameter and no and block (rule O7)", d->name);
-  for (s = 0; s < count; s++)
+  for (s = 0; s < count; s++) {
     m->families[first + s].sealed = d[s].is_sealed;
+    m->families[first + s].affine_pos = 0;
+  }
   return 1;
 }
 
@@ -4851,18 +4905,19 @@ static void cocell_pos(Text *t, const char *dn, const char *f, CocellField kind)
 
 /* The destructor F: the observation reads the position here, a cofield
    moves one position down. */
-static void cocell_dtor(Text *t, const char *dn, const char *f, CocellField kind, unsigned long long u) {
+/* ARROW is `-o` for an affine cofamily: a destructor is a one-use view. */
+static void cocell_dtor(Text *t, const char *dn, const char *f, CocellField kind, unsigned long long u, const char *arrow) {
   switch (kind) {
   case COCELL_OBSERVATION:
-    text_add(t, "def %s : (.A : Type %llu) -> %s .A -> .A := fun (.A : Type %llu) (.x : %s .A) => .x %s.here\n", f, u, dn, u, dn, dn);
+    text_add(t, "def %s : (.A : Type %llu) -> %s .A %s .A := fun (.A : Type %llu) (.x : %s .A) => .x %s.here\n", f, u, dn, arrow, u, dn, dn);
     break;
   case COCELL_COFIELD:
-    text_add(t, "def %s : (.A : Type %llu) -> %s .A -> %s .A := fun (.A : Type %llu) (.x : %s .A) (.p : %s.pos) => .x (%s.%s .p)\n",
-             f, u, dn, dn, u, dn, dn, dn, f);
+    text_add(t, "def %s : (.A : Type %llu) -> %s .A %s %s .A := fun (.A : Type %llu) (.x : %s .A) (.p : %s.pos) => .x (%s.%s .p)\n",
+             f, u, dn, arrow, dn, u, dn, dn, dn, f);
     break;
   case COCELL_LABELLED:
-    text_add(t, "def %s : (.A : Type %llu) -> %s .A -> %s.%s.E -> %s .A := fun (.A : Type %llu) (.x : %s .A) (.e : %s.%s.E) (.p : %s.pos) => .x (%s.%s .e .p)\n",
-             f, u, dn, dn, f, dn, u, dn, dn, f, dn, dn, f);
+    text_add(t, "def %s : (.A : Type %llu) -> %s .A %s %s.%s.E -> %s .A := fun (.A : Type %llu) (.x : %s .A) (.e : %s.%s.E) (.p : %s.pos) => .x (%s.%s .e .p)\n",
+             f, u, dn, arrow, dn, f, dn, u, dn, dn, f, dn, dn, f);
     break;
   }
 }
@@ -4953,6 +5008,29 @@ static void cocell_bisim_case(Text *t, const char *dn, const char *f, CocellFiel
    field, the walk, the corecursor c and the bisimulation principle
    DBisim. Generated binders start with `.`, so they never capture a user
    name. */
+/* An affine cofamily (S5 item 4) has `-o` destructors and no D Bisim: its
+   binders of `D A` are omega (O18). */
+/* An affine cofamily with one observation and one labelled cofield gets
+   D.Open (S5 item 4, Q-S5-8 (a)): the observation now and the continuation
+   for one label, as one pair. The body uses .x two times, so check_cofamily
+   checks it as trusted kernel text. */
+static int cocell_opens(const Decl *d, const CocellField *kinds) {
+  return d->is_affine && d->ctors->field_count == 2u && kinds[0] != kinds[1] && kinds[0] != COCELL_COFIELD && kinds[1] != COCELL_COFIELD;
+}
+
+static void cocell_open(Text *t, const Decl *d, unsigned long long u, const CocellField *kinds) {
+  const char *dn = d->name;
+  size_t o = kinds[0] == COCELL_OBSERVATION ? 0u : 1u;
+  const char *obs;
+  const char *f;
+  if (!cocell_opens(d, kinds))
+    return;
+  obs = d->ctors->fields[o].name;
+  f = d->ctors->fields[1u - o].name;
+  text_add(t, "def %sOpen : (.A : Type %llu) -> %s .A -o Prod .A (%s.%s.E -o %s .A) :=\n  fun (.A : Type %llu) (.x : %s .A) => pair (%s .A .x) (fun (.e : %s.%s.E) => %s .A .x .e)\n",
+           dn, u, dn, dn, f, dn, u, dn, obs, dn, f, f);
+}
+
 static void cocell_text(Text *t, const Decl *d, uint64_t n, const CocellField *kinds) {
   const Ctor *ctor = d->ctors;
   const char *dn = d->name;
@@ -4966,7 +5044,7 @@ static void cocell_text(Text *t, const Decl *d, uint64_t n, const CocellField *k
     cocell_pos(t, dn, ctor->fields[j].name, kinds[j]);
   text_add(t, "\ndef %s : Type %llu -> Type %llu := fun (.A : Type %llu) => %s.pos -> .A\n", dn, u, u, u, dn);
   for (j = 0; j < ctor->field_count; j++)
-    cocell_dtor(t, dn, ctor->fields[j].name, kinds[j], u);
+    cocell_dtor(t, dn, ctor->fields[j].name, kinds[j], u, d->is_affine ? "-o" : "->");
   text_add(t, "def %s.walk : (.S : Type %llu) ->", dn, u);
   for (j = 0; j < ctor->field_count; j++)
     cocell_step(t, dn, ctor->fields[j].name, kinds[j], " ->");
@@ -4985,7 +5063,12 @@ static void cocell_text(Text *t, const Decl *d, uint64_t n, const CocellField *k
   text_add(t, " (.seed : .S) (.p : %s.pos) => .o (%s.walk .S", dn, dn);
   for (j = 0; j < ctor->field_count; j++)
     cocell_walk_arg(t, ctor->fields[j].name, kinds[j]);
-  text_add(t, " .p .seed)\ndef %sBisim : (.A : Type %llu) -> (.R : %s .A -> %s .A -> Type %llu) ->", dn, u, dn, dn, u);
+  text_add(t, " .p .seed)\n");
+  if (d->is_affine) {
+    cocell_open(t, d, u, kinds);
+    return;
+  }
+  text_add(t, "def %sBisim : (.A : Type %llu) -> (.R : %s .A -> %s .A -> Type %llu) ->", dn, u, dn, dn, u);
   for (j = 0; j < ctor->field_count; j++)
     cocell_hyp(t, dn, ctor->fields[j].name, kinds[j], " ->");
   text_add(t, "\n    (.x : %s .A) -> (.y : %s .A) -> .R .x .y -> Path (%s .A) .x .y :=\n  fun (.A : Type %llu) (.R : %s .A -> %s .A -> Type %llu)", dn, dn, dn, u, dn, dn, u);
@@ -5078,9 +5161,22 @@ static int check_cofamily(Checker *c, const Decl *d) {
       return 0;
   if (!lex_internal(m->arena, source, t.text, t.len, &toks, m->diag) || !parse_source(m->arena, source, ORIGIN_DOMAIN, &toks, &list, m->diag))
     return 0;
-  for (i = 0; i < list.count; i++)
-    if (!check_generated(c, &list.items[i]))
+  for (i = 0; i < list.count; i++) {
+    int ok;
+    /* The destructors preserve positions, so their position closures can
+       move the input. Other affine use checks still apply to them. */
+    c->position_view = d->is_affine && i >= 2u && i < 2u + count;
+    /* D.Open is the last generated decl when it exists (cocell_open). */
+    c->trusted = cocell_opens(d, kinds) && i + 1u == list.count;
+    ok = check_generated(c, &list.items[i]);
+    c->trusted = 0;
+    c->position_view = 0;
+    if (!ok)
       return 0;
+    /* The positions family is the first generated decl (cocell_text). */
+    if (i == 0u)
+      m->families[m->family_count - 1u].affine_pos = d->is_affine;
+  }
   return 1;
 }
 

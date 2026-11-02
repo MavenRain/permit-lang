@@ -9,7 +9,7 @@
 #define VARIES 0xffu
 
 static const char *const OP_NAMES[] = {
-  [OP_NAT] = "Nat", [OP_FLAG] = "Flag", [OP_UNIT] = "Unit", [OP_BUDGET] = "Budget", [OP_APPROVAL] = "Approval", [OP_PROD] = "Prod",
+  [OP_NAT] = "Nat", [OP_FLAG] = "Flag", [OP_UNIT] = "Unit", [OP_BUDGET] = "Budget", [OP_APPROVAL] = "Approval", [OP_RESOURCE] = "Resource", [OP_PROD] = "Prod",
   [OP_SUM] = "Sum", [OP_OPTION] = "Option", [OP_LIST] = "List",
   [OP_FAMILY] = "?", [OP_UNIT_VAL] = "unit", [OP_FLAG_YES] = "flagYes",
   [OP_FLAG_NO] = "flagNo", [OP_PAIR] = "pair", [OP_INL] = "inl", [OP_INR] = "inr",
@@ -29,13 +29,14 @@ static const char *const OP_NAMES[] = {
   [OP_SYSTEM] = "system", [OP_HCOMP] = "hcomp", [OP_FIN] = "Fin",
   [OP_FIN_ADD] = "finAdd", [OP_FIN_NEG] = "finNeg", [OP_FIN_CASE] = "finCase",
   [OP_GLUE] = "Glue", [OP_GLUE_ELEM] = "glue", [OP_UNGLUE] = "unglue",
-  [OP_NONZERO] = "NonZero", [OP_NONZERO_OF] = "nonZero", [OP_NONZERO_VALUE] = "nonZeroValue"
+  [OP_NONZERO] = "NonZero", [OP_NONZERO_OF] = "nonZero", [OP_NONZERO_VALUE] = "nonZeroValue",
+  [OP_RES_ROOT] = "resRoot", [OP_RES_CHILD] = "resChild", [OP_RES_EQ] = "resEq", [OP_RES_WITHIN] = "within"
 };
 
 /* The number of arguments of each operation. VARIES: it comes from the
    family tables. */
 static const unsigned char OP_ARITY[] = {
-  [OP_NAT] = 0, [OP_FLAG] = 0, [OP_UNIT] = 0, [OP_BUDGET] = 0, [OP_APPROVAL] = 0, [OP_PROD] = 2, [OP_SUM] = 2,
+  [OP_NAT] = 0, [OP_FLAG] = 0, [OP_UNIT] = 0, [OP_BUDGET] = 0, [OP_APPROVAL] = 0, [OP_RESOURCE] = 0, [OP_PROD] = 2, [OP_SUM] = 2,
   [OP_OPTION] = 1, [OP_LIST] = 1, [OP_FAMILY] = VARIES,
   [OP_UNIT_VAL] = 0, [OP_FLAG_YES] = 0, [OP_FLAG_NO] = 0, [OP_PAIR] = 2,
   [OP_INL] = 1, [OP_INR] = 1, [OP_NONE] = 0, [OP_SOME] = 1, [OP_NIL] = 0,
@@ -51,7 +52,8 @@ static const unsigned char OP_ARITY[] = {
   [OP_SYSTEM] = VARIES, [OP_HCOMP] = 4, [OP_FIN] = 1, [OP_FIN_ADD] = 3,
   [OP_FIN_NEG] = 2, [OP_FIN_CASE] = VARIES, [OP_GLUE] = 3, [OP_GLUE_ELEM] = 3,
   [OP_UNGLUE] = 4,
-  [OP_NONZERO] = 1, [OP_NONZERO_OF] = 1, [OP_NONZERO_VALUE] = 1
+  [OP_NONZERO] = 1, [OP_NONZERO_OF] = 1, [OP_NONZERO_VALUE] = 1,
+  [OP_RES_ROOT] = 1, [OP_RES_CHILD] = 2, [OP_RES_EQ] = 2, [OP_RES_WITHIN] = 2
 };
 
 typedef enum {
@@ -1404,6 +1406,46 @@ static const Value *nat_test(Machine *m, Op op, const Value *const *a, uint32_t 
   return flag(m, op == OP_NAT_EQ ? x == y : x <= y);
 }
 
+/* S5: the depth of a closed resRoot/resChild chain, or 0 when a part is
+   not a closed value (a neutral part or a neutral segment id). */
+static uint32_t res_depth(const Value *r) {
+  uint32_t d = 1;
+  while (val_is(r, OP_RES_CHILD)) {
+    if (r->args[1]->kind != VAL_NAT)
+      return 0;
+    r = r->args[0];
+    d++;
+  }
+  return val_is(r, OP_RES_ROOT) && r->args[0]->kind == VAL_NAT ? d : 0;
+}
+
+/* 1 when two closed chains of the same depth have the same segments. */
+static int res_same(const Value *r, const Value *s) {
+  while (val_is(r, OP_RES_CHILD) && val_is(s, OP_RES_CHILD)) {
+    if (r->args[1]->nat != s->args[1]->nat)
+      return 0;
+    r = r->args[0];
+    s = s->args[0];
+  }
+  return val_is(r, OP_RES_ROOT) && val_is(s, OP_RES_ROOT) && r->args[0]->nat == s->args[0]->nat;
+}
+
+/* S5 (PLAN 4): resEq r s and within r s on closed chains. within r s is
+   flagYes when the segments of s are a prefix of the segments of r (s is
+   r or an ancestor of r). An open chain gives the stuck operation. */
+static const Value *res_test(Machine *m, Op op, const Value *const *a, uint32_t n) {
+  uint32_t dr = res_depth(a[0]);
+  uint32_t ds = res_depth(a[1]);
+  const Value *r = a[0];
+  if (dr == 0u || ds == 0u)
+    return val_op(m, VAL_STUCK, op, 0, 0, a, n);
+  if (op == OP_RES_EQ ? dr != ds : dr < ds)
+    return flag(m, 0);
+  for (; dr > ds; dr--)
+    r = r->args[0];
+  return flag(m, res_same(r, a[1]));
+}
+
 static const Value *reduce_flag_if(Machine *m, const Value *const *a, uint32_t n) {
   const Value *out;
   if (blocked(m, a[0], OP_FLAG_IF, 0, 0, a, n, &out))
@@ -1908,6 +1950,7 @@ static const Value *transp_data(Machine *m, const Value *head, const Value *line
   case OP_FLAG:
   case OP_BUDGET:
   case OP_APPROVAL:
+  case OP_RESOURCE:
   case OP_UNIT:
   case OP_KMAP:
   case OP_NONZERO:
@@ -1983,6 +2026,10 @@ static const Value *transp_data(Machine *m, const Value *head, const Value *line
   case OP_NAT_SUB:
   case OP_NAT_EQ:
   case OP_NAT_LE:
+  case OP_RES_ROOT:
+  case OP_RES_CHILD:
+  case OP_RES_EQ:
+  case OP_RES_WITHIN:
   case OP_FLAG_IF:
   case OP_NAT_DIV:
   case OP_NAT_MOD:
@@ -2865,6 +2912,7 @@ static const Value *reduce_op(Machine *m, Op op, uint32_t inst, uint32_t field, 
   case OP_FLAG:
   case OP_BUDGET:
   case OP_APPROVAL:
+  case OP_RESOURCE:
   case OP_UNIT:
   case OP_PROD:
   case OP_SUM:
@@ -2872,6 +2920,8 @@ static const Value *reduce_op(Machine *m, Op op, uint32_t inst, uint32_t field, 
   case OP_LIST:
   case OP_INTERVAL:
   case OP_FAMILY:
+  case OP_RES_ROOT:
+  case OP_RES_CHILD:
   case OP_UNIT_VAL:
   case OP_FLAG_YES:
   case OP_FLAG_NO:
@@ -2938,6 +2988,9 @@ static const Value *reduce_op(Machine *m, Op op, uint32_t inst, uint32_t field, 
   case OP_NAT_EQ:
   case OP_NAT_LE:
     return nat_test(m, op, a, n);
+  case OP_RES_EQ:
+  case OP_RES_WITHIN:
+    return res_test(m, op, a, n);
   case OP_NAT_DIV:
   case OP_NAT_MOD:
     return nat_divmod(m, op, a, n);

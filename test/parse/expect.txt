@@ -18,3 +18,4 @@ affine-alias-ident.lang LEX_CHAR
 mark-range.lang PARSE_EXPECT
 affine-param-mark.lang PARSE_EXPECT
 affine-field-mark.lang PARSE_EXPECT
+affine-no-cofamily.lang PARSE_EXPECT

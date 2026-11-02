@@ -71,7 +71,7 @@ fi
 time_hint=0
 build/langc $(kit test/check/kit.txt time-block.lang) check test/check/time-block.lang 2>"$tmp/err" >/dev/null || true
 time_hint=$((time_hint + 1))
-if ! rg -q -F 'count operations: a position is `len r` (an OpPos) and a deadline is a count of later operations' "$tmp/err"; then
+if ! rg -q -F 'count operations: a deadline is a StepBound (a count of later operations)' "$tmp/err"; then
   echo "FAIL time-block.lang: the message does not name the op-count form"
   fail=$((fail + 1))
 fi
@@ -269,6 +269,18 @@ sizeSum 20
 sizeTrap 4
 EOF
 echo "spine evals: $spineevals checked"
+# The kit evals of test/ir/natops.lang (S5, O15): reasonCode is a case
+# split over the domain family Reason. Each line is `NAME ARG VALUE`.
+natopsevals=0
+while read -r name arg want; do
+  got=$(build/langc --kit eval test/ir/natops.lang "$name" "$arg" 2>&1) || got="exit $?: $got"
+  natopsevals=$((natopsevals + 1))
+  [ "$got" = "$want" ] || { echo "FAIL natops $name $arg: want $want, got $got"; fail=$((fail + 1)); }
+done <<'ROWS'
+reasonCode 0 1
+reasonCode 1 2
+ROWS
+echo "natops evals: $natopsevals checked"
 
 status=0
 build/langc 2>/dev/null || status=$?

@@ -1,0 +1,3 @@
+-- REFUSE_TIME (S5, Q-S5-2): `deadline` is a time word; no field can take it.
+-- A deadline is a StepBound: a count of later operations.
+state State := makeState (deadline : Nat)

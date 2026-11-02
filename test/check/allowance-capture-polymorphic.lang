@@ -1,0 +1,2 @@
+-- An unknown observation type can later be a Budget or an Allowance.
+def repeat : (A : Type 0) -> A -o Allowance A := fun A a => fun p => a
