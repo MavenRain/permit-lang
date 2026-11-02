@@ -109,3 +109,7 @@ budget-overspend-spend.lang
 budget-overspend-split.lang
 delegate-widen.lang
 delegate-overspend.lang
+execute-unapproved-none.lang
+execute-unapproved-refused.lang
+execute-unapproved-other.lang
+digest-payload-changed.lang

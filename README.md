@@ -44,7 +44,7 @@ layer from leaf-lang 47a6f36: the marks `@0` and `@1`, `A -o B`,
 and `fmMap`. The examples have `orbitNExtBag` and `isSetAtLin`, and
 `map0`, `map1` and `truncExt` are at fixed types. S5 adds the domain
 types in `domain/domain.lang`: `Action`, `Reason`, `Decision`,
-`StepBound := Size`, the `Call` stand-in, `Scope` with `allows` and
+`StepBound := Size`, a `Call` stand-in (S7 widens it), `Scope` with `allows` and
 `scopeWithin`, and the affine `cofamily Allowance` with `alOpen`. The
 kernel has the sort `Resource` with `resEq` and `within`, and
 `REFUSE_TIME` names 10 time words. `examples/scope.lang` is the S5
@@ -52,9 +52,13 @@ demo (L4, L6). S6 adds the guest ops `spend` and `split` on a `Budget`
 (kit-only `budget` and `budgetLeft`), the domain `Capability`, `sizeLe`
 and `delegate`, and the codes `REFUSE_DELEGATE_WIDEN` and
 `REFUSE_BUDGET_OVERSPEND` on closed rows. `examples/capability.lang` is
-the S6 demo (L1, L2). The other permit-lang types and refusals (`Call`,
-`Plan`, `decide`, the approval forms), the gate and the three targets
-do not exist yet.
+the S6 demo (L1, L2). S7 adds the kernel sorts `Payload`, `Bytes` and
+`Digest` (kit-only `payloadOf` and `approval`, guest `approvalDigest`),
+the domain `Mutation`, `canon`, `Ticket`, `Call`, `Authority`, `judge`,
+`decide`, `Reply`, the first-order `Plan`, `Entry` and `Trace`, and the
+code `REFUSE_EXECUTE_UNAPPROVED` on a closed `Plan`.
+`examples/decide.lang` is the S7 demo (L3, L5, L7). The gate and the
+three targets do not exist yet.
 `docs/PLAN.md` gives the readings, the route, the slices and the open
 questions.
 

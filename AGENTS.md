@@ -18,7 +18,7 @@ A5).
   `REFUSE_AFFINE_PATH`. A `Budget` or an `Approval` is used at most one
   time.
 - S5 adds the domain types (`docs/PLAN.md` sections 4 and 5): `Action`,
-  `Reason`, `Decision`, `StepBound := Size`, the `Call` stand-in, `Scope`
+  `Reason`, `Decision`, `StepBound := Size`, a `Call` stand-in (S7 widens it), `Scope`
   with `grants`, `allows` and `scopeWithin`, and `affine cofamily
   Allowance` with the generated `AllowanceOpen` behind `alOpen`. The
   kernel has the copyable sort `Resource` with `resEq`, `within` and the
@@ -38,9 +38,19 @@ A5).
   `split` gives the `n` units first and the rest second; `delegate`
   gives (child, rest). `examples/capability.lang` holds the L1 and L2
   rows.
-- The other permit-lang types, refusals and targets (`Call`, `Plan`,
-  `decide`, the approval forms, the gate) are a plan only:
-  `docs/PLAN.md` sections 4 to 8.
+- S7 adds the copyable kernel sorts `Payload`, `Bytes` and `Digest`
+  (`docs/PLAN.md` sections 3, 4 and 7); `payloadOf` and `approval` are
+  kit-only, and `payloadEq`, `digestEq`, `hash`, `envelope` and
+  `approvalDigest` are guest ops. The domain has `Mutation`, `canon`,
+  `Ticket`, `Call`, `Authority`, `judge`, `decide`, `Reply`, the
+  first-order `Plan`, `Entry` and `Trace := Stream Entry`. A `Call`
+  holds an `Approval`, so it is a resource type; a `Ticket` is
+  copyable. `REFUSE_EXECUTE_UNAPPROVED` refuses a closed `Plan` def
+  with a `planExecute` outside the `ppApproved` branch of a
+  `planPropose` of the same mutation. `langc ir` refuses a `Payload` at
+  run time (S8). `examples/decide.lang` holds the L3, L5 and L7 rows.
+- The gate and the three targets are a plan only: `docs/PLAN.md`
+  sections 4 to 8.
 - `design/DESIGN.md` is verbatim. Do not edit it. A design change is a
   new paste and an open item.
 

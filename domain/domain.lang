@@ -305,8 +305,22 @@ family Reason := scopeMiss | boundSpent | budgetShort | noApproval | digestDiffe
 family Decision := permit | deny (why : Reason)
 -- A deadline is a StepBound: a count of later operations (Q-S5-2 (a)).
 def StepBound : Type 0 := Size
--- A call at the tool boundary (a stand-in until S6): a target and an action.
-family Call := call (target : Resource) (action : Action)
+-- A mutation (S7, Q-S7-11 (a)): a target, an action and a payload. canon m
+-- is the bytes that an approval signs: the target and the payload.
+family Mutation := mutation (mTarget : Resource) (mAction : Action) (mPayload : Payload)
+def canon : Mutation -> Bytes := fun (m : Mutation) => envelope (mTarget m) (mPayload m)
+-- A ticket is the copyable record of one call: the mutation, the cost and
+-- the digest of the approval (none when the call has no approval).
+family Ticket := ticket (tkMutation : Mutation) (tkCost : Nat) (tkDigest : Option Digest)
+-- A call at the tool boundary (Q-S7-11 (a)). The Approval field makes Call
+-- a resource type (affine). callTicket uses the approval one time.
+family Call := call (callMutation : Mutation) (callCost : Nat) (callApproval : Option Approval)
+def ticketWith : Mutation -> Nat -> Option Digest -o Ticket :=
+  fun (m : Mutation) (n : Nat) (d : Option Digest) => ticket m n d
+def someDigest : Digest -o Option Digest := fun (d : Digest) => some d
+def callTicket : Call -o Ticket :=
+  fun (c : Call) => elim (fun (@0 x : Call) => Ticket)
+    (fun (m : Mutation) (n : Nat) (a : Option Approval) => ticketWith m n (option none (fun (p : Approval) => someDigest (approvalDigest p)) a)) c
 def actEq : Action -> Action -> Flag :=
   fun (a : Action) (b : Action) => elim (fun (x : Action) => Flag)
     (elim (fun (y : Action) => Flag) flagYes flagNo flagNo b)
@@ -328,11 +342,11 @@ def scopeWithin : Scope -> Scope -> Flag :=
   fun (s : Scope) (t : Scope) =>
     natEq (len Nat (fmBindNat (Prod Resource Action) (fun (g : Prod Resource Action) => flagIf (allows t (first g) (second g)) (fmUnit Nat) (fmEtaNat 0)) s)) 0
 -- The allowance (Q-S5-4 (b)): eps is the value that the allowance holds
--- now and advance is the allowance after one call.
-affine cofamily Allowance (A : Type 0) := alCorec (eps : A) (advance : Call -> Allowance A)
+-- now and advance is the allowance after one call (its ticket, S7).
+affine cofamily Allowance (A : Type 0) := alCorec (eps : A) (advance : Ticket -> Allowance A)
 -- alOpen gives the value now and the allowance after one call, as one
 -- pair (Q-S5-8 (a)). The pair is a resource: split it with unpack.
-def alOpen : (A : Type 0) -> Allowance A -o Prod A (Call -o Allowance A) := AllowanceOpen
+def alOpen : (A : Type 0) -> Allowance A -o Prod A (Ticket -o Allowance A) := AllowanceOpen
 -- sizeLe a b is flagYes when a is at most b (a child step bound cannot
 -- pass the parent bound).
 def sizeLe : Size -> Size -> Flag :=
@@ -354,3 +368,68 @@ def delegate : Capability -o Scope -> StepBound -> Nat -> Option (Prod Capabilit
           (option none (fun (bs : Prod Budget Budget) => some (unpack bs (fun (b1 : Budget) (b2 : Budget) => pair (cap s k b1) (cap ps pk b2)))) (split pb n))
           none)
         none) c
+-- The authority (S7, Q-S7-12 (a)): the copyable state of the allowance. A
+-- scope, a step bound, the units left (a Nat: the gate holds the Budget,
+-- S9) and the digests of the approvals that were used.
+family Authority := authority (auScope : Scope) (auSteps : StepBound) (auLeft : Nat) (auUsed : FreeMon Digest)
+-- stepLeft k is flagYes when k has one more step.
+def stepLeft : StepBound -> Flag :=
+  fun (k : StepBound) => elim (fun (v : Size) => Flag) flagNo (fun (w : Size) (jh : Flag) => flagYes) k
+-- usedHas u d is flagYes when the digest d is in u (a count, as allows).
+def usedHas : FreeMon Digest -> Digest -> Flag :=
+  fun (u : FreeMon Digest) (d : Digest) =>
+    flagIf (natEq (len Nat (fmBindNat Digest (fun (e : Digest) => flagIf (digestEq e d) (fmEtaNat 0) (fmUnit Nat)) u)) 0) flagNo flagYes
+-- auTake s c u is the authority after a decision: one step less, c units
+-- less and the used digests u.
+def auTake : Authority -> Nat -> FreeMon Digest -> Authority :=
+  fun (s : Authority) (c : Nat) (u : FreeMon Digest) => authority (auScope s) (sizePred (auSteps s)) (natSub (auLeft s) c) u
+-- judge s t is the decision on the ticket t and the authority after it.
+-- The denials come in this order (S7 survey sec 2): scopeMiss, boundSpent,
+-- budgetShort, noApproval (an execute with no digest), digestDiffers (the
+-- digest is not hash (canon m)) and approvalUsed (the digest is in
+-- auUsed). A permit takes one step and the cost and, for an execute, adds
+-- the digest to auUsed. A deny takes one step and keeps the budget and
+-- the used digests (Q-S0-6).
+def judge : Authority -> Ticket -> Prod Decision Authority :=
+  fun (s : Authority) (t : Ticket) =>
+    flagIf (allows (auScope s) (mTarget (tkMutation t)) (mAction (tkMutation t)))
+      (flagIf (stepLeft (auSteps s))
+        (flagIf (natLe (tkCost t) (auLeft s))
+          (elim (fun (x : Action) => Prod Decision Authority)
+            (pair permit (auTake s (tkCost t) (auUsed s)))
+            (pair permit (auTake s (tkCost t) (auUsed s)))
+            (option (pair (deny noApproval) (auTake s 0 (auUsed s)))
+              (fun (d : Digest) => flagIf (digestEq d (hash (canon (tkMutation t))))
+                (flagIf (usedHas (auUsed s) d) (pair (deny approvalUsed) (auTake s 0 (auUsed s))) (pair permit (auTake s (tkCost t) (fmCons Digest d (auUsed s)))))
+                (pair (deny digestDiffers) (auTake s 0 (auUsed s))))
+              (tkDigest t))
+            (mAction (tkMutation t)))
+          (pair (deny budgetShort) (auTake s 0 (auUsed s))))
+        (pair (deny boundSpent) (auTake s 0 (auUsed s))))
+      (pair (deny scopeMiss) (auTake s 0 (auUsed s)))
+-- The allowance of an authority: eps is the authority now and advance
+-- judges the ticket.
+def allowanceOf : Authority -> Allowance Authority :=
+  fun (s : Authority) => alCorec Authority Authority (fun (x : Authority) => x) (fun (x : Authority) (t : Ticket) => second (judge x t)) s
+-- decide gives the decision on a call and the allowance after it. The call
+-- gives a ticket (callTicket uses the approval one time); alOpen gives the
+-- authority now and the advance, and judge decides on the ticket.
+def decideTicket : Allowance Authority -o Ticket -o Prod Decision (Allowance Authority) :=
+  fun (al : Allowance Authority) (t : Ticket) => unpack (alOpen Authority al) (fun (s : Authority) (k : Ticket -o Allowance Authority) => pair (first (judge s t)) (k t))
+def decide : Allowance Authority -o Call -o Prod Decision (Allowance Authority) :=
+  fun (al : Allowance Authority) (c : Call) => decideTicket al (callTicket c)
+-- The reply of the host to one operation (S7, Q-S7-10 (a)). replyDenied
+-- holds the Reason for the trace; a plan branch does not see it.
+family Reply := replyOk | replyDenied (replyWhy : Reason) | replyFailed
+-- A plan (Q-S7-10 (a)) is first order: one branch field for each reply
+-- (rule R1 refuses a field of a function type). An execute of m must lie
+-- in the ppApproved branch of an earlier propose of m (the checker,
+-- REFUSE_EXECUTE_UNAPPROVED).
+family Plan (A : Type 0) := planDone (planOf : A)
+  | planInspect (piTarget : Resource) (piOk : Plan A) (piDenied : Plan A) (piFailed : Plan A)
+  | planPropose (ppMutation : Mutation) (ppApproved : Plan A) (ppRefused : Plan A)
+  | planExecute (peMutation : Mutation) (peOk : Plan A) (peDenied : Plan A) (peFailed : Plan A)
+-- A trace entry: the mutation, the decision, the steps and the units left.
+family Entry := entry (enMutation : Mutation) (enDecision : Decision) (enSteps : StepBound) (enLeft : Nat)
+-- The trace (rule R1: a cofamily has one type parameter, so it is a Stream).
+def Trace : Type 0 := Stream Entry

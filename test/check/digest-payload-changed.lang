@@ -1,0 +1,3 @@
+-- L3 (S7): a changed payload gives another digest, so a refl proof that
+-- the two digests are equal is refused.
+def bad : Path Flag (digestEq (hash (envelope (resRoot 1) (payloadOf 7))) (hash (envelope (resRoot 1) (payloadOf 8)))) flagYes := refl

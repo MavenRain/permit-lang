@@ -87,6 +87,7 @@ kit-literal-nat-infer.lang REFUSE_KIT
 kit-state.lang REFUSE_KIT
 base-natdiv.lang REFUSE_KIT
 base-natmod.lang REFUSE_KIT
+kit-payload-of.lang REFUSE_KIT
 sig-defined.lang REFUSE_SIG
 sig-slot-universe.lang REFUSE_SIG
 sig-act-type.lang REFUSE_SIG
@@ -217,3 +218,7 @@ allowance-unpack-twice.lang REFUSE_AFFINE_REUSE
 allowance-capture-budget.lang REFUSE_AFFINE_OMEGA
 allowance-capture-allowance.lang REFUSE_AFFINE_OMEGA
 allowance-capture-polymorphic.lang REFUSE_AFFINE_OMEGA
+execute-unapproved-none.lang REFUSE_EXECUTE_UNAPPROVED
+execute-unapproved-refused.lang REFUSE_EXECUTE_UNAPPROVED
+execute-unapproved-other.lang REFUSE_EXECUTE_UNAPPROVED
+digest-payload-changed.lang PATH_END

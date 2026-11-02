@@ -172,6 +172,7 @@ ir_refused kmap.lang "REFUSE_LOWER: got: the Wasm host does not lower an elim, K
 ir_refused tree.lang "REFUSE_RUNTIME_TREE: tips: "
 ir_refused spine.lang "REFUSE_LOWER: trapHead: heap use has no static bound"
 ir_refused hop.lang "REFUSE_LOWER: hopDepth: a recursive fold over a block of families"
+ir_refused payload.lang "REFUSE_LOWER: got: the Wasm host does not lower a Payload at run time (S8)"
 echo "ir refusals: $irrefusals checked"
 
 # The IR lowerings (S3): `langc

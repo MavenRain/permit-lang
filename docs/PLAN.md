@@ -25,8 +25,10 @@ leaf-lang 47a6f36 (section 6, "S4 result"). S5 DONE: `Resource`,
 `Reason` (sections 4 and 5; the S5 row of section 12). S6 DONE: the
 `Budget` ops `spend` and `split`, `Capability`, `delegate`,
 `REFUSE_DELEGATE_WIDEN` and `REFUSE_BUDGET_OVERSPEND` (sections 4, 6
-and 7; the S6 row of section 12). Next: S7 (`Call`, `Plan`, `decide`,
-section 12).
+and 7; the S6 row of section 12). S7 DONE: `Payload`, `Digest`,
+`Mutation`, `Ticket`, `Call`, `Authority`, `judge`, `decide`, the
+first-order `Plan`, `Trace` and `REFUSE_EXECUTE_UNAPPROVED` (sections 3,
+4 and 7; the S7 row of section 12). Next: S8 (T1 part 1, section 12).
 
 ## 1. Rulings
 
@@ -83,6 +85,18 @@ section 12).
 | 2026-11-02 | Q-S6-6 `REFUSE_BUDGET_OVERSPEND`: "(a) (Recommended)". At check time, at a term level of 1: a closed `spend`, `split` or `delegate` application whose budget part reduces to `none` (`test/check/budget-overspend-{spend,split}.lang`, `delegate-overspend.lang`). The sum along `Plan` paths comes at S7. Edit: section 7. | USER, S6 |
 | 2026-11-02 | Q-S6-7 O17: "(a) (Recommended)". No change; O17 CLOSED. The gate holds the state, and a guest cannot make a `Budget`, so a rebuild cannot add units. Edit: section 13. | USER, S6 |
 | 2026-11-02 | Q-S6-8 O18: "(a) (Recommended)". No change; O18 CLOSED. No S6 law needs a bisimulation; the `Allowance` laws are closed refl rows. Edit: section 13. | USER, S6 |
+| 2026-11-02 | Q-S7-1 Opaque forms: (a), USER "Take recommendations for questions 1 through 9". Kernel sorts `Payload`, `Bytes` and `Digest` (copyable); kit-only `payloadOf`; guest `payloadEq`, `digestEq`, `hash` and `envelope`; domain `canon`. Eval reads `hash` as injective (the O5 model). Edit: section 4. | USER, S7 |
+| 2026-11-02 | Q-S7-2 `Mutation`: (a). Domain `family Mutation := mutation (mTarget : Resource) (mAction : Action) (mPayload : Payload)`. Edit: section 4. | USER, S7 |
+| 2026-11-02 | Q-S7-3 `Approval`: (a). `Approval` stays the S4 kernel affine sort; kit-only `approval : Digest -> Approval`; guest `approvalDigest : Approval -o Digest`. Edit: section 4. | USER, S7 |
+| 2026-11-02 | Q-S7-4 `Call`: (a), with a probe first. The probe refused `advance : Call -> Allowance A` (`REFUSE_AFFINE_OMEGA`), so Q-S7-11 replaces the `advance` part. Edit: section 4. | USER, S7 |
+| 2026-11-02 | Q-S7-5 The host cost: (a). `callCost` is a domain Nat field; kit rows use literals. Edit: section 4. | USER, S7 |
+| 2026-11-02 | Q-S7-6 `decide`: (a). Domain `Authority`, `judge` (the section 2 deny order) and `decide : Allowance Authority -o Call -o Prod Decision (Allowance Authority)` through `alCorec`; L3 and L7 (L4, L6) rows in `examples/decide.lang`. Q-S7-12 replaces the `Authority` shape. Edit: section 4. | USER, S7 |
+| 2026-11-02 | Q-S7-7 `Plan` and `Trace`: (a), with a probe first. The probe refused a function field in `Plan` and a `Trace` cofamily with no parameter (R1), so Q-S7-10 replaces both. `Reply` stays. Edit: section 3. | USER, S7 |
+| 2026-11-02 | Q-S7-8 `REFUSE_EXECUTE_UNAPPROVED`: (a). At check time, at a term level of 1, on a closed `Plan`; Q-S7-10 gives the first-order path rule. Edit: section 7. | USER, S7 |
+| 2026-11-02 | Q-S7-9 The `Plan` path sum: (a). The sum of the costs along a `Plan` path is O20; the S6 closed-term rule stays. Edit: sections 7 and 13. | USER, S7 |
+| 2026-11-02 | Q-S7-10 `Plan`: "First-order Plan (Recommended)". `family Plan (A : Type 0) := planDone (planOf : A) \| planInspect (piTarget : Resource) (piOk) (piDenied) (piFailed : Plan A) \| planPropose (ppMutation : Mutation) (ppApproved) (ppRefused : Plan A) \| planExecute (peMutation : Mutation) (peOk) (peDenied) (peFailed : Plan A)`. No `Approval` field: the gate pairs an execute with the approval that its propose got. The plan does not see the deny `Reason`. `def Trace : Type 0 := Stream Entry` (R1: a cofamily has one type parameter). Edit: section 3. | USER, S7 |
+| 2026-11-02 | Q-S7-11 `Ticket`: "Ticket split (Recommended)". The affine `Call := call (callMutation : Mutation) (callCost : Nat) (callApproval : Option Approval)` is the `decide` input. The copyable `Ticket := ticket (tkMutation : Mutation) (tkCost : Nat) (tkDigest : Option Digest)` drives `advance : Ticket -> Allowance A` and `alOpen : Allowance A -o Prod A (Ticket -o Allowance A)`. `decide` uses the approval one time (`approvalDigest`), then advances with the ticket. Edit: section 4. | USER, S7 |
+| 2026-11-02 | Q-S7-12 `Authority`: "Copyable state, Nat left (Recommended)". Copyable `Authority := authority (auScope : Scope) (auSteps : StepBound) (auLeft : Nat) (auUsed : FreeMon Digest)` under `alCorec`; `judge` compares the cost with `auLeft`; L2 stays on the `Budget` ops; the gate holds the `Budget` (S9). Edit: section 4. | USER, S7 |
 
 The seed is `bin/new-lang.sh permit-lang tcc-wasm` from lang-template
 5265a2a. The kit gives the parser, the checker, the evaluator, the lowering
@@ -184,30 +198,40 @@ The duality is the core of permit-lang. The agent side is a CM, and the
 gate side is its dual CC:
 
 - The plan of the agent is a term of `Plan A`, the free monad over the tool
-  signature. Each tool call is a cell: `inspect`, `propose`, `execute`.
-- The authority is an `Allowance`, the cofree comonad of `Call -> -`.
-  `eps` gives the authority that is left now (the scope, the steps, the
-  budget, the used approvals). `advance : Allowance -> Call -> Allowance`
-  gives the authority after one call. This is the accrue-lang `advance`
-  shape with a `Call` in place of a `Stamp`.
+  signature. Each tool call is a cell: `planInspect`, `planPropose`,
+  `planExecute` (S7, Q-S7-10 (a)). The plan is first order: each cell has
+  one branch field for each reply arm, no function field and no
+  `Approval` field. Rule R1 refuses a field of a function type
+  (`REFUSE_CELL`, R1 fact P1).
+- The authority is an `Allowance`, the cofree comonad of `Ticket -> -`
+  (S7, Q-S7-11 (a)). `eps` gives the authority that is left now (an
+  `Authority`: the scope, the steps, the units left, the used digests).
+  `advance : Ticket -> Allowance A` gives the authority after one call.
+  This is the accrue-lang `advance` shape with a `Ticket` in place of a
+  `Stamp`. The affine `Call` holds the approval; `decide` uses it one
+  time and advances with the copyable `Ticket`.
 - The record of a run is a `Trace`, the cofree comonad over the record
-  signature. `eps` gives the current entry (the call, the decision, the
-  steps and the budget left, the digest that the gate checked). The T2
-  report is a fold over a finite prefix of the `Trace`.
+  signature. S7 (Q-S7-10 (a)): `def Trace : Type 0 := Stream Entry` with
+  `Entry := entry (enMutation : Mutation) (enDecision : Decision)
+  (enSteps : StepBound) (enLeft : Nat)`. A cofamily has one type
+  parameter (R1 fact P3), so `Trace` is not a cofamily of its own.
+  `sHead` gives the current entry (the mutation, the decision, the steps
+  and the units left). The T2 report is a fold over a finite prefix of
+  the `Trace`.
 - Authority over a sequence: the pairing runs a `Plan` against an
   `Allowance` and gives a `Trace`. The checker shows, on each path of the
-  plan, that each `execute` pairs with an approval of the same mutation
-  (L5).
+  plan, that each `planExecute` lies in the `ppApproved` branch of a
+  `planPropose` of the same mutation (L5).
 
 | Former | Class | Reason |
 |---|---|---|
-| `Plan A` | CM | Free over the cells `inspect r k`, `propose m k`, `execute m a k` (closed data: `Resource`, `Mutation`, `Approval`; arity: `Outcome`). `eta` is `done`. |
-| `Allowance` | CC | Cofree over `Call -> -`: `eps` = the authority now, `advance` = the authority after one call. The dual of `Plan`. |
-| `Trace` | CC | Cofree over the record signature: `eps` = the current entry, `next : Trace -> Trace`. |
-| `Outcome R` | CM | `eta` = `done`, cells `denied reason` and `toolFailed code` (closed base data). The exception monad as a value. |
+| `Plan A` | CM | Free over the cells `planInspect r ok denied failed`, `planPropose m approved refused` and `planExecute m ok denied failed` (closed data: `Resource`, `Mutation`; arity: the arms of `Reply`, one branch field each). `eta` is `planDone`. S7 (Q-S7-10 (a)): first order, no `Approval` field. |
+| `Allowance` | CC | Cofree over `Ticket -> -` (Q-S7-11 (a)): `eps` = the authority now, `advance` = the authority after one call. The dual of `Plan`. |
+| `Trace` | CC | S7: `Stream Entry` (Q-S7-10 (a)): `sHead` = the current entry, `sTail` = the rest of the trace. |
+| `Outcome R` | CM | `eta` = `done`, cells `denied reason` and `toolFailed code` (closed base data). The exception monad as a value. S7 uses `family Reply := replyOk \| replyDenied (replyWhy : Reason) \| replyFailed` in its place (Q-S7-10 (a)). The plan branches on the reply arm and does not see the `Reason` in a branch. |
 | `Option A` | CM | `eta` = `some`, one cell `none` with no data. |
 | `FreeMon A` | CM | The admitted list: the scope entries, the used approvals of one run. |
-| `Capability`, `Mutation`, `Call`, `Approval`, a user `Action` sum, `Decision`, `Reason`, `Prod`, `Sum` | LCC structure | Finite products and coproducts. No parameter, so not a type constructor. |
+| `Capability`, `Mutation`, `Call`, `Ticket`, `Authority`, `Reply`, `Entry`, `Approval`, a user `Action` sum, `Decision`, `Reason`, `Prod`, `Sum` | LCC structure | Finite products and coproducts. No parameter, so not a type constructor. |
 | cons `List`, `Ref`, `IO`, `Promise`, a general JSON value type, an exception type with a `throw` form | REFUSED | Not a CM or CC (`List`, `Ref`, JSON), or a control path that R0 refuses (`throw`). `IO` and `Promise` are replaced by `Plan`. |
 
 ## 4. The minimal base signature (R2)
@@ -241,15 +265,17 @@ The lines of pasted 1 (DESIGN.md 1):
 | `Budget` | kernel sort, affine; guest `spend` and `split` (Q-S6-2 (a)); kit-only `budget : Nat -> Budget` and `budgetLeft : Budget -o Nat` (Q-S6-1 (a)) | P6 | Section 6. `spend` and `split` give an `Option`. A guest cannot make a budget; the gate makes the values (S9). |
 | `Capability` | domain `family Capability := cap (capScope : Scope) (capSteps : StepBound) (capBudget : Budget)` (Q-S6-4 (a)) | P1, P5 | A resource type, because it holds a `Budget` (`test/check/capability-{reuse,omega}.lang`). |
 | `delegate` | a domain def, `Capability -o Scope -> StepBound -> Nat -> Option (Prod Capability Capability)` (Q-S6-4 (a)) | P5 | Attenuation only: the child scope is within the parent scope, the child steps are not more than the parent steps (`sizeLe`), and the child budget is split from the parent budget (L1). The result is (child, rest): the rest keeps the parent scope, the parent steps and the remaining units. |
-| `Payload` | opaque canonical tool-call bytes; equality and `canon` input only | P7, P9, P10 | The gate canonicalizes the tool name, arguments and each forwarded call parameter before it constructs a `Payload`. Raw JSON spellings are not payload values. |
-| `Mutation` | record: target `Resource`, `Action`, `Payload` | P7, P9 | |
-| `canon` | `Mutation -> Bytes`: the canonical bytes of (target, payload) | P9 | Q-S0-4; the target envelope below. |
-| `Digest`, `hash` | opaque; `digestEq`; `hash : Bytes -> Digest` with laws only | P7, P9 | v1 binds SHA-256 (ruling). |
-| `Approval` | record: one `Digest`; affine | P7 | Section 6. The gate records who approved; the program does not read it. |
-| `Call` | record: `Mutation`, cost `Nat`, an optional `Approval` | P2, P10 | One request from the agent. S5 stand-in: `family Call := call (target : Resource) (action : Action)`; S7 widens it to the record (Q-S5-4 (b)). |
+| `Payload` | kernel sort, copyable, opaque canonical tool-call bytes; kit-only `payloadOf : Nat -> Payload`, guest `payloadEq` (Q-S7-1 (a)); equality and `canon` input only | P7, P9, P10 | The gate canonicalizes the tool name, arguments and each forwarded call parameter before it constructs a `Payload`. Raw JSON spellings are not payload values. `langc ir` refuses a `Payload` at run time (S8). |
+| `Mutation` | domain `family Mutation := mutation (mTarget : Resource) (mAction : Action) (mPayload : Payload)` (Q-S7-2 (a)) | P7, P9 | Copyable. |
+| `canon` | domain def `Mutation -> Bytes`, `envelope (mTarget m) (mPayload m)`: the canonical bytes of (target, payload) | P9 | Q-S0-4; the target envelope below. |
+| `Bytes`, `Digest`, `hash`, `envelope` | kernel sorts `Bytes` and `Digest` (copyable, opaque); guest `digestEq`, `hash : Bytes -> Digest` and `envelope : Resource -> Payload -> Bytes` (Q-S7-1 (a)) | P7, P9 | v1 binds SHA-256 (ruling). Eval reads `hash` as injective (the O5 model). |
+| `Approval` | the S4 kernel sort, affine, over one `Digest`; kit-only `approval : Digest -> Approval`, guest `approvalDigest : Approval -o Digest` (Q-S7-3 (a)) | P7 | Section 6. The gate records who approved; the program does not read it. |
+| `Call` | domain `family Call := call (callMutation : Mutation) (callCost : Nat) (callApproval : Option Approval)` (Q-S7-4 (a)) | P2, P10 | One request from the agent, the `decide` input. A resource type, because it holds an `Approval`. `callCost` is the host cost (Q-S7-5 (a)). It replaces the S5 stand-in `call (target : Resource) (action : Action)` (Q-S5-4 (b)). |
+| `Ticket` | domain `family Ticket := ticket (tkMutation : Mutation) (tkCost : Nat) (tkDigest : Option Digest)`, copyable; `callTicket : Call -o Ticket` (Q-S7-11 (a)) | P2, P10 | `callTicket` uses the approval one time (`approvalDigest`). Fact P7: a copyable constructor and `some` at a copyable `Option` take their arguments at omega, so the digest goes through a `-o` binder (`someDigest`, `ticketWith`). |
 | `Decision`, `Reason` | `permit` or `deny Reason`; `Reason` is the closed sum of section 2 | P3 to P9 | A denial is a value (R0). S5: both are domain families; `Reason` has the 8 arms of section 2. |
-| `Allowance` | `affine cofamily Allowance (A : Type 0) := alCorec (eps : A) (advance : Call -> Allowance A)`; `alOpen : Allowance A -o Prod A (Call -o Allowance A)` | P2, P4, P10 | Affine (Q-S5-4 (b), Q-S5-7 (a)): a value is used at most one time, and a second use is `REFUSE_AFFINE_REUSE`. `eps` and `advance` are one-use views. `alOpen` gives both parts; `unpack` on the pair binds each part at 1 (Q-S5-6 (a), Q-S5-8 (a)). Section 3 gives the CC reading. |
-| `decide` | `Allowance -> Call -> Decision * Allowance` | P10 | The one entry of the T1 module (S7). |
+| `Allowance` | `affine cofamily Allowance (A : Type 0) := alCorec (eps : A) (advance : Ticket -> Allowance A)`; `alOpen : Allowance A -o Prod A (Ticket -o Allowance A)` (S7: over `Ticket`, Q-S7-11 (a)) | P2, P4, P10 | Affine (Q-S5-4 (b), Q-S5-7 (a)): a value is used at most one time, and a second use is `REFUSE_AFFINE_REUSE`. `eps` and `advance` are one-use views. `alOpen` gives both parts; `unpack` on the pair binds each part at 1 (Q-S5-6 (a), Q-S5-8 (a)). Section 3 gives the CC reading. |
+| `decide` | domain def `Allowance Authority -o Call -o Prod Decision (Allowance Authority)` (Q-S7-6 (a)) | P10 | The one entry of the T1 module (S7). It uses the approval one time (`callTicket`), then `decideTicket` judges the ticket. |
+| `Authority` | domain `family Authority := authority (auScope : Scope) (auSteps : StepBound) (auLeft : Nat) (auUsed : FreeMon Digest)`, copyable (Q-S7-12 (a)); `judge : Authority -> Ticket -> Prod Decision Authority`; `allowanceOf : Authority -> Allowance Authority` | P3 to P10 | `judge` denies in the section 2 order: `scopeMiss`, `boundSpent`, `budgetShort`, `noApproval`, `digestDiffers`, `approvalUsed`. A permit takes one step and the cost (`auTake`) and, for an execute, adds the digest to `auUsed`; a deny takes one step and keeps the budget and used digests (Q-S0-6). Helpers: `stepLeft`, `usedHas`, `auTake`. L2 stays on the `Budget` ops; the gate holds the `Budget` (S9). |
 
 Review clarification of Q-S0-4 (a) under the S0 approval ruling (L3):
 
@@ -464,9 +490,9 @@ is `refl`; a general law uses induction where the kernel has it.
 |---|---|
 | L1 attenuation | `delegate` gives a child with `scopeWithin child parent`, child steps not more than parent steps, and child budget plus rest budget equal to the parent budget. A widening gives `none`. |
 | L2 conservation | `split b n` gives budgets with sum `b`. `spend b n` gives `rest` with `rest + n = b`. |
-| L3 approval binding | `decide` permits an `execute` of `m` with approval `a` only when `digestEq (digestOf a) (hash (canon m))`. `canon` is injective on (target, canonical payload) values as defined in section 4. The binding then rests on the collision resistance of `hash`, which is an assumption, not a law (O5). |
+| L3 approval binding | `decide` permits a `Call` of an execute `m` with approval `a` only when `digestEq (approvalDigest a) (hash (canon m))` (S7: `judge`, `examples/decide.lang`). `canon` is injective on (target, canonical payload) values as defined in section 4. The binding then rests on the collision resistance of `hash`, which is an assumption, not a law (O5). |
 | L4 steps monotone | Along `advance`, the steps never increase. Each decided call takes one step until 0. At 0, each decision is `deny boundSpent`. |
-| L5 sequence guard | On each path of a `Plan`, each `execute m` has an approval of `hash (canon m)` in scope, and a `propose m` before it. The checker refuses a path without them: `REFUSE_EXECUTE_UNAPPROVED`. |
+| L5 sequence guard | On each path of a `Plan`, each `planExecute m` lies in the `ppApproved` branch of an earlier `planPropose m'`, with `m'` convertible to `m` (Q-S7-10 (a)). The checker refuses a path without one: `REFUSE_EXECUTE_UNAPPROVED`. The gate pairs the execute with the approval that the propose got. |
 | L6 scope soundness | `decide` permits a call only when `allows scope target action`. |
 | L7 at most once | After a permitted `execute` with approval `a`, each later call with `a` gives `deny approvalUsed`. |
 | L8 agreement | `langc eval` of `decide` and the Wasm module in the gate give the same `Decision` on each row. This is a gate row, not a law term. |
@@ -481,8 +507,15 @@ closed rows, at check time and at a term level of 1 (not in a law type):
 a `delegate` application with closed scopes where `scopeWithin` gives
 `flagNo` (Q-S6-5 (a)), and a closed `spend`, `split` or `delegate`
 application whose budget part reduces to `none` (Q-S6-6 (a)). The sum
-along `Plan` paths comes at S7. The other names stay proposals until
-the slice that adds the code.
+along `Plan` paths is O20 (Q-S7-9 (a)). S7 adds
+`REFUSE_EXECUTE_UNAPPROVED` at check time, at a term level of 1, on a def
+of type `Plan A`. The walk is on the value: a def name unfolds, and a
+neutral term stops the walk. `planPropose m'` adds `m'` for the
+`ppApproved` branch only. Each `planExecute m` needs a convertible `m'`.
+There is no use count: a second execute of `m` under one propose checks,
+and the gate denies the reuse at run time (`usedHas`, `deny
+approvalUsed`). The other names stay proposals until the slice that adds
+the code.
 
 ## 8. Route
 
@@ -574,7 +607,11 @@ gate in stdio mode with the fake deployment tool, rows D1 to D11),
 ported from cairn-lang `test/shatool.c`. New tests are guest `.lang` files
 and C tools. No new node, Python or shell harness; the kit harnesses stay.
 Mutation: each slice that adds a refusal or a law kills at least one mutant
-of it.
+of it. S7: 21 mutants, 15 killed in the first run. The 6 survivors got
+rows (`examples/decide.lang` `nestedPlan`, `lawOrderScope`,
+`lawOrderBound`, `lawOrderBudget` and `lawOtherRoot`;
+`test/ir/payload.lang`; `test/check/kit-payload-of.lang`), and the rerun
+killed each one.
 
 ## 11. Port sources
 
@@ -609,8 +646,8 @@ One session for each slice: scope, gate, mutants, docs, close.
 | S4 | The affine layer (section 6): multiplicities, `REFUSE_AFFINE_REUSE`, the resource sorts. Ported from leaf-lang 47a6f36 (Q-S4-1 to Q-S4-12); gate EXIT 0: 30 examples, 20 parse refusals, 200 check refusals, 10 kit-only refusals, 1 time hint, 79 evals, 1 build, 1 ir lowered, 5 ir refusals, 2 ir lowerings, 4 notrap modules, 7 notrap bad rows, 10 spine evals, review, domain and path regressions passed; mutants of `REFUSE_AFFINE_REUSE`, the context split of a case, the family field loop (Q-S4-12) and `mult_scale` killed. | DONE |
 | S5 | `Resource`, `Action`, `Scope`, `StepBound`, the affine `Allowance` (CC), `Decision`, `Reason`; `REFUSE_TIME` with 10 words; L4 and L6 as refl laws and eval rows in `examples/scope.lang`. Rulings Q-S5-1 to Q-S5-8 (section 1); sources in section 11; gate EXIT 0: 31 examples, 21 parse refusals, 213 check refusals, 11 kit-only refusals, 1 time hint, 85 evals, 1 build, 1 ir lowered, 5 ir refusals, 2 ir lowerings, 4 notrap modules, 7 notrap bad rows, 10 spine evals, 2 natops evals, review, domain and path regressions passed. New rows: `test/check/time-{date,ttl,deadline,expires}.lang`, `kit-res-root.lang`, `allowance-{reuse,omega,open-twice,open-parts,unpack-twice,capture-budget,capture-allowance,capture-polymorphic}.lang`, `test/parse/affine-no-cofamily.lang`, 6 eval rows of `examples/scope.lang`, the `natops evals` line (O15). The original 17-mutant run killed 16; the live one (`trusted` for each generated decl of a cofamily, not only the last) is equivalent, because no other generated decl uses a 1-variable two times. Review adds three capture refusals: each rejects the checker before the review fix. Position closures cannot capture affine values, since `alOpen` observes more than one position. The generated destructors preserve positions; their other affine use checks still apply. Copyable captures and linear continuations still check (`lawConstant`, `lawKeep` in `examples/scope.lang`). | DONE |
 | S6 | The `Budget` ops `spend` and `split` (kit-only `budget` and `budgetLeft`), `Capability`, `sizeLe`, `delegate`; `REFUSE_DELEGATE_WIDEN` and `REFUSE_BUDGET_OVERSPEND` on closed rows at a term level of 1; L1 and L2 as refl laws and eval rows in `examples/capability.lang`. Rulings Q-S6-1 to Q-S6-8 (section 1); O17 and O18 closed with no change; O19 fixed. Gate EXIT 0: 32 examples, 21 parse refusals, 219 check refusals, 11 kit-only refusals, 1 time hint, 88 evals, 1 build, 1 ir lowered, 5 ir refusals, 2 ir lowerings, 4 notrap modules, 7 notrap bad rows, 10 spine evals, 2 natops evals, review, domain and path regressions passed. New rows: `test/check/budget-overspend-{spend,split}.lang` and `delegate-overspend.lang` (`REFUSE_BUDGET_OVERSPEND`), `delegate-widen.lang` (`REFUSE_DELEGATE_WIDEN`), `capability-reuse.lang` (`REFUSE_AFFINE_REUSE`), `capability-omega.lang` (`REFUSE_AFFINE_OMEGA`), 3 `sizeLe` eval rows of `examples/capability.lang`, 2 guest rows (`spend`, `split`) in `test/fronttool.c` and the O19 message row in `test/gate.sh`. 18 mutants, 18 killed. | DONE |
-| S7 | `Payload`, `Mutation`, `canon`, `Digest`, `hash`, `Approval`, `Call`, `Plan` (CM), `Trace` (CC), `decide`; `REFUSE_EXECUTE_UNAPPROVED`; L3, L5, L7. Takes the host cost in `Call` (Q-S6-3 (a)) and the `Plan` path sum of `REFUSE_BUDGET_OVERSPEND` (Q-S6-6 (a)). | NEXT |
-| S8 | T1 part 1: the Wasm module of `decide`, the binding (Q-S0-5), the notrap rows; the differential and wasm runs lines (Q-S3-2 (b)). | |
+| S7 | `Payload`, `Mutation`, `canon`, `Digest`, `hash`, `Approval`, `Call`, `Plan` (CM), `Trace` (CC), `decide`; `REFUSE_EXECUTE_UNAPPROVED`; L3, L5, L7. Takes the host cost in `Call` (Q-S6-3 (a)) and the `Plan` path sum of `REFUSE_BUDGET_OVERSPEND` (Q-S6-6 (a)). Built: the kernel sorts `Payload`, `Bytes` and `Digest` with kit-only `payloadOf` and `approval`; `Mutation`, `canon`, the copyable `Ticket`, the affine `Call`, `Authority`, `judge`, `decide`, `Reply`, the first-order `Plan`, `Entry` and `Trace = Stream Entry`; `REFUSE_EXECUTE_UNAPPROVED` on a closed `Plan` def; `langc ir` refuses a `Payload` at run time (S8). Rulings Q-S7-1 to Q-S7-12 (section 1); the path sum is O20. Gate EXIT 0: 33 examples, 21 parse refusals, 224 check refusals, 12 kit-only refusals, 1 time hint, 92 evals, 1 build, 1 ir lowered, 6 ir refusals, 2 ir lowerings, 4 notrap modules, 7 notrap bad rows, 10 spine evals, 2 natops evals, review, domain and path regressions passed. 21 mutants, 21 killed (section 10). | DONE |
+| S8 | T1 part 1: the Wasm module of `decide`, the binding (Q-S0-5), the notrap rows; the differential and wasm runs lines (Q-S3-2 (b)). Takes a `Payload` at run time (the S7 `REFUSE_LOWER` row `test/ir/payload.lang`). | NEXT |
 | S9 | T1 part 2: `permitd`: the Wasm engine, SHA-256, the canonical bytes, the approver channel, the state, the stdio MCP proxy, `fakedeploy`, N6; the demo D1 to D11; L8. | |
 | S10 | T2: the JSON authority report, `docs/REPORT-JSON.md`. | |
 | S11 | T3: the Cedar export, the golden files. | |
@@ -681,6 +718,11 @@ One session for each slice: scope, gate, mutants, docs, close.
   cofamily type (the Pi `D.pos -> A`) as `D A` in a diagnostic, so the
   `REFUSE_AFFINE_OMEGA` message names `Allowance A`. Row: the
   `allowance-omega.lang` message row in `test/gate.sh`.
+- O20 OPEN (Q-S7-9 (a)). `REFUSE_BUDGET_OVERSPEND` checks one closed
+  `spend`, `split` or `delegate` term. No check sums the costs along a
+  `Plan` path: a `Plan` has no cost field. The cost comes with the
+  `Ticket` at run time, and `judge` gives `deny budgetShort` when it is
+  more than `auLeft`.
 
 ## 14. Questions for the USER (S0)
 

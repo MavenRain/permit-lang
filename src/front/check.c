@@ -118,6 +118,7 @@ typedef enum {
   RULE_RES2,      /* S5: resEq, within */
   RULE_RES_CHILD, /* S5: resChild r n */
   RULE_BUDGET,    /* S6: budgetLeft b, spend b n, split b n */
+  RULE_OPAQUE,    /* S7: approval, payloadEq, digestEq, hash, envelope, approvalDigest */
   RULE_LEN, /* S3: len A r (survey section 7) */
   RULE_FLAG_IF,
   RULE_NONZERO,       /* S3: NonZero Nat */
@@ -150,6 +151,9 @@ static const Builtin BUILTINS[] = {
   {"Unit", 0, RULE_TYPE0, OP_UNIT, OP_NAT, 0, VIS_GUEST},
   {"Budget", 0, RULE_TYPE0, OP_BUDGET, OP_NAT, 0, VIS_GUEST},
   {"Approval", 0, RULE_TYPE0, OP_APPROVAL, OP_NAT, 0, VIS_GUEST},
+  {"Payload", 0, RULE_TYPE0, OP_PAYLOAD_T, OP_NAT, 0, VIS_GUEST},
+  {"Bytes", 0, RULE_TYPE0, OP_BYTES, OP_NAT, 0, VIS_GUEST},
+  {"Digest", 0, RULE_TYPE0, OP_DIGEST, OP_NAT, 0, VIS_GUEST},
   {"Resource", 0, RULE_TYPE0, OP_RESOURCE, OP_NAT, 0, VIS_GUEST},
   {"Prod", 2, RULE_TYPE2, OP_PROD, OP_NAT, 0, VIS_GUEST},
   {"Sum", 2, RULE_TYPE2, OP_SUM, OP_NAT, 0, VIS_GUEST},
@@ -209,6 +213,13 @@ static const Builtin BUILTINS[] = {
   {"budgetLeft", 1, RULE_BUDGET, OP_BUDGET_LEFT, OP_NAT, 0, VIS_INTERNAL},
   {"spend", 2, RULE_BUDGET, OP_SPEND, OP_OPTION, 0, VIS_GUEST},
   {"split", 2, RULE_BUDGET, OP_SPLIT, OP_OPTION, 0, VIS_GUEST},
+  {"payloadOf", 1, RULE_NAT2, OP_PAYLOAD_OF, OP_PAYLOAD_T, 0, VIS_INTERNAL},
+  {"approval", 1, RULE_OPAQUE, OP_APPROVAL_MK, OP_APPROVAL, 0, VIS_INTERNAL},
+  {"payloadEq", 2, RULE_OPAQUE, OP_PAYLOAD_EQ, OP_FLAG, 0, VIS_GUEST},
+  {"digestEq", 2, RULE_OPAQUE, OP_DIGEST_EQ, OP_FLAG, 0, VIS_GUEST},
+  {"hash", 1, RULE_OPAQUE, OP_HASH, OP_DIGEST, 0, VIS_GUEST},
+  {"envelope", 2, RULE_OPAQUE, OP_ENVELOPE, OP_BYTES, 0, VIS_GUEST},
+  {"approvalDigest", 1, RULE_OPAQUE, OP_APPROVAL_DIGEST, OP_DIGEST, 0, VIS_GUEST},
   {"flagIf", 3, RULE_FLAG_IF, OP_FLAG_IF, OP_FLAG, 0, VIS_INTERNAL},
   {"Map", 2, RULE_KMAP, OP_KMAP, OP_NAT, 0, VIS_INTERNAL},
   {"mapEmpty", 0, RULE_EMPTY, OP_KMAP_OF, OP_KMAP, 0, VIS_INTERNAL},
@@ -2593,6 +2604,32 @@ static const Core *rule_prim(Call *k, Op arg) {
   return k->b->arity < 2u ? op3(c, k->b->op, 0, 1, x, NULL, NULL) : op3(c, k->b->op, 0, 2, x, y, NULL);
 }
 
+/* S7: the sort of argument I of an opaque op. */
+static Op opaque_arg(Op op, uint32_t i) {
+  if (op == OP_APPROVAL_MK || op == OP_DIGEST_EQ)
+    return OP_DIGEST;
+  if (op == OP_PAYLOAD_EQ)
+    return OP_PAYLOAD_T;
+  if (op == OP_HASH)
+    return OP_BYTES;
+  if (op == OP_ENVELOPE)
+    return i == 0u ? OP_RESOURCE : OP_PAYLOAD_T;
+  return OP_APPROVAL;
+}
+
+/* S7 (PLAN 6): approval d, payloadEq p q, digestEq d e, hash b,
+   envelope r p and approvalDigest a. Each argument has the sort of
+   opaque_arg. The Approval of approvalDigest is checked at Approval, so
+   the use counts charge it (the -o of PLAN 6). */
+static const Core *rule_opaque(Call *k) {
+  Checker *c = k->c;
+  Op op = k->b->op;
+  const Core *x = check(c, k->args[0], tyop(c, opaque_arg(op, 0u), 0, NULL, NULL, NULL));
+  const Core *y = x == NULL || k->b->arity < 2u ? NULL : check(c, k->args[1], tyop(c, opaque_arg(op, 1u), 0, NULL, NULL, NULL));
+  k->type = tyop(c, k->b->result, 0, NULL, NULL, NULL);
+  return k->b->arity < 2u ? op3(c, op, 0, 1, x, NULL, NULL) : op3(c, op, 0, 2, x, y, NULL);
+}
+
 static uint32_t find_family(const Machine *m, const char *name);
 
 /* len A r (S3, USER ruling Q-S3-3 (a)): the op count of the trace
@@ -2895,6 +2932,8 @@ static const Core *rule(Call *k) {
     return rule_res_child(k);
   case RULE_BUDGET:
     return rule_budget(k);
+  case RULE_OPAQUE:
+    return rule_opaque(k);
   case RULE_LEN:
     return rule_len(k);
   case RULE_FIN_OP:
@@ -3595,7 +3634,8 @@ static Resource resource_shape_in(Checker *c, const Value *v, uint32_t level, co
     return RESOURCE_UNKNOWN;
   if (v->op == OP_BUDGET || v->op == OP_APPROVAL)
     return RESOURCE_PRESENT;
-  if (v->op == OP_NAT || v->op == OP_FLAG || v->op == OP_UNIT || v->op == OP_INTERVAL || v->op == OP_FIN || v->op == OP_NONZERO || v->op == OP_RESOURCE)
+  if (v->op == OP_NAT || v->op == OP_FLAG || v->op == OP_UNIT || v->op == OP_INTERVAL || v->op == OP_FIN || v->op == OP_NONZERO || v->op == OP_RESOURCE ||
+      v->op == OP_PAYLOAD_T || v->op == OP_BYTES || v->op == OP_DIGEST)
     return RESOURCE_NONE;
   if ((v->op == OP_OPTION || v->op == OP_LIST) && v->argc == 1u)
     return resource_shape_in(c, v->args[0], level, seen, captures);
@@ -4744,6 +4784,48 @@ static int check_def_body(Checker *c, const Decl *d, const Value *tv, const Core
   return 1;
 }
 
+/* REFUSE_EXECUTE_UNAPPROVED (Q-S7-8 (a), Q-S7-10 (a), L5): on a def of
+   type Plan A at a term level of 1, each planExecute m lies in the
+   ppApproved branch of an earlier planPropose m' on its path, m'
+   convertible to m. The walk is on the value, so a def name in the plan is
+   unfolded. An open part is a neutral, so the walk stops there and only a
+   closed row gives the code. The gate denies a second use of an approval
+   at run time (usedHas), so the rule does not count the uses. */
+typedef struct Proposed Proposed;
+struct Proposed {
+  const Value *mutation;
+  const Proposed *next;
+};
+
+static int proposed(Checker *c, const Proposed *p, const Value *m) {
+  return p != NULL && (conv_values(c->m, c->level, p->mutation, m) || proposed(c, p->next, m));
+}
+
+static int plan_path(Checker *c, uint32_t plan, const Value *v, const Proposed *p) {
+  const CtorInfo *ci;
+  Proposed more;
+  uint32_t base = c->m->families[plan].param_count;
+  uint32_t j;
+  int ok = 1;
+  if (!val_is(v, OP_CTOR) || c->m->ctors[v->inst].family != plan)
+    return 1;
+  ci = &c->m->ctors[v->inst];
+  if (ci->field_count == 0u || v->argc < base + ci->field_count)
+    return 1;
+  if (strcmp(ci->name, "planExecute") == 0 && !proposed(c, p, v->args[base]))
+    return FAIL(c, "REFUSE_EXECUTE_UNAPPROVED", "planExecute %s is not in the ppApproved branch of an earlier planPropose of the same mutation on its path (L5)", show(c, v->args[base]));
+  more.mutation = v->args[base];
+  more.next = p;
+  for (j = base; ok && j < base + ci->field_count; j++)
+    ok = plan_path(c, plan, v->args[j], strcmp(ci->name, "planPropose") == 0 && j == base + 1u ? &more : p);
+  return ok;
+}
+
+static int plan_paths(Checker *c, const Value *tv, const Core *body) {
+  uint32_t plan = find_family(c->m, "Plan");
+  return plan == NO_FAMILY || !is_family(tv, plan) || plan_path(c, plan, here(c, body), NULL);
+}
+
 static int check_def(Checker *c, const Decl *d) {
   uint64_t level = 0;
   const Core *t = check_type(c, d->type, &level);
@@ -4765,6 +4847,8 @@ static int check_def(Checker *c, const Decl *d) {
       refusal = diag.code != NULL ? diag.code : "REFUSE_AFFINE_REUSE";
     uses_restore(c, uses);
   }
+  if (body != NULL && !erased && !plan_paths(c, tv, body))
+    return 0;
   if (!check_def_body(c, d, tv, t, body))
     return 0;
   c->m->defs[c->m->def_count - 1u].runtime_refusal = refusal;

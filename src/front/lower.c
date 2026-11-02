@@ -590,6 +590,9 @@ static int lower_canon(Low *l, Buf *b, const Value *v, Operand *out) {
   case OP_FLAG:
   case OP_BUDGET:
   case OP_APPROVAL:
+  case OP_PAYLOAD_T:
+  case OP_BYTES:
+  case OP_DIGEST:
   case OP_RESOURCE:
   case OP_UNIT:
   case OP_PROD:
@@ -659,6 +662,14 @@ static int lower_canon(Low *l, Buf *b, const Value *v, Operand *out) {
   case OP_SPEND:
   case OP_SPLIT:
     return refuse(l, "a Budget at run time (S8)");
+  case OP_PAYLOAD_OF:
+  case OP_APPROVAL_MK:
+  case OP_PAYLOAD_EQ:
+  case OP_DIGEST_EQ:
+  case OP_HASH:
+  case OP_ENVELOPE:
+  case OP_APPROVAL_DIGEST:
+    return refuse(l, "a Payload at run time (S8)");
   case OP_FM_LEN:
     return refuse(l, "len (the op count of a FreeMon trace at run time)");
   case OP_ELIM:
@@ -1155,6 +1166,9 @@ static int lower_stuck(Low *l, Buf *b, const Value *v, Operand *out) {
   case OP_FLAG:
   case OP_BUDGET:
   case OP_APPROVAL:
+  case OP_PAYLOAD_T:
+  case OP_BYTES:
+  case OP_DIGEST:
   case OP_RESOURCE:
   case OP_UNIT:
   case OP_PROD:
@@ -1237,6 +1251,14 @@ static int lower_stuck(Low *l, Buf *b, const Value *v, Operand *out) {
   case OP_SPEND:
   case OP_SPLIT:
     return refuse(l, "a Budget at run time (S8)");
+  case OP_PAYLOAD_OF:
+  case OP_APPROVAL_MK:
+  case OP_PAYLOAD_EQ:
+  case OP_DIGEST_EQ:
+  case OP_HASH:
+  case OP_ENVELOPE:
+  case OP_APPROVAL_DIGEST:
+    return refuse(l, "a Payload at run time (S8)");
   case OP_FM_LEN:
     return refuse(l, "len (the op count of a FreeMon trace at run time)");
   case OP_ELIM:

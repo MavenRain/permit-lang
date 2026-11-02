@@ -1,0 +1,3 @@
+-- REFUSE_KIT (S7): payloadOf is a kit item. A guest gets a Payload from
+-- the host.
+def p : Ticket -> Payload := fun t => payloadOf (tkCost t)

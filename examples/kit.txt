@@ -20,3 +20,4 @@ elim.lang
 history-bind.lang
 scope.lang
 capability.lang
+decide.lang

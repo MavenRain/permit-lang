@@ -564,8 +564,19 @@ int main(void) {
     "def dup : Outer -> Prod Outer Outer := fun o => pair o o", "REFUSE_AFFINE_OMEGA");
   ok &= domain("family Outer := wrap (inner : Inner) and Inner := leaf (units : Budget) | again (outer : Outer)\n"
     "def dup : Outer -o Prod Outer Outer := fun o => pair o o", "REFUSE_AFFINE_REUSE");
-  ok &= domain("family Outer := wrap (inner : Inner) and Inner := middle (last : Last) and Last := leaf (approval : Approval)\n"
+  ok &= domain("family Outer := wrap (inner : Inner) and Inner := middle (last : Last) and Last := leaf (stamp : Approval)\n"
     "def dup : Outer -> Prod Outer Outer := fun o => pair o o", "REFUSE_AFFINE_OMEGA");
+  /* S7: hash, envelope and approvalDigest are guest names, and a guest gets
+     a Payload and an Approval from the host. approval is a kit item.
+     payloadOf is a kit item too, but guest() has no domain (no Ticket):
+     test/check/kit-payload-of.lang checks it. The payloadOf row here gets
+     REFUSE_KIT from budgetLeft (Q-S6-1). An Approval is used one time.
+     No row names Flag (a kit item). */
+  ok &= guest("def h : Resource -> Payload -> Digest := fun r p => hash (envelope r p)\n"
+    "def u : Approval -o Digest := fun a => approvalDigest a", NULL);
+  ok &= guest("def p : Budget -o Payload := fun b => payloadOf (budgetLeft b)", "REFUSE_KIT");
+  ok &= guest("def a : Digest -> Approval := fun d => approval d", "REFUSE_KIT");
+  ok &= guest("def twice : Approval -o Prod Digest Digest := fun a => pair (approvalDigest a) (approvalDigest a)", "REFUSE_AFFINE_REUSE");
   /* Copyable arguments that retain closures charge captures at omega. */
   ok &= guest("def twice : (@1 p : Prod (Unit -> Budget) Unit) -> Prod Budget Budget := fun p => pair (first p unit) (first p unit)\n"
     "def dup : Budget -o Prod Budget Budget := fun b => twice (pair (fun u => b) unit)", "REFUSE_AFFINE_OMEGA");

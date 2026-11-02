@@ -1,0 +1,76 @@
+-- The decide forms on closed rows (S7, Q-S7-1..12 (a)). Kit mode: the kit
+-- intros resRoot, payloadOf and approval make the resources, the payloads
+-- and the approvals (a guest program gets them from the host).
+def r1 : Resource := resRoot 1
+def m1 : Mutation := mutation r1 execute (payloadOf 7)
+def m2 : Mutation := mutation r1 execute (payloadOf 8)
+def m3 : Mutation := mutation r1 execute (payloadOf 9)
+def sc : Scope := fmEta (Prod Resource Action) (pair r1 execute)
+def a0 : Authority := authority sc (szS (szS sz0)) 5 (fmUnit Digest)
+def tOk : Ticket := ticket m1 2 (some (hash (canon m1)))
+def tTwo : Ticket := ticket m2 2 (some (hash (canon m2)))
+def tThree : Ticket := ticket m3 1 (some (hash (canon m3)))
+-- L3 on the digest: the same target and payload give the same digest. A
+-- changed payload or another target gives another digest.
+def lawSameDigest : Path Flag (digestEq (hash (envelope r1 (payloadOf 7))) (hash (envelope r1 (payloadOf 7)))) flagYes := refl
+def lawChangedPayload : Path Flag (digestEq (hash (envelope r1 (payloadOf 7))) (hash (envelope r1 (payloadOf 8)))) flagNo := refl
+def lawOtherTarget : Path Flag (digestEq (hash (envelope r1 (payloadOf 7))) (hash (envelope (resChild r1 2) (payloadOf 7)))) flagNo := refl
+def lawOtherRoot : Path Flag (digestEq (hash (envelope r1 (payloadOf 7))) (hash (envelope (resRoot 2) (payloadOf 7)))) flagNo := refl
+def lawPayloadEq : Path Flag (payloadEq (payloadOf 3) (payloadOf 3)) flagYes := refl
+def lawPayloadNe : Path Flag (payloadEq (payloadOf 3) (payloadOf 4)) flagNo := refl
+-- L7: an approval gives back its digest.
+def lawApprovalDigest : Path Digest (approvalDigest (approval (hash (canon m1)))) (hash (canon m1)) := refl
+-- judge: a permit, then one row for each deny reason. L6: a ticket out of
+-- the scope (target or action) is denied. L3: a changed payload is
+-- denied. L7: a second use of the approval is denied.
+def lawOk : Path Decision (first (judge a0 tOk)) permit := refl
+def lawScope : Path Decision (first (judge a0 (ticket (mutation (resRoot 2) execute (payloadOf 7)) 9 none))) (deny scopeMiss) := refl
+def lawActionOut : Path Decision (first (judge a0 (ticket (mutation r1 inspect (payloadOf 7)) 1 none))) (deny scopeMiss) := refl
+def lawBound : Path Decision (first (judge (authority sc sz0 5 (fmUnit Digest)) tOk)) (deny boundSpent) := refl
+def lawBudget : Path Decision (first (judge a0 (ticket m1 6 (some (hash (canon m1)))))) (deny budgetShort) := refl
+def lawNoApproval : Path Decision (first (judge a0 (ticket m1 2 none))) (deny noApproval) := refl
+def lawDiffers : Path Decision (first (judge a0 (ticket m1 2 (some (hash (canon m2)))))) (deny digestDiffers) := refl
+def lawUsed : Path Decision (first (judge (second (judge a0 tOk)) tOk)) (deny approvalUsed) := refl
+-- The deny order: scopeMiss before boundSpent, boundSpent before
+-- budgetShort, budgetShort before noApproval.
+def lawOrderScope : Path Decision (first (judge (authority sc sz0 5 (fmUnit Digest)) (ticket (mutation (resRoot 2) execute (payloadOf 7)) 9 none))) (deny scopeMiss) := refl
+def lawOrderBound : Path Decision (first (judge (authority sc sz0 5 (fmUnit Digest)) (ticket m1 6 none))) (deny boundSpent) := refl
+def lawOrderBudget : Path Decision (first (judge a0 (ticket m1 6 none))) (deny budgetShort) := refl
+-- A permit takes one step and the cost from the authority.
+def lawLeft : Path Nat (auLeft (second (judge a0 tOk))) 3 := refl
+def lawSteps : Path StepBound (auSteps (second (judge a0 tOk))) (szS sz0) := refl
+-- L4 over Authority: along advance the steps go down to sz0, and then
+-- each decision is deny boundSpent.
+def afterTwo : Authority := eps Authority (advance Authority (advance Authority (allowanceOf a0) tOk) tTwo)
+def lawStepsTwo : Path StepBound (auSteps afterTwo) sz0 := refl
+def lawSpent : Path Decision (first (judge afterTwo tThree)) (deny boundSpent) := refl
+-- decide on a Call: the affine Call gives its ticket to decideTicket.
+def lawDecide : Path Decision (unpack (decide (allowanceOf a0) (call m1 2 (some (approval (hash (canon m1)))))) (fun (d : Decision) (k : Allowance Authority) => d)) permit := refl
+def lawDecideNone : Path Decision (unpack (decide (allowanceOf a0) (call m1 2 none)) (fun (d : Decision) (k : Allowance Authority) => d)) (deny noApproval) := refl
+-- Q-S0-6: every denial takes one step and keeps the budget and digests.
+def deniedState : Authority := authority sc (szS sz0) 5 (fmUnit Digest)
+def usedState : Authority := second (judge a0 tOk)
+def lawScopeState : Path Authority (second (judge a0 (ticket (mutation (resRoot 2) execute (payloadOf 7)) 2 none))) deniedState := refl
+def lawBoundState : Path Authority (second (judge (authority sc sz0 5 (fmUnit Digest)) tOk)) (authority sc sz0 5 (fmUnit Digest)) := refl
+def lawBudgetState : Path Authority (second (judge a0 (ticket m1 6 (some (hash (canon m1)))))) deniedState := refl
+def lawNoApprovalState : Path Authority (second (judge a0 (ticket m1 2 none))) deniedState := refl
+def lawDiffersState : Path Authority (second (judge a0 (ticket m1 2 (some (hash (canon m2)))))) deniedState := refl
+def lawUsedState : Path Authority (second (judge usedState tOk)) (authority sc sz0 3 (auUsed usedState)) := refl
+-- A denied call exhausts the last step, so a later valid call is denied.
+def lastStep : Authority := authority sc (szS sz0) 5 (fmUnit Digest)
+def lawBoundAfterDeny : Path Decision (first (judge (second (judge lastStep (ticket m1 2 none))) tOk)) (deny boundSpent) := refl
+def deniedAllowance : Allowance Authority := unpack (decide (allowanceOf lastStep) (call m1 2 none)) (fun (d : Decision) (k : Allowance Authority) => k)
+def lawDecideDeniedSteps : Path StepBound (auSteps (eps Authority deniedAllowance)) sz0 := refl
+def lawDecideAfterDeny : Path Decision (unpack (decide deniedAllowance (call m1 2 (some (approval (hash (canon m1)))))) (fun (d : Decision) (k : Allowance Authority) => d)) (deny boundSpent) := refl
+-- Eval rows.
+def leftAfter : Nat := auLeft (eps Authority (advance Authority (allowanceOf a0) tOk))
+def stepsAfter : StepBound := auSteps afterTwo
+def decisionOk : Decision := first (judge a0 tOk)
+def decisionUsed : Decision := first (judge (second (judge a0 tOk)) tOk)
+-- L5 on a closed plan: the execute of m1 lies in the ppApproved branch of
+-- the propose of m1. The checker refuses an execute on another path
+-- (REFUSE_EXECUTE_UNAPPROVED).
+def stop : Plan Unit := planDone Unit unit
+def goodPlan : Plan Unit := planPropose Unit m1 (planInspect Unit r1 (planExecute Unit m1 stop stop stop) stop stop) stop
+-- A propose of m2 inside the ppApproved branch of m1 keeps m1 on the path.
+def nestedPlan : Plan Unit := planPropose Unit m1 (planPropose Unit m2 (planExecute Unit m1 stop stop stop) stop) stop

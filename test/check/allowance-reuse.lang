@@ -1,1 +1,1 @@
-def reuse : (A : Type 0) -> Call -> Allowance A -o Prod A (Allowance A) := fun A c x => pair (eps A x) (advance A x c)
+def reuse : (A : Type 0) -> Ticket -> Allowance A -o Prod A (Allowance A) := fun A c x => pair (eps A x) (advance A x c)

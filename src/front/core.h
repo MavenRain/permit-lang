@@ -21,6 +21,9 @@ typedef enum {
   OP_UNIT,
   OP_BUDGET,   /* Budget : Type 0, a resource sort with no constructor (PLAN 6) */
   OP_APPROVAL, /* Approval : Type 0, a resource sort with no constructor (PLAN 6) */
+  OP_PAYLOAD_T, /* S7: Payload : Type 0, a copyable sort with no guest constructor (PLAN 6) */
+  OP_BYTES,     /* S7: Bytes : Type 0, the canonical encoding of a mutation */
+  OP_DIGEST,    /* S7: Digest : Type 0, the hash of a Bytes value */
   OP_RESOURCE, /* S5: Resource : Type 0, a copyable sort with no guest constructor (PLAN 4) */
   OP_PROD,
   OP_SUM,
@@ -96,7 +99,17 @@ typedef enum {
   OP_BUDGET_MK,   /* budget n: the budget of n units */
   OP_BUDGET_LEFT, /* budgetLeft b: the units of b */
   OP_SPEND,       /* spend b n: some (the rest), none when b has fewer than n units */
-  OP_SPLIT        /* split b n: some (pair (n units) (the rest)), none when b has fewer than n units */
+  OP_SPLIT,       /* split b n: some (pair (n units) (the rest)), none when b has fewer than n units */
+  /* S7 (PLAN 6): payloadOf and approval are kit only (Q-S7-1 (a),
+     Q-S7-3 (a)); the other five are guest ops. hash is injective in the
+     model (O5). */
+  OP_PAYLOAD_OF,     /* payloadOf n: the payload with the Nat n */
+  OP_APPROVAL_MK,    /* approval d: the approval of the digest d */
+  OP_PAYLOAD_EQ,     /* payloadEq p q: a Flag */
+  OP_DIGEST_EQ,      /* digestEq d e: a Flag */
+  OP_HASH,           /* hash b: the Digest of b */
+  OP_ENVELOPE,       /* envelope r p: the Bytes of the target r and the payload p */
+  OP_APPROVAL_DIGEST /* approvalDigest a: the digest that a approves */
 } Op;
 
 /* The instance of pure, map, bind and filter (formers F5 and F8). */

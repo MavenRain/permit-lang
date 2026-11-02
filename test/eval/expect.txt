@@ -86,3 +86,7 @@ scope openAfterOne => szS sz0
 capability oneTwo => 1
 capability twoOne => 0
 capability twoTwo => 1
+decide leftAfter => 3
+decide stepsAfter => sz0
+decide decisionOk => permit
+decide decisionUsed => deny approvalUsed

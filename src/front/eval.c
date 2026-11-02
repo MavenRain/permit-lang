@@ -9,7 +9,8 @@
 #define VARIES 0xffu
 
 static const char *const OP_NAMES[] = {
-  [OP_NAT] = "Nat", [OP_FLAG] = "Flag", [OP_UNIT] = "Unit", [OP_BUDGET] = "Budget", [OP_APPROVAL] = "Approval", [OP_RESOURCE] = "Resource", [OP_PROD] = "Prod",
+  [OP_NAT] = "Nat", [OP_FLAG] = "Flag", [OP_UNIT] = "Unit", [OP_BUDGET] = "Budget", [OP_APPROVAL] = "Approval",
+  [OP_PAYLOAD_T] = "Payload", [OP_BYTES] = "Bytes", [OP_DIGEST] = "Digest", [OP_RESOURCE] = "Resource", [OP_PROD] = "Prod",
   [OP_SUM] = "Sum", [OP_OPTION] = "Option", [OP_LIST] = "List",
   [OP_FAMILY] = "?", [OP_UNIT_VAL] = "unit", [OP_FLAG_YES] = "flagYes",
   [OP_FLAG_NO] = "flagNo", [OP_PAIR] = "pair", [OP_INL] = "inl", [OP_INR] = "inr",
@@ -31,13 +32,16 @@ static const char *const OP_NAMES[] = {
   [OP_GLUE] = "Glue", [OP_GLUE_ELEM] = "glue", [OP_UNGLUE] = "unglue",
   [OP_NONZERO] = "NonZero", [OP_NONZERO_OF] = "nonZero", [OP_NONZERO_VALUE] = "nonZeroValue",
   [OP_RES_ROOT] = "resRoot", [OP_RES_CHILD] = "resChild", [OP_RES_EQ] = "resEq", [OP_RES_WITHIN] = "within",
-  [OP_BUDGET_MK] = "budget", [OP_BUDGET_LEFT] = "budgetLeft", [OP_SPEND] = "spend", [OP_SPLIT] = "split"
+  [OP_BUDGET_MK] = "budget", [OP_BUDGET_LEFT] = "budgetLeft", [OP_SPEND] = "spend", [OP_SPLIT] = "split",
+  [OP_PAYLOAD_OF] = "payloadOf", [OP_APPROVAL_MK] = "approval", [OP_PAYLOAD_EQ] = "payloadEq",
+  [OP_DIGEST_EQ] = "digestEq", [OP_HASH] = "hash", [OP_ENVELOPE] = "envelope", [OP_APPROVAL_DIGEST] = "approvalDigest"
 };
 
 /* The number of arguments of each operation. VARIES: it comes from the
    family tables. */
 static const unsigned char OP_ARITY[] = {
-  [OP_NAT] = 0, [OP_FLAG] = 0, [OP_UNIT] = 0, [OP_BUDGET] = 0, [OP_APPROVAL] = 0, [OP_RESOURCE] = 0, [OP_PROD] = 2, [OP_SUM] = 2,
+  [OP_NAT] = 0, [OP_FLAG] = 0, [OP_UNIT] = 0, [OP_BUDGET] = 0, [OP_APPROVAL] = 0,
+  [OP_PAYLOAD_T] = 0, [OP_BYTES] = 0, [OP_DIGEST] = 0, [OP_RESOURCE] = 0, [OP_PROD] = 2, [OP_SUM] = 2,
   [OP_OPTION] = 1, [OP_LIST] = 1, [OP_FAMILY] = VARIES,
   [OP_UNIT_VAL] = 0, [OP_FLAG_YES] = 0, [OP_FLAG_NO] = 0, [OP_PAIR] = 2,
   [OP_INL] = 1, [OP_INR] = 1, [OP_NONE] = 0, [OP_SOME] = 1, [OP_NIL] = 0,
@@ -55,7 +59,9 @@ static const unsigned char OP_ARITY[] = {
   [OP_UNGLUE] = 4,
   [OP_NONZERO] = 1, [OP_NONZERO_OF] = 1, [OP_NONZERO_VALUE] = 1,
   [OP_RES_ROOT] = 1, [OP_RES_CHILD] = 2, [OP_RES_EQ] = 2, [OP_RES_WITHIN] = 2,
-  [OP_BUDGET_MK] = 1, [OP_BUDGET_LEFT] = 1, [OP_SPEND] = 2, [OP_SPLIT] = 2
+  [OP_BUDGET_MK] = 1, [OP_BUDGET_LEFT] = 1, [OP_SPEND] = 2, [OP_SPLIT] = 2,
+  [OP_PAYLOAD_OF] = 1, [OP_APPROVAL_MK] = 1, [OP_PAYLOAD_EQ] = 2, [OP_DIGEST_EQ] = 2,
+  [OP_HASH] = 1, [OP_ENVELOPE] = 2, [OP_APPROVAL_DIGEST] = 1
 };
 
 typedef enum {
@@ -1461,6 +1467,39 @@ static const Value *budget_op(Machine *m, Op op, const Value *const *a, uint32_t
               NULL, NULL);
 }
 
+/* S7: 1 when P is payloadOf of a closed Nat. */
+static int payload_closed(const Value *p) {
+  return val_is(p, OP_PAYLOAD_OF) && p->args[0]->kind == VAL_NAT;
+}
+
+/* S7: 1 when D is hash (envelope r p) with a closed chain r and a
+   closed payload p. */
+static int digest_closed(const Value *d) {
+  return val_is(d, OP_HASH) && val_is(d->args[0], OP_ENVELOPE) && res_depth(d->args[0]->args[0]) != 0u &&
+         payload_closed(d->args[0]->args[1]);
+}
+
+/* S7 (PLAN 6): payloadEq p q, digestEq d e and approvalDigest a.
+   payloadEq compares two closed payloads. hash is injective in the
+   model (O5): two digests are equal when the targets and the payloads
+   are equal. approvalDigest (approval d) is d. An open part gives the
+   stuck operation. */
+static const Value *opaque_op(Machine *m, Op op, const Value *const *a, uint32_t n) {
+  const Value *r;
+  const Value *s;
+  if (op == OP_APPROVAL_DIGEST)
+    return val_is(a[0], OP_APPROVAL_MK) ? a[0]->args[0] : val_op(m, VAL_STUCK, op, 0, 0, a, n);
+  if (op == OP_PAYLOAD_EQ)
+    return payload_closed(a[0]) && payload_closed(a[1]) ? flag(m, a[0]->args[0]->nat == a[1]->args[0]->nat)
+                                                       : val_op(m, VAL_STUCK, op, 0, 0, a, n);
+  if (!digest_closed(a[0]) || !digest_closed(a[1]))
+    return val_op(m, VAL_STUCK, op, 0, 0, a, n);
+  r = a[0]->args[0];
+  s = a[1]->args[0];
+  return flag(m, res_depth(r->args[0]) == res_depth(s->args[0]) && res_same(r->args[0], s->args[0]) &&
+                     r->args[1]->args[0]->nat == s->args[1]->args[0]->nat);
+}
+
 /* S5 (PLAN 4): resEq r s and within r s on closed chains. within r s is
    flagYes when the segments of s are a prefix of the segments of r (s is
    r or an ancestor of r). An open chain gives the stuck operation. */
@@ -1981,6 +2020,9 @@ static const Value *transp_data(Machine *m, const Value *head, const Value *line
   case OP_FLAG:
   case OP_BUDGET:
   case OP_APPROVAL:
+  case OP_PAYLOAD_T:
+  case OP_BYTES:
+  case OP_DIGEST:
   case OP_RESOURCE:
   case OP_UNIT:
   case OP_KMAP:
@@ -2065,6 +2107,13 @@ static const Value *transp_data(Machine *m, const Value *head, const Value *line
   case OP_BUDGET_LEFT:
   case OP_SPEND:
   case OP_SPLIT:
+  case OP_PAYLOAD_OF:
+  case OP_APPROVAL_MK:
+  case OP_PAYLOAD_EQ:
+  case OP_DIGEST_EQ:
+  case OP_HASH:
+  case OP_ENVELOPE:
+  case OP_APPROVAL_DIGEST:
   case OP_FLAG_IF:
   case OP_NAT_DIV:
   case OP_NAT_MOD:
@@ -2947,6 +2996,9 @@ static const Value *reduce_op(Machine *m, Op op, uint32_t inst, uint32_t field, 
   case OP_FLAG:
   case OP_BUDGET:
   case OP_APPROVAL:
+  case OP_PAYLOAD_T:
+  case OP_BYTES:
+  case OP_DIGEST:
   case OP_RESOURCE:
   case OP_UNIT:
   case OP_PROD:
@@ -2958,6 +3010,10 @@ static const Value *reduce_op(Machine *m, Op op, uint32_t inst, uint32_t field, 
   case OP_RES_ROOT:
   case OP_RES_CHILD:
   case OP_BUDGET_MK:
+  case OP_PAYLOAD_OF:
+  case OP_APPROVAL_MK:
+  case OP_HASH:
+  case OP_ENVELOPE:
   case OP_UNIT_VAL:
   case OP_FLAG_YES:
   case OP_FLAG_NO:
@@ -3031,6 +3087,10 @@ static const Value *reduce_op(Machine *m, Op op, uint32_t inst, uint32_t field, 
   case OP_SPEND:
   case OP_SPLIT:
     return budget_op(m, op, a, n);
+  case OP_PAYLOAD_EQ:
+  case OP_DIGEST_EQ:
+  case OP_APPROVAL_DIGEST:
+    return opaque_op(m, op, a, n);
   case OP_NAT_DIV:
   case OP_NAT_MOD:
     return nat_divmod(m, op, a, n);
