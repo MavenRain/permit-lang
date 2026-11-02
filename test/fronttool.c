@@ -509,11 +509,11 @@ int main(void) {
   ok &= guest("def keep : Option Budget -o Option Budget := fun o => option none (fun l => some l) o", NULL);
   ok &= guest("def lw : (@0 l : Budget) -> Path Budget l l := fun l => refl", NULL);
   ok &= guest("def apply1 : (Budget -o Budget) -> Budget -o Budget := fun f l => f l\n"
-    "def spend : Budget -o Budget := fun l => apply1 (fun x => x) l", NULL);
+    "def drain : Budget -o Budget := fun l => apply1 (fun x => x) l", NULL);
   ok &= checked("def pick : Flag -> Budget -o Budget := fun b l => flagIf b l l", ORIGIN_PROGRAM, CHECK_KIT, NULL);
   ok &= guest("def swap : Sigma (x : Budget) Budget -o Sigma (y : Budget) Budget := fun p => unpack p (fun a b => pack b a)", NULL);
   ok &= checked("def burn : Budget -o Nat := fun l => 0\n"
-    "def spend : Budget -o Nat -> Nat := fun l n => fold (fun r => r) (burn l) n", ORIGIN_PROGRAM, CHECK_KIT, NULL);
+    "def drain : Budget -o Nat -> Nat := fun l n => fold (fun r => r) (burn l) n", ORIGIN_PROGRAM, CHECK_KIT, NULL);
   ok &= checked("def hold : (@1 l : Budget) -> Prod (Path Nat 0 0) Nat := fun l => pair (fun (i : I) => 0) 0", ORIGIN_PROGRAM, CHECK_KIT, NULL);
   ok &= checked("def inc : Nat -> Option Nat := fun n => natAdd n 1\n"
     "def use : Option Nat -> Option Nat := fun o => bind o inc", ORIGIN_PROGRAM, CHECK_KIT, NULL);
@@ -535,10 +535,34 @@ int main(void) {
   ok &= domain("family Pile (size : Nat) := base (baseOf : Nat) | more (on : Nat) (below : Pile size)", NULL);
   ok &= domain("family Box := boxed (item : Budget)\n"
     "def dup : Box -> Prod Box Box := fun b => pair b b", "REFUSE_AFFINE_OMEGA");
+  /* S6 (Q-S6-4 (a)): the Budget field makes Capability a resource type. */
+  ok &= checked_in("family Size := sz0 | szS (szPred : Size)\n"
+    "def StepBound : Type 0 := Size\n"
+    "family Capability := cap (capSteps : StepBound) (capBudget : Budget)\n",
+    "def dup : Capability -> Prod Capability Capability := fun c => pair c c", ORIGIN_PROGRAM, CHECK_GUEST, "REFUSE_AFFINE_OMEGA");
+  ok &= checked_in("family Size := sz0 | szS (szPred : Size)\n"
+    "def StepBound : Type 0 := Size\n"
+    "family Capability := cap (capSteps : StepBound) (capBudget : Budget)\n",
+    "def keep : Capability -o Capability := fun c => c", ORIGIN_PROGRAM, CHECK_GUEST, NULL);
+  /* S6 (PLAN 6): spend and split are guest names. Guest code cannot write
+     a Nat literal, so the cost is a domain def. */
+  ok &= checked_in("def one : Nat := 1\n",
+    "def pay : Budget -o Option Budget := fun b => spend b one", ORIGIN_PROGRAM, CHECK_GUEST, NULL);
+  ok &= checked_in("def one : Nat := 1\n",
+    "def cut : Budget -o Option (Prod Budget Budget) := fun b => split b one", ORIGIN_PROGRAM, CHECK_GUEST, NULL);
+  /* A local delegate is an ordinary function, even with capability arguments. */
+  ok &= checked_in("family Capability := cap (capScope : Unit) (capSteps : Unit) (capBudget : Budget)\n"
+    "def scopeWithin : Unit -> Unit -> Flag := fun child parent => flagNo\n",
+    "def local : (Capability -o Unit -> Unit -> Nat -> Unit) -> Budget -o Unit := "
+    "fun delegate b => delegate (cap unit unit b) unit unit 0", ORIGIN_PROGRAM, CHECK_KIT, NULL);
+  ok &= checked_in("family Capability := cap (capScope : Unit) (capSteps : Unit) (capBudget : Budget)\n"
+    "def scopeWithin : Unit -> Unit -> Flag := fun child parent => flagYes\n",
+    "def local : (Capability -o Unit -> Unit -> Nat -> Unit) -> Unit := "
+    "fun delegate => delegate (cap unit unit (budget 0)) unit unit 1", ORIGIN_PROGRAM, CHECK_KIT, NULL);
   /* Resource fields propagate across sibling sorts, including cycles. */
-  ok &= domain("family Outer := wrap (inner : Inner) and Inner := leaf (budget : Budget)\n"
+  ok &= domain("family Outer := wrap (inner : Inner) and Inner := leaf (units : Budget)\n"
     "def dup : Outer -> Prod Outer Outer := fun o => pair o o", "REFUSE_AFFINE_OMEGA");
-  ok &= domain("family Outer := wrap (inner : Inner) and Inner := leaf (budget : Budget) | again (outer : Outer)\n"
+  ok &= domain("family Outer := wrap (inner : Inner) and Inner := leaf (units : Budget) | again (outer : Outer)\n"
     "def dup : Outer -o Prod Outer Outer := fun o => pair o o", "REFUSE_AFFINE_REUSE");
   ok &= domain("family Outer := wrap (inner : Inner) and Inner := middle (last : Last) and Last := leaf (approval : Approval)\n"
     "def dup : Outer -> Prod Outer Outer := fun o => pair o o", "REFUSE_AFFINE_OMEGA");

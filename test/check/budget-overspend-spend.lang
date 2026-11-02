@@ -1,0 +1,2 @@
+-- REFUSE_BUDGET_OVERSPEND (Q-S6-6 (a)): a closed spend of 3 units from 2.
+def tooMuch : Option Budget := spend (budget 2) 3

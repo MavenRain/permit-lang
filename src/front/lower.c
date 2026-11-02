@@ -654,6 +654,11 @@ static int lower_canon(Low *l, Buf *b, const Value *v, Operand *out) {
   case OP_RES_EQ:
   case OP_RES_WITHIN:
     return refuse(l, "a Resource at run time (S8)");
+  case OP_BUDGET_MK:
+  case OP_BUDGET_LEFT:
+  case OP_SPEND:
+  case OP_SPLIT:
+    return refuse(l, "a Budget at run time (S8)");
   case OP_FM_LEN:
     return refuse(l, "len (the op count of a FreeMon trace at run time)");
   case OP_ELIM:
@@ -1227,6 +1232,11 @@ static int lower_stuck(Low *l, Buf *b, const Value *v, Operand *out) {
   case OP_RES_EQ:
   case OP_RES_WITHIN:
     return refuse(l, "a Resource at run time (S8)");
+  case OP_BUDGET_MK:
+  case OP_BUDGET_LEFT:
+  case OP_SPEND:
+  case OP_SPLIT:
+    return refuse(l, "a Budget at run time (S8)");
   case OP_FM_LEN:
     return refuse(l, "len (the op count of a FreeMon trace at run time)");
   case OP_ELIM:

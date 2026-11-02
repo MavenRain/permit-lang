@@ -1,10 +1,10 @@
 # AGENTS.md
 
-How an agent works in permit-lang. This file is true at S5 (the domain
-types). The final form comes at slice S15 (`docs/PLAN.md` section 9,
+How an agent works in permit-lang. This file is true at S6 (the budget
+ops and `delegate`). The final form comes at slice S15 (`docs/PLAN.md` section 9,
 A5).
 
-## State at S5
+## State at S6
 
 - The code is the Cubical TT kernel of intent-lang (67445ae), ported from
   relay-lang 05dd63b without the crypto code: `langc` (C99, TinyCC) and
@@ -29,9 +29,18 @@ A5).
   affine value: `alOpen` observes distinct positions. Generated destructors
   preserve positions and can move their input. `examples/scope.lang` holds
   the L4 and L6 rows and the copyable-capture and linear-continuation checks.
-- The other permit-lang types, refusals and targets (`spend`, `split`,
-  `Capability`, `delegate`, the approval forms, the gate) are a plan
-  only: `docs/PLAN.md` sections 4 to 8.
+- S6 adds the guest ops `spend` and `split` on a `Budget` (`docs/PLAN.md`
+  sections 4, 6 and 7); `budget` and `budgetLeft` are kit-only. The
+  domain has `Capability`, `sizeLe` and `delegate`. A `Capability`
+  holds a `Budget`, so it is a resource type. `REFUSE_DELEGATE_WIDEN`
+  and `REFUSE_BUDGET_OVERSPEND` refuse closed rows at a term level of
+  1. These are core names: `spend`, `split`, `budget`, `budgetLeft`, `Capability`, `cap`, `capScope`, `capSteps`, `capBudget`, `sizeLe` and `delegate`.
+  `split` gives the `n` units first and the rest second; `delegate`
+  gives (child, rest). `examples/capability.lang` holds the L1 and L2
+  rows.
+- The other permit-lang types, refusals and targets (`Call`, `Plan`,
+  `decide`, the approval forms, the gate) are a plan only:
+  `docs/PLAN.md` sections 4 to 8.
 - `design/DESIGN.md` is verbatim. Do not edit it. A design change is a
   new paste and an open item.
 

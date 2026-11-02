@@ -80,6 +80,14 @@ unknown payload: `alOpen` can observe more than one position. Such a
 capture gives `REFUSE_AFFINE_OMEGA`. Copyable captures and linear
 continuations that move an Allowance are allowed.
 
+S6 (`docs/PLAN.md` sections 4, 6 and 7) adds the guest ops `spend :
+Budget -o Nat -> Option Budget` and `split : Budget -o Nat -> Option
+(Prod Budget Budget)`, and the kit-only `budget : Nat -> Budget` and
+`budgetLeft : Budget -o Nat`. `split b n` gives the `n` units first and
+the rest second. The domain gives `Capability`, `sizeLe` and
+`delegate`; `delegate` gives (child, rest). A `Capability` holds a
+`Budget`, so it is a resource type.
+
 The compiler enforces these rules:
 
 | Rule | Code | The compiler refuses |
@@ -89,6 +97,8 @@ The compiler enforces these rules:
 | R3 | `REFUSE_REC` | `def rec`, or a definition that refers to itself or to a later definition |
 | R4 | `REFUSE_NAME` | a core name, a domain name, a reserved name or a repeated name as a new definition |
 | R4 | `REFUSE_TIME` | one of 10 time words (`now`, `block`, `timestamp`, `time`, `clock`, `epoch`, `date`, `ttl`, `deadline`, `expires`) as a name or a use; the message says to count operations: a deadline is a `StepBound` (a count of later operations) |
+| L1 | `REFUSE_DELEGATE_WIDEN` | a closed `delegate` application whose child scope is not within the parent scope, at a term level of 1 |
+| L2 | `REFUSE_BUDGET_OVERSPEND` | a closed `spend`, `split` or `delegate` application whose budget part reduces to `none`, at a term level of 1 |
 
 ## CLI
 
@@ -198,12 +208,12 @@ how to replace the sample domain.
 
 | Line | What the gate does |
 |---|---|
-| `examples: 31 checked, 0 failed` | `langc check` accepts each `examples/*.lang` file; the files in `examples/kit.txt` run with `--kit` (`scope.lang`, the S5 demo, is one of them) |
+| `examples: 32 checked, 0 failed` | `langc check` accepts each `examples/*.lang` file; the files in `examples/kit.txt` run with `--kit` (`scope.lang`, the S5 demo, and `capability.lang`, the S6 demo, are two of them) |
 | `parse refusals: 21 checked` | each `test/parse` file fails with the code in `test/parse/expect.txt`; one file has 1100 nested parentheses. 4 files (S4) have a bad mark (`@2`, a marked parameter, a marked field) or `-ops`. 1 file (S5, `affine-no-cofamily.lang`) has `affine` with no `cofamily` after it |
-| `check refusals: 213 checked` | each `test/check` file fails with the code in `test/check/expect.txt`; the `TYPE_REFL` message shows both normal forms. The 45 `affine-*.lang` files (S4) give `REFUSE_AFFINE_REUSE` (11), `REFUSE_AFFINE_OMEGA` (24), `REFUSE_AFFINE_FIX` (3), `REFUSE_AFFINE_PATH` (4) or `TYPE_MISMATCH` (3). 16 of them are in `test/check/kit.txt`, so they run with `--kit`. The 13 S5 files: `time-{date,ttl,deadline,expires}.lang` (`REFUSE_TIME`), `kit-res-root.lang` (`REFUSE_KIT`), `allowance-{reuse,open-twice,open-parts,unpack-twice}.lang` (`REFUSE_AFFINE_REUSE`: a second use of an `Allowance`, of its opened pair, or of its parts) and `allowance-{omega,capture-budget,capture-allowance,capture-polymorphic}.lang` (`REFUSE_AFFINE_OMEGA`: an omega binder or a position closure that captures a resource or an unknown payload) |
+| `check refusals: 219 checked` | each `test/check` file fails with the code in `test/check/expect.txt`; the `TYPE_REFL` message shows both normal forms. The 45 `affine-*.lang` files (S4) give `REFUSE_AFFINE_REUSE` (11), `REFUSE_AFFINE_OMEGA` (24), `REFUSE_AFFINE_FIX` (3), `REFUSE_AFFINE_PATH` (4) or `TYPE_MISMATCH` (3). 16 of them are in `test/check/kit.txt`, so they run with `--kit`. The 13 S5 files: `time-{date,ttl,deadline,expires}.lang` (`REFUSE_TIME`), `kit-res-root.lang` (`REFUSE_KIT`), `allowance-{reuse,open-twice,open-parts,unpack-twice}.lang` (`REFUSE_AFFINE_REUSE`: a second use of an `Allowance`, of its opened pair, or of its parts) and `allowance-{omega,capture-budget,capture-allowance,capture-polymorphic}.lang` (`REFUSE_AFFINE_OMEGA`: an omega binder or a position closure that captures a resource or an unknown payload). The 6 S6 files: `budget-overspend-{spend,split}.lang` and `delegate-overspend.lang` (`REFUSE_BUDGET_OVERSPEND`), `delegate-widen.lang` (`REFUSE_DELEGATE_WIDEN`), `capability-reuse.lang` (`REFUSE_AFFINE_REUSE`) and `capability-omega.lang` (`REFUSE_AFFINE_OMEGA`); the first 4 are in `test/check/kit.txt` |
 | `kit-only refusals: 11 checked` | each `REFUSE_KIT` row refuses a kit item in guest mode only: `langc --kit check` accepts the file (`kit-res-root.lang`, S5, is a guest `resRoot`) |
 | `time hint: 1 checked` | a `REFUSE_TIME` refusal says to count operations: a deadline is a `StepBound` (a count of later operations) |
-| `evals: 85 checked` | `langc eval` gives each result in `test/eval/expect.txt`; 6 rows (S5) run `examples/scope.lang` with `--kit`: `within` and `resEq` (yes and no), `afterOne` and `openAfterOne` (L4) |
+| `evals: 88 checked` | `langc eval` gives each result in `test/eval/expect.txt`; 6 rows (S5) run `examples/scope.lang` with `--kit`: `within` and `resEq` (yes and no), `afterOne` and `openAfterOne` (L4); 3 rows (S6) run `examples/capability.lang` with `--kit`: `sizeLe` (`oneTwo`, `twoOne`, `twoTwo`) |
 | `builds: 1 checked` | `langc build examples/functions.lang` writes a module that `wasm-validate` accepts |
 | `ir: 1 lowered` | `langc ir examples/functions.lang` gives one `func` line for each `abi` line |
 | `ir refusals: 5 checked` | `langc --kit ir` refuses `test/ir/closure.lang`, `kmap.lang`, `tree.lang`, `spine.lang` and `hop.lang`, each with its code |
@@ -214,7 +224,7 @@ how to replace the sample domain.
 | `natops evals: 2 checked` | `langc --kit eval` gives 1 for `reasonCode 0` and 2 for `reasonCode 1` of `test/ir/natops.lang` (the run-time case split over the domain `Reason`, O15) |
 | `gate: 0 failures` | the sum of all failures of `test/gate.sh` |
 | `review regressions: passed` | `test/review.sh` passes |
-| `domain regressions: passed` | `build/fronttool` (the domain declaration rows, the 54 affine rows of S4 and the 4 time rows and 3 affine cofamily rows of S5) passes |
+| `domain regressions: passed` | `build/fronttool` (the domain declaration rows, the 54 affine rows of S4 and the 4 time rows and 3 affine cofamily rows of S5 and the 2 guest `spend` and `split` rows of S6) passes |
 | `path regressions: passed` | `build/pathtool` (the path rows) passes |
 
 The gate also checks the usage and IO exit codes, five `eval` refusals and

@@ -1,2 +1,2 @@
 def idMany : (A : Type 0) -> A -> A := fun A x => x
-def spend : Budget -o Budget := fun l => idMany Budget l
+def drain : Budget -o Budget := fun l => idMany Budget l

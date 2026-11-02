@@ -31,7 +31,7 @@ trap: a denial is a value with a reason code.
 
 ## Status
 
-S5: the domain types. The repo holds the Cubical TT kernel of intent-lang
+S6: the budget ops, `Capability` and `delegate`. The repo holds the Cubical TT kernel of intent-lang
 (67445ae), ported from relay-lang 05dd63b without the crypto code, on the
 tcc-wasm host, and the plan. S3 adds R0 from relay-lang 5c386bb: total
 Nat operations, `REFUSE_PARTIAL`, and a Wasm writer that emits no trap
@@ -48,9 +48,13 @@ types in `domain/domain.lang`: `Action`, `Reason`, `Decision`,
 `scopeWithin`, and the affine `cofamily Allowance` with `alOpen`. The
 kernel has the sort `Resource` with `resEq` and `within`, and
 `REFUSE_TIME` names 10 time words. `examples/scope.lang` is the S5
-demo (L4, L6). The other permit-lang types and refusals (the `Budget`
-ops, `Capability`, `delegate`, the approval forms), the gate and the
-three targets do not exist yet.
+demo (L4, L6). S6 adds the guest ops `spend` and `split` on a `Budget`
+(kit-only `budget` and `budgetLeft`), the domain `Capability`, `sizeLe`
+and `delegate`, and the codes `REFUSE_DELEGATE_WIDEN` and
+`REFUSE_BUDGET_OVERSPEND` on closed rows. `examples/capability.lang` is
+the S6 demo (L1, L2). The other permit-lang types and refusals (`Call`,
+`Plan`, `decide`, the approval forms), the gate and the three targets
+do not exist yet.
 `docs/PLAN.md` gives the readings, the route, the slices and the open
 questions.
 

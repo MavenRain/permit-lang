@@ -67,6 +67,13 @@ if ! rg -q -F 'the path at i1 is some 1201, but the type needs some 1200' "$tmp/
   fail=$((fail + 1))
 fi
 
+# An affine cofamily type prints as D A in a refusal (S6, O19).
+build/langc $(kit test/check/kit.txt allowance-omega.lang) check test/check/allowance-omega.lang 2>"$tmp/err" >/dev/null || true
+if ! rg -q -F 'the domain of the arrow has the resource type Allowance A at omega' "$tmp/err"; then
+  echo "FAIL allowance-omega.lang: the message does not print the cofamily type as Allowance A"
+  fail=$((fail + 1))
+fi
+
 # A REFUSE_TIME refusal names the op-count form (S3, O3).
 time_hint=0
 build/langc $(kit test/check/kit.txt time-block.lang) check test/check/time-block.lang 2>"$tmp/err" >/dev/null || true

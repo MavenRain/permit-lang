@@ -90,7 +90,13 @@ typedef enum {
   OP_RES_ROOT,  /* resRoot n: the root segment n */
   OP_RES_CHILD, /* resChild r n: the segment n under r */
   OP_RES_EQ,    /* resEq r s: a Flag */
-  OP_RES_WITHIN /* within r s: a Flag, flagYes when s is r or an ancestor of r */
+  OP_RES_WITHIN, /* within r s: a Flag, flagYes when s is r or an ancestor of r */
+  /* S6 (PLAN 6): a budget value is a tagged Nat. budget and budgetLeft
+     are kit only (Q-S6-1 (a)); spend and split are guest ops (Q-S6-2 (a)). */
+  OP_BUDGET_MK,   /* budget n: the budget of n units */
+  OP_BUDGET_LEFT, /* budgetLeft b: the units of b */
+  OP_SPEND,       /* spend b n: some (the rest), none when b has fewer than n units */
+  OP_SPLIT        /* split b n: some (pair (n units) (the rest)), none when b has fewer than n units */
 } Op;
 
 /* The instance of pure, map, bind and filter (formers F5 and F8). */
@@ -393,6 +399,8 @@ const Core *quote_value(Machine *m, uint32_t level, const Value *v);
 /* Writes V in the surface syntax. NAMES gives the names of the levels below
    NAME_COUNT. */
 int value_print(Machine *m, const char *const *names, uint32_t name_count, const Value *v, char *buf, size_t cap);
+/* As value_print, for a diagnostic: an affine cofamily type prints as D A. */
+int value_show(Machine *m, const char *const *names, uint32_t name_count, const Value *v, char *buf, size_t cap);
 const char *op_name(const Machine *m, Op op, uint32_t inst, uint32_t field);
 
 #endif

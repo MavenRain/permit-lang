@@ -333,3 +333,24 @@ affine cofamily Allowance (A : Type 0) := alCorec (eps : A) (advance : Call -> A
 -- alOpen gives the value now and the allowance after one call, as one
 -- pair (Q-S5-8 (a)). The pair is a resource: split it with unpack.
 def alOpen : (A : Type 0) -> Allowance A -o Prod A (Call -o Allowance A) := AllowanceOpen
+-- sizeLe a b is flagYes when a is at most b (a child step bound cannot
+-- pass the parent bound).
+def sizeLe : Size -> Size -> Flag :=
+  fun (a : Size) (b : Size) => elim (fun (t : Size) => Size -> Flag)
+    (fun (u : Size) => flagYes)
+    (fun (m : Size) (ih : Size -> Flag) => fun (u : Size) => elim (fun (v : Size) => Flag) flagNo (fun (w : Size) (jh : Flag) => ih w) u) a b
+-- The capability (S6, Q-S6-4 (a)): a scope, a step bound and a budget.
+-- The Budget field makes Capability a resource type (affine).
+family Capability := cap (capScope : Scope) (capSteps : StepBound) (capBudget : Budget)
+-- delegate c s k n gives some (child, rest) when s is within the parent
+-- scope, k is at most the parent step bound and the parent budget has n
+-- units. The child has s, k and the n units; the rest keeps the parent
+-- scope, the parent step bound and the remaining units. Else none.
+def delegate : Capability -o Scope -> StepBound -> Nat -> Option (Prod Capability Capability) :=
+  fun (c : Capability) (s : Scope) (k : StepBound) (n : Nat) => elim (fun (@0 x : Capability) => Option (Prod Capability Capability))
+    (fun (ps : Scope) (pk : StepBound) (pb : Budget) =>
+      flagIf (scopeWithin s ps)
+        (flagIf (sizeLe k pk)
+          (option none (fun (bs : Prod Budget Budget) => some (unpack bs (fun (b1 : Budget) (b2 : Budget) => pair (cap s k b1) (cap ps pk b2)))) (split pb n))
+          none)
+        none) c

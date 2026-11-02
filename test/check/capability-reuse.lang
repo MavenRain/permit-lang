@@ -1,0 +1,2 @@
+def twice : Capability -o Scope -> StepBound -> Prod (Option (Prod Capability Capability)) (Option (Prod Capability Capability)) :=
+  fun c s k => pair (delegate c s k (len Unit (fmUnit Unit))) (delegate c s k (len Unit (fmUnit Unit)))

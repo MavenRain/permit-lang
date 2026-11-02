@@ -105,3 +105,7 @@ affine-mark-arrow.lang
 affine-drop-zero.lang
 affine-erased-leak.lang
 affine-mark-mismatch.lang
+budget-overspend-spend.lang
+budget-overspend-split.lang
+delegate-widen.lang
+delegate-overspend.lang

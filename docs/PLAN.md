@@ -22,8 +22,11 @@ R0 in the kernel and the Wasm writer, ported from relay-lang 5c386bb
 (section 2, "S3 result"). S4 DONE: the affine layer, ported from
 leaf-lang 47a6f36 (section 6, "S4 result"). S5 DONE: `Resource`,
 `Action`, `Scope`, `StepBound`, the affine `Allowance`, `Decision` and
-`Reason` (sections 4 and 5; the S5 row of section 12). Next: S6
-(`Budget` ops, `Capability`, `delegate`, section 12).
+`Reason` (sections 4 and 5; the S5 row of section 12). S6 DONE: the
+`Budget` ops `spend` and `split`, `Capability`, `delegate`,
+`REFUSE_DELEGATE_WIDEN` and `REFUSE_BUDGET_OVERSPEND` (sections 4, 6
+and 7; the S6 row of section 12). Next: S7 (`Call`, `Plan`, `decide`,
+section 12).
 
 ## 1. Rulings
 
@@ -72,6 +75,14 @@ leaf-lang 47a6f36 (section 6, "S4 result"). S5 DONE: `Resource`,
 | 2026-11-01 | Q-S5-6 `alOpen`: "(a) One affine `alOpen` (Recommended)". `alOpen : Allowance A -o Prod A (Call -o Allowance A)`. `eps` and `advance` stay one-use views. `alCorec` stays guest-visible: the gate holds the one live value. A kit-only corecursor is a later question, if a row needs it. Edit: section 4; section 13, O17. | USER, S5 |
 | 2026-11-02 | Q-S5-7 The affine marker: "(a) opt-in modifier (Recommended)". The keyword `affine` before `cofamily` (`affine cofamily Allowance ...`) sets `affine_pos` on the `D.pos` family. `resource_shape` has a new arm, `affine_arrow`: a Pi on an `affine_pos` family is PRESENT, and so is a `-o` Pi whose codomain is such a Pi. `Stream` is unchanged. The checker emits no `AllowanceBisim` for an affine cofamily, because its `D A` binders are omega (O18). Edit: section 4; section 13, O18. | USER, S5 U1c |
 | 2026-11-02 | Q-S5-8 The `alOpen` pair: "(a) PRESENT + split builtin (Recommended)". `Prod A (Call -o Allowance A)` is PRESENT (the `-o` arm of `affine_arrow`), so the pair is affine. The checker generates a trusted `AllowanceOpen` (`fun .A .x => pair (eps .A .x) (fun .e => advance .A .x .e)`), and `alOpen` is that name. `unpack p f` on a `Prod` pair gives `f (first p) (second p)` and charges `p` one time; no new builtin. Edit: section 4. | USER, S5 U1c |
+| 2026-11-02 | Q-S6-1 Budget values: "(a) (Recommended)". `budget : Nat -> Budget` and `budgetLeft : Budget -o Nat` are kit-only (`REFUSE_KIT` in guest mode), as `resRoot`. Eval gets a budget value. The gate makes budgets at S9. L1 and L2 are closed refl rows in the kit example `examples/capability.lang` (the Q-S5-5 (a) pattern). Edit: sections 4 and 6. | USER, S6 |
+| 2026-11-02 | Q-S6-2 `spend` and `split`: "(a) (Recommended)". Kernel builtins with a new `RULE_BUDGET` shape, guest-visible: `spend : Budget -o Nat -> Option Budget`, `split : Budget -o Nat -> Option (Prod Budget Budget)`. `split b n` gives the `n` units first and the rest second. Each gives `none` when `b` has fewer than `n` units. `spend`, `split`, `budget`, `budgetLeft`, `Capability`, `cap`, `capScope`, `capSteps`, `capBudget`, `sizeLe` and `delegate` are core names (`REFUSE_NAME`), so `examples/orbit.lang` renames its `split` to `pick`, and two `affine-*.lang` rows rename their `spend` to `drain`. Edit: sections 4 and 6. | USER, S6 |
+| 2026-11-02 | Q-S6-3 The guest Nat: "(a) (Recommended)". No new guest Nat route at S6: a guest Nat is `len` or a Nat field of a domain value. A guest cannot name `Nat` or write a Nat literal (`REFUSE_KIT`). The host cost comes with the `Call` record at S7. Kit rows use literals. Edit: section 4. | USER, S6 |
+| 2026-11-02 | Q-S6-4 `Capability` and `delegate`: "(a) (Recommended)". Domain `family Capability := cap (capScope : Scope) (capSteps : StepBound) (capBudget : Budget)`, a domain def `sizeLe : Size -> Size -> Flag` and a domain def `delegate : Capability -o Scope -> StepBound -> Nat -> Option (Prod Capability Capability)`. The result is (child, rest): the child has the new scope, the new steps and `n` units; the rest keeps the parent scope, the parent steps and the remaining units. Edit: section 4. | USER, S6 |
+| 2026-11-02 | Q-S6-5 `REFUSE_DELEGATE_WIDEN`: "(a) (Recommended)". At check time, at a term level of 1 (not in a law type): a `delegate` application whose child scope and parent scope are closed, and `scopeWithin` evaluates to `flagNo`. A `Resource` is kit-only, so the rows are kit rows (`test/check/delegate-widen.lang`). Edit: section 7. | USER, S6 |
+| 2026-11-02 | Q-S6-6 `REFUSE_BUDGET_OVERSPEND`: "(a) (Recommended)". At check time, at a term level of 1: a closed `spend`, `split` or `delegate` application whose budget part reduces to `none` (`test/check/budget-overspend-{spend,split}.lang`, `delegate-overspend.lang`). The sum along `Plan` paths comes at S7. Edit: section 7. | USER, S6 |
+| 2026-11-02 | Q-S6-7 O17: "(a) (Recommended)". No change; O17 CLOSED. The gate holds the state, and a guest cannot make a `Budget`, so a rebuild cannot add units. Edit: section 13. | USER, S6 |
+| 2026-11-02 | Q-S6-8 O18: "(a) (Recommended)". No change; O18 CLOSED. No S6 law needs a bisimulation; the `Allowance` laws are closed refl rows. Edit: section 13. | USER, S6 |
 
 The seed is `bin/new-lang.sh permit-lang tcc-wasm` from lang-template
 5265a2a. The kit gives the parser, the checker, the evaluator, the lowering
@@ -222,14 +233,14 @@ The lines of pasted 1 (DESIGN.md 1):
 
 | Name | Kind | Line | Note |
 |---|---|---|---|
-| `Resource` | kernel sort, copyable (Q-S5-3 (a)); `resEq`, `within : Resource -> Resource -> Flag`; kit-only `resRoot : Nat -> Resource`, `resChild : Resource -> Nat -> Resource` | P3 | A path of segments (for example `deploy/prod/web`). `within` is prefix containment by segments, with no wildcard. The gate interns the segments. A program never parses a string (Q-S0-3 (a)). A guest `resRoot` or `resChild` is `REFUSE_KIT`: the gate makes the values (S8). |
+| `Resource` | kernel sort, copyable (Q-S5-3 (a)); kit-only `resEq`, `within : Resource -> Resource -> Flag`, `resRoot : Nat -> Resource` and `resChild : Resource -> Nat -> Resource` | P3 | A path of segments (for example `deploy/prod/web`). `within` is prefix containment by segments, with no wildcard. The gate interns the segments. A program never parses a string (Q-S0-3 (a)). A guest `resRoot` or `resChild` is `REFUSE_KIT`: the gate makes the values (S8). `resEq` and `within` are kit-only too (as built at S5); a guest tests scopes with the domain defs `allows` and `scopeWithin`. |
 | `Action` | a domain sum: `family Action` with the arms `inspect`, `propose` and `execute` in `domain/domain.lang` (Q-S5-1 (a)) | P2, P8 | A program cannot declare a family (rule R1). `actEq` is equality; there is no action order. |
 | `needsApproval` | a mark on an `Action` | P7, P8 | Q-S0-11. |
 | `Scope` | `FreeMon (Prod Resource Action)`; `grants`, `allows`, `scopeWithin` | P3, P5 | Finite. `scopeWithin child parent` is decidable. S5: `allows` and `scopeWithin` count the grants that match (`fmBindNat`, then `len`) and test the count with `natEq 0`. They do not fold into `Flag`: the domain cannot prove the `Flag` monoid laws of `fmFold` at an open `Flag` (permit has no `fmRun`). `within` does the resource test. |
 | `StepBound` | `Size` (Q-S5-4 (b)): a count of calls left | P4 | Expiry under the time ruling (section 5). A tick is `sizePred`; it stops at `sz0` (L4). |
-| `Budget` | a `Nat` count of units, affine; `spend`, `split` | P6 | Section 6. `spend` and `split` give an `Option`. |
-| `Capability` | record: scope, steps, budget | P1, P5 | A resource type, because it holds a `Budget`. |
-| `delegate` | `Capability -o Scope -> StepBound -> Nat -> Option (Capability * Capability)` | P5 | Attenuation only: the child scope is within the parent scope, the child steps are not more than the parent steps, and the child budget is split from the parent budget (L1). |
+| `Budget` | kernel sort, affine; guest `spend` and `split` (Q-S6-2 (a)); kit-only `budget : Nat -> Budget` and `budgetLeft : Budget -o Nat` (Q-S6-1 (a)) | P6 | Section 6. `spend` and `split` give an `Option`. A guest cannot make a budget; the gate makes the values (S9). |
+| `Capability` | domain `family Capability := cap (capScope : Scope) (capSteps : StepBound) (capBudget : Budget)` (Q-S6-4 (a)) | P1, P5 | A resource type, because it holds a `Budget` (`test/check/capability-{reuse,omega}.lang`). |
+| `delegate` | a domain def, `Capability -o Scope -> StepBound -> Nat -> Option (Prod Capability Capability)` (Q-S6-4 (a)) | P5 | Attenuation only: the child scope is within the parent scope, the child steps are not more than the parent steps (`sizeLe`), and the child budget is split from the parent budget (L1). The result is (child, rest): the rest keeps the parent scope, the parent steps and the remaining units. |
 | `Payload` | opaque canonical tool-call bytes; equality and `canon` input only | P7, P9, P10 | The gate canonicalizes the tool name, arguments and each forwarded call parameter before it constructs a `Payload`. Raw JSON spellings are not payload values. |
 | `Mutation` | record: target `Resource`, `Action`, `Payload` | P7, P9 | |
 | `canon` | `Mutation -> Bytes`: the canonical bytes of (target, payload) | P9 | Q-S0-4; the target envelope below. |
@@ -312,9 +323,9 @@ context split, weakening allowed, contraction refused, and
 - Resource sorts: `Budget` and `Approval`. `Capability` holds a `Budget`,
   so it is a resource type.
 - `spend : Budget -o Nat -> Option Budget` uses the budget once and gives
-  the rest. `split : Budget -o Nat -> Option (Budget * Budget)` gives two
-  budgets whose sum is the input (L2). A copy of a budget is
-  `REFUSE_AFFINE_REUSE`.
+  the rest. `split : Budget -o Nat -> Option (Prod Budget Budget)` gives
+  two budgets whose sum is the input (L2): the `n` units first, the rest
+  second. A copy of a budget is `REFUSE_AFFINE_REUSE`.
 - `execute` uses its `Approval` once. A second use is
   `REFUSE_AFFINE_REUSE`.
 - Weakening: a program can drop a budget or an approval. A dropped budget
@@ -430,6 +441,19 @@ rows differ from leaf-lang:
 | Weakening | Covered. A program can drop a budget (`burn : Budget -o Nat := fun l => 0`). |
 | The run-time check | Not S4. `decide` comes at S7 and `permitd` at S9. |
 
+S6 result (2026-11-02). `spend` and `split` are kernel builtins with the
+`RULE_BUDGET` shape, guest-visible (Q-S6-2 (a)). `budget` and
+`budgetLeft` are kit-only (Q-S6-1 (a)). A budget value is a tagged
+`Nat`. The domain has `Capability`, `sizeLe` and `delegate` (Q-S6-4
+(a)). `spend`, `split`, `budget`, `budgetLeft`, `Capability`, `cap`, `capScope`, `capSteps`, `capBudget`, `sizeLe` and `delegate`
+are core names (`REFUSE_NAME`). `Capability` holds a `Budget`, so it is
+a resource type: `test/check/capability-reuse.lang`
+(`REFUSE_AFFINE_REUSE`) and `capability-omega.lang`
+(`REFUSE_AFFINE_OMEGA`). L2 is the refl laws `lawSplit`, `lawSpend`,
+`lawShort` and `lawLeft` in `examples/capability.lang`. The rows above
+that say "Not yet" or "Partly" for `spend`, `split` and `Capability`
+are now covered.
+
 ## 7. Laws
 
 Each law is a guest-language term with a `Path` type. A law on closed rows
@@ -452,7 +476,13 @@ Static refusals: `REFUSE_EXECUTE_UNAPPROVED` (L5), `REFUSE_DELEGATE_WIDEN`
 the literal costs on a path is more than the literal budget),
 `REFUSE_AFFINE_REUSE` (section 6), `REFUSE_TIME` (section 5),
 `REFUSE_PARTIAL` (section 2). S1 ruled the name `REFUSE_TIME` (Q-S0-9
-(a)). The other names stay proposals until the slice that adds the code.
+(a)). S6 adds `REFUSE_DELEGATE_WIDEN` and `REFUSE_BUDGET_OVERSPEND` for
+closed rows, at check time and at a term level of 1 (not in a law type):
+a `delegate` application with closed scopes where `scopeWithin` gives
+`flagNo` (Q-S6-5 (a)), and a closed `spend`, `split` or `delegate`
+application whose budget part reduces to `none` (Q-S6-6 (a)). The sum
+along `Plan` paths comes at S7. The other names stay proposals until
+the slice that adds the code.
 
 ## 8. Route
 
@@ -578,8 +608,8 @@ One session for each slice: scope, gate, mutants, docs, close.
 | S3 | R0 in the kernel and the Wasm writer: N1 to N5, `REFUSE_PARTIAL`, `test/notraptool.c`, no `unreachable`, static memory; the kit trap row (O2). Ported from relay-lang 5c386bb (Q-S3-1 to Q-S3-3); gate EXIT 0: 30 examples, 16 parse refusals, 155 check refusals, 10 kit-only refusals, 1 time hint, 79 evals, 1 build, 1 ir lowered, 5 ir refusals, 2 ir lowerings, 4 notrap modules, 7 notrap bad rows, 10 spine evals, review, domain and path regressions passed; mutants of `REFUSE_PARTIAL` and `test/notraptool.c` killed. | DONE |
 | S4 | The affine layer (section 6): multiplicities, `REFUSE_AFFINE_REUSE`, the resource sorts. Ported from leaf-lang 47a6f36 (Q-S4-1 to Q-S4-12); gate EXIT 0: 30 examples, 20 parse refusals, 200 check refusals, 10 kit-only refusals, 1 time hint, 79 evals, 1 build, 1 ir lowered, 5 ir refusals, 2 ir lowerings, 4 notrap modules, 7 notrap bad rows, 10 spine evals, review, domain and path regressions passed; mutants of `REFUSE_AFFINE_REUSE`, the context split of a case, the family field loop (Q-S4-12) and `mult_scale` killed. | DONE |
 | S5 | `Resource`, `Action`, `Scope`, `StepBound`, the affine `Allowance` (CC), `Decision`, `Reason`; `REFUSE_TIME` with 10 words; L4 and L6 as refl laws and eval rows in `examples/scope.lang`. Rulings Q-S5-1 to Q-S5-8 (section 1); sources in section 11; gate EXIT 0: 31 examples, 21 parse refusals, 213 check refusals, 11 kit-only refusals, 1 time hint, 85 evals, 1 build, 1 ir lowered, 5 ir refusals, 2 ir lowerings, 4 notrap modules, 7 notrap bad rows, 10 spine evals, 2 natops evals, review, domain and path regressions passed. New rows: `test/check/time-{date,ttl,deadline,expires}.lang`, `kit-res-root.lang`, `allowance-{reuse,omega,open-twice,open-parts,unpack-twice,capture-budget,capture-allowance,capture-polymorphic}.lang`, `test/parse/affine-no-cofamily.lang`, 6 eval rows of `examples/scope.lang`, the `natops evals` line (O15). The original 17-mutant run killed 16; the live one (`trusted` for each generated decl of a cofamily, not only the last) is equivalent, because no other generated decl uses a 1-variable two times. Review adds three capture refusals: each rejects the checker before the review fix. Position closures cannot capture affine values, since `alOpen` observes more than one position. The generated destructors preserve positions; their other affine use checks still apply. Copyable captures and linear continuations still check (`lawConstant`, `lawKeep` in `examples/scope.lang`). | DONE |
-| S6 | `Budget`, `spend`, `split`, `Capability`, `delegate`; `REFUSE_DELEGATE_WIDEN`, `REFUSE_BUDGET_OVERSPEND`; L1, L2. Takes O17 (a second `alCorec` remakes an affine `Allowance`), O18 (no `AllowanceBisim` for an affine cofamily) and O19 (the `?` in the message for `Allowance A`). | NEXT |
-| S7 | `Payload`, `Mutation`, `canon`, `Digest`, `hash`, `Approval`, `Call`, `Plan` (CM), `Trace` (CC), `decide`; `REFUSE_EXECUTE_UNAPPROVED`; L3, L5, L7. | |
+| S6 | The `Budget` ops `spend` and `split` (kit-only `budget` and `budgetLeft`), `Capability`, `sizeLe`, `delegate`; `REFUSE_DELEGATE_WIDEN` and `REFUSE_BUDGET_OVERSPEND` on closed rows at a term level of 1; L1 and L2 as refl laws and eval rows in `examples/capability.lang`. Rulings Q-S6-1 to Q-S6-8 (section 1); O17 and O18 closed with no change; O19 fixed. Gate EXIT 0: 32 examples, 21 parse refusals, 219 check refusals, 11 kit-only refusals, 1 time hint, 88 evals, 1 build, 1 ir lowered, 5 ir refusals, 2 ir lowerings, 4 notrap modules, 7 notrap bad rows, 10 spine evals, 2 natops evals, review, domain and path regressions passed. New rows: `test/check/budget-overspend-{spend,split}.lang` and `delegate-overspend.lang` (`REFUSE_BUDGET_OVERSPEND`), `delegate-widen.lang` (`REFUSE_DELEGATE_WIDEN`), `capability-reuse.lang` (`REFUSE_AFFINE_REUSE`), `capability-omega.lang` (`REFUSE_AFFINE_OMEGA`), 3 `sizeLe` eval rows of `examples/capability.lang`, 2 guest rows (`spend`, `split`) in `test/fronttool.c` and the O19 message row in `test/gate.sh`. 18 mutants, 18 killed. | DONE |
+| S7 | `Payload`, `Mutation`, `canon`, `Digest`, `hash`, `Approval`, `Call`, `Plan` (CM), `Trace` (CC), `decide`; `REFUSE_EXECUTE_UNAPPROVED`; L3, L5, L7. Takes the host cost in `Call` (Q-S6-3 (a)) and the `Plan` path sum of `REFUSE_BUDGET_OVERSPEND` (Q-S6-6 (a)). | NEXT |
 | S8 | T1 part 1: the Wasm module of `decide`, the binding (Q-S0-5), the notrap rows; the differential and wasm runs lines (Q-S3-2 (b)). | |
 | S9 | T1 part 2: `permitd`: the Wasm engine, SHA-256, the canonical bytes, the approver channel, the state, the stdio MCP proxy, `fakedeploy`, N6; the demo D1 to D11; L8. | |
 | S10 | T2: the JSON authority report, `docs/REPORT-JSON.md`. | |
@@ -640,20 +670,17 @@ One session for each slice: scope, gate, mutants, docs, close.
   whose `f` drops a resource element, and a `map` from `Option Budget`
   to `Option Unit`. A precise rule for a form comes only when a demo row
   needs one.
-- O17 A second `alCorec` can remake an affine `Allowance`. `alCorec`
-  stays guest-visible (Q-S5-6 (a)), so a program can build a fresh value
-  from the parts of an opened one. The affine rule stops a second use of
-  one value, not a rebuild. The gate holds the one live value (S8, S9).
-  A kit-only corecursor is a later question, if a row needs it. For S6.
-- O18 The checker emits no `AllowanceBisim` for an affine cofamily: the
-  `D A` binders of the bisimulation are omega, and an affine value cannot
-  be used at omega. A bisimulation form for an affine cofamily waits for
-  a row that needs one. For S6.
-- O19 The `REFUSE_AFFINE_OMEGA` message prints the type `Allowance A`
-  as `?`. `print_op_name` in `src/front/eval.c` prints `?` and stops on
-  a dotted generated name (`Allowance.pos`); `Allowance A` is the Pi
-  `Allowance.pos -> A`. Fix: a Pi printer case that prints `D cod` for
-  a domain named `D.pos`. For S6.
+- O17 CLOSED at S6 (Q-S6-7 (a)), no change. `alCorec` stays
+  guest-visible (Q-S5-6 (a)). A rebuild from the parts of an opened
+  `Allowance` cannot add units: the gate holds the one live value (S8,
+  S9), and a guest cannot make a `Budget`.
+- O18 CLOSED at S6 (Q-S6-8 (a)), no change. The checker emits no
+  `AllowanceBisim` for an affine cofamily. No S6 law needs one; the
+  `Allowance` laws are closed refl rows.
+- O19 CLOSED at S6. `value_show` in `src/front/eval.c` prints an affine
+  cofamily type (the Pi `D.pos -> A`) as `D A` in a diagnostic, so the
+  `REFUSE_AFFINE_OMEGA` message names `Allowance A`. Row: the
+  `allowance-omega.lang` message row in `test/gate.sh`.
 
 ## 14. Questions for the USER (S0)
 

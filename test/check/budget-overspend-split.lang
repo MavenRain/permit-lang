@@ -1,0 +1,2 @@
+-- REFUSE_BUDGET_OVERSPEND (Q-S6-6 (a)): a closed split of 3 units from 2.
+def tooMuch : Option (Prod Budget Budget) := split (budget 2) 3

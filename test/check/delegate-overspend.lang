@@ -1,0 +1,9 @@
+-- REFUSE_BUDGET_OVERSPEND (Q-S6-6 (a)): a closed delegate of 3 units
+-- from a budget of 2 (the scopes narrow, the steps shorten).
+def docs : Resource := resRoot 1
+def report : Resource := resChild docs 2
+def readDocs : Scope := fmEta (Prod Resource Action) (pair docs inspect)
+def readReport : Scope := fmEta (Prod Resource Action) (pair report inspect)
+def one : StepBound := szS sz0
+def two : StepBound := szS (szS sz0)
+def tooMuch : Option (Prod Capability Capability) := delegate (cap readDocs two (budget 2)) readReport one 3

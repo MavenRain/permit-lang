@@ -117,6 +117,7 @@ typedef enum {
   RULE_NAT2,
   RULE_RES2,      /* S5: resEq, within */
   RULE_RES_CHILD, /* S5: resChild r n */
+  RULE_BUDGET,    /* S6: budgetLeft b, spend b n, split b n */
   RULE_LEN, /* S3: len A r (survey section 7) */
   RULE_FLAG_IF,
   RULE_NONZERO,       /* S3: NonZero Nat */
@@ -204,6 +205,10 @@ static const Builtin BUILTINS[] = {
   {"within", 2, RULE_RES2, OP_RES_WITHIN, OP_FLAG, 0, VIS_INTERNAL},
   {"resRoot", 1, RULE_NAT2, OP_RES_ROOT, OP_RESOURCE, 0, VIS_INTERNAL},
   {"resChild", 2, RULE_RES_CHILD, OP_RES_CHILD, OP_RESOURCE, 0, VIS_INTERNAL},
+  {"budget", 1, RULE_NAT2, OP_BUDGET_MK, OP_BUDGET, 0, VIS_INTERNAL},
+  {"budgetLeft", 1, RULE_BUDGET, OP_BUDGET_LEFT, OP_NAT, 0, VIS_INTERNAL},
+  {"spend", 2, RULE_BUDGET, OP_SPEND, OP_OPTION, 0, VIS_GUEST},
+  {"split", 2, RULE_BUDGET, OP_SPLIT, OP_OPTION, 0, VIS_GUEST},
   {"flagIf", 3, RULE_FLAG_IF, OP_FLAG_IF, OP_FLAG, 0, VIS_INTERNAL},
   {"Map", 2, RULE_KMAP, OP_KMAP, OP_NAT, 0, VIS_INTERNAL},
   {"mapEmpty", 0, RULE_EMPTY, OP_KMAP_OF, OP_KMAP, 0, VIS_INTERNAL},
@@ -432,7 +437,7 @@ static const char *show(Checker *c, const Value *v) {
   }
   if (buf == NULL || v == NULL)
     return "?";
-  value_print(c->m, names, count, v, buf, SHOW_MAX);
+  value_show(c->m, names, count, v, buf, SHOW_MAX);
   return buf;
 }
 
@@ -2689,6 +2694,62 @@ static const Core *rule_res_child(Call *k) {
   return op3(c, OP_RES_CHILD, 0, 2, r, n, NULL);
 }
 
+/* REFUSE_BUDGET_OVERSPEND (Q-S6-6 (a)): the spend, split or delegate K
+   at a term level of 1 whose budget part reduces to none. An open part
+   is a neutral, so only a closed row gives the code; a law type is at 0. */
+static const Core *overspend(Checker *c, const char *what, const Core *k) {
+  if (k != NULL && c->at != MULT_ZERO && val_is(here(c, k), OP_NONE))
+    return nul(FAIL(c, "REFUSE_BUDGET_OVERSPEND", "%s: the cost is more than the budget, so the budget part reduces to none (PLAN 7)", what));
+  return k;
+}
+
+/* REFUSE_DELEGATE_WIDEN (Q-S6-5 (a)) and REFUSE_BUDGET_OVERSPEND on the
+   application K = delegate p s k n at a term level of 1: scopeWithin s
+   (capScope p) reduces to flagNo, or split (capBudget p) n reduces to
+   none. An open part is a neutral, so only closed rows give a code. */
+static const Core *delegate_check(Checker *c, const Core *k) {
+  const Core *args[4];
+  const Core *f = k;
+  const Core *scope;
+  const Core *budget;
+  uint32_t within = find_def(c->m, "scopeWithin");
+  uint32_t ctor = 0;
+  uint32_t i;
+  if (k == NULL || c->at == MULT_ZERO || within == NO_DEF)
+    return k;
+  for (i = 4u; i > 0u; i--) {
+    if (f == NULL || f->kind != CORE_APP)
+      return k;
+    args[i - 1u] = f->b;
+    f = f->a;
+  }
+  while (ctor < c->m->ctor_count && (c->m->ctors[ctor].name == NULL || strcmp(c->m->ctors[ctor].name, "cap") != 0))
+    ctor++;
+  if (ctor == c->m->ctor_count)
+    return k;
+  scope = core_op(c, OP_PROJ, ctor, 0, &args[0], 1);
+  budget = core_op(c, OP_PROJ, ctor, 2, &args[0], 1);
+  if (val_is(here(c, core_app(c, core_app(c, core_index(c, CORE_GLOBAL, within), args[1]), scope)), OP_FLAG_NO))
+    return nul(FAIL(c, "REFUSE_DELEGATE_WIDEN", "delegate: the child scope is not within the parent scope (scopeWithin gives flagNo) (PLAN 7)"));
+  return overspend(c, "delegate", op3(c, OP_SPLIT, 0, 2, budget, args[3], NULL)) == NULL ? NULL : k;
+}
+
+/* S6 (PLAN 6): budgetLeft b : Nat, spend b n : Option Budget and
+   split b n : Option (Prod Budget Budget). B is checked at Budget, so
+   the use counts charge it (the -o of PLAN 6); n is a Nat. */
+static const Core *rule_budget(Call *k) {
+  Checker *c = k->c;
+  const Value *t = tyop(c, OP_BUDGET, 0, NULL, NULL, NULL);
+  const Core *b = check(c, k->args[0], t);
+  const Core *n = b == NULL || k->b->arity < 2u ? NULL : check(c, k->args[1], tyop(c, OP_NAT, 0, NULL, NULL, NULL));
+  if (k->b->op == OP_BUDGET_LEFT) {
+    k->type = tyop(c, OP_NAT, 0, NULL, NULL, NULL);
+    return op3(c, OP_BUDGET_LEFT, 0, 1, b, NULL, NULL);
+  }
+  k->type = tyop(c, OP_OPTION, 1, k->b->op == OP_SPEND ? t : tyop(c, OP_PROD, 2, t, t, NULL), NULL, NULL);
+  return overspend(c, k->b->op == OP_SPEND ? "spend" : "split", op3(c, k->b->op, 0, 2, b, n, NULL));
+}
+
 static const Core *rule_flag_if(Call *k) {
   Checker *c = k->c;
   const Value *res = k->hint;
@@ -2832,6 +2893,8 @@ static const Core *rule(Call *k) {
     return rule_prim(k, OP_RESOURCE);
   case RULE_RES_CHILD:
     return rule_res_child(k);
+  case RULE_BUDGET:
+    return rule_budget(k);
   case RULE_LEN:
     return rule_len(k);
   case RULE_FIN_OP:
@@ -3220,7 +3283,9 @@ static const Core *var_core(Checker *c, const char *name, const Value **type) {
 static const Core *apply_term(Checker *c, const Term *head, const Term *const *args, uint32_t argc, const Value *hint, const Value **type) {
   const Value *ty = NULL;
   const Core *k = head->kind == TERM_VAR ? var_core(c, head->name, &ty) : infer(c, head, &ty);
-  return apply_rest(c, k, ty, args, argc, hint, type);
+  const Core *r = apply_rest(c, k, ty, args, argc, hint, type);
+  /* A local binder may shadow the domain def. Check the resolved head. */
+  return k != NULL && k->kind == CORE_GLOBAL && argc == 4u && strcmp(c->m->defs[k->index].name, "delegate") == 0 ? delegate_check(c, r) : r;
 }
 
 /* REFUSE_PARTIAL site 2 (S3): a checked kit word
@@ -3595,7 +3660,7 @@ static const Core *elab_binder(Checker *c, const Term *t, CoreKind kind, const V
   const Core *b;
   const Value *dom = here(c, a);
   if (a != NULL && kind == CORE_PI && t->mult == MULT_OMEGA && resource_type(c, dom))
-    return nul(FAIL(c, "REFUSE_AFFINE_OMEGA", "the binder %s has the resource type %s at omega; bind it at 1 (@1 or -o) or at 0 (@0) (PLAN 6)", t->name != NULL ? t->name : "_", show(c, dom)));
+    return nul(FAIL(c, "REFUSE_AFFINE_OMEGA", "%s%s has the resource type %s at omega; bind it at 1 (@1 or -o) or at 0 (@0) (PLAN 6)", t->name != NULL ? "the binder " : "the domain of the arrow", t->name != NULL ? t->name : "", show(c, dom)));
   if (a == NULL || !push_at(c, t->mult, t->name, dom))
     return NULL;
   b = check_type(c, t->right, &lb);

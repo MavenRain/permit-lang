@@ -160,6 +160,12 @@ partial-option-arg.lang REFUSE_PARTIAL
 partial-zero.lang REFUSE_PARTIAL
 affine-reuse.lang REFUSE_AFFINE_REUSE
 affine-omega.lang REFUSE_AFFINE_OMEGA
+capability-omega.lang REFUSE_AFFINE_OMEGA
+capability-reuse.lang REFUSE_AFFINE_REUSE
+budget-overspend-spend.lang REFUSE_BUDGET_OVERSPEND
+budget-overspend-split.lang REFUSE_BUDGET_OVERSPEND
+delegate-widen.lang REFUSE_DELEGATE_WIDEN
+delegate-overspend.lang REFUSE_BUDGET_OVERSPEND
 affine-fix.lang REFUSE_AFFINE_FIX
 affine-path.lang REFUSE_AFFINE_PATH
 affine-unpack-reuse.lang REFUSE_AFFINE_REUSE

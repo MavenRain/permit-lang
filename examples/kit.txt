@@ -19,3 +19,4 @@ univ.lang
 elim.lang
 history-bind.lang
 scope.lang
+capability.lang

@@ -1,0 +1,1 @@
+def dup : Capability -> Prod Capability Capability := fun c => pair c c

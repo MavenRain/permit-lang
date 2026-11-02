@@ -30,7 +30,8 @@ static const char *const OP_NAMES[] = {
   [OP_FIN_ADD] = "finAdd", [OP_FIN_NEG] = "finNeg", [OP_FIN_CASE] = "finCase",
   [OP_GLUE] = "Glue", [OP_GLUE_ELEM] = "glue", [OP_UNGLUE] = "unglue",
   [OP_NONZERO] = "NonZero", [OP_NONZERO_OF] = "nonZero", [OP_NONZERO_VALUE] = "nonZeroValue",
-  [OP_RES_ROOT] = "resRoot", [OP_RES_CHILD] = "resChild", [OP_RES_EQ] = "resEq", [OP_RES_WITHIN] = "within"
+  [OP_RES_ROOT] = "resRoot", [OP_RES_CHILD] = "resChild", [OP_RES_EQ] = "resEq", [OP_RES_WITHIN] = "within",
+  [OP_BUDGET_MK] = "budget", [OP_BUDGET_LEFT] = "budgetLeft", [OP_SPEND] = "spend", [OP_SPLIT] = "split"
 };
 
 /* The number of arguments of each operation. VARIES: it comes from the
@@ -53,7 +54,8 @@ static const unsigned char OP_ARITY[] = {
   [OP_FIN_NEG] = 2, [OP_FIN_CASE] = VARIES, [OP_GLUE] = 3, [OP_GLUE_ELEM] = 3,
   [OP_UNGLUE] = 4,
   [OP_NONZERO] = 1, [OP_NONZERO_OF] = 1, [OP_NONZERO_VALUE] = 1,
-  [OP_RES_ROOT] = 1, [OP_RES_CHILD] = 2, [OP_RES_EQ] = 2, [OP_RES_WITHIN] = 2
+  [OP_RES_ROOT] = 1, [OP_RES_CHILD] = 2, [OP_RES_EQ] = 2, [OP_RES_WITHIN] = 2,
+  [OP_BUDGET_MK] = 1, [OP_BUDGET_LEFT] = 1, [OP_SPEND] = 2, [OP_SPLIT] = 2
 };
 
 typedef enum {
@@ -1430,6 +1432,35 @@ static int res_same(const Value *r, const Value *s) {
   return val_is(r, OP_RES_ROOT) && val_is(s, OP_RES_ROOT) && r->args[0]->nat == s->args[0]->nat;
 }
 
+/* S6 (PLAN 6): budgetLeft b, spend b n and split b n. A[0] is a budget
+   value, budget k. spend and split need a closed k and a closed n: n
+   above k gives none (N1). A neutral part gives the stuck operation. */
+static const Value *budget_op(Machine *m, Op op, const Value *const *a, uint32_t n) {
+  const Value *out;
+  uint64_t k = 0;
+  uint64_t x = 0;
+  if (blocked(m, a[0], op, 0, 0, a, n, &out))
+    return out;
+  if (!val_is(a[0], OP_BUDGET_MK))
+    return internal(m, "a Budget operation on a value that is not a budget");
+  if (op == OP_BUDGET_LEFT)
+    return a[0]->args[0];
+  if (blocked(m, a[0]->args[0], op, 0, 0, a, n, &out) || blocked(m, a[1], op, 0, 0, a, n, &out))
+    return out;
+  if (a[0]->args[0]->kind != VAL_NAT || a[1]->kind != VAL_NAT)
+    return internal(m, "a Budget operation on a value that is not a Nat");
+  k = a[0]->args[0]->nat;
+  x = a[1]->nat;
+  if (x > k)
+    return constant(m, OP_NONE);
+  if (op == OP_SPEND)
+    return make(m, VAL_OP, OP_SOME, 0, 1, make(m, VAL_OP, OP_BUDGET_MK, 0, 1, val_nat(m, k - x), NULL, NULL), NULL, NULL);
+  return make(m, VAL_OP, OP_SOME, 0, 1,
+              make(m, VAL_OP, OP_PAIR, 0, 2, make(m, VAL_OP, OP_BUDGET_MK, 0, 1, val_nat(m, x), NULL, NULL),
+                   make(m, VAL_OP, OP_BUDGET_MK, 0, 1, val_nat(m, k - x), NULL, NULL), NULL),
+              NULL, NULL);
+}
+
 /* S5 (PLAN 4): resEq r s and within r s on closed chains. within r s is
    flagYes when the segments of s are a prefix of the segments of r (s is
    r or an ancestor of r). An open chain gives the stuck operation. */
@@ -2030,6 +2061,10 @@ static const Value *transp_data(Machine *m, const Value *head, const Value *line
   case OP_RES_CHILD:
   case OP_RES_EQ:
   case OP_RES_WITHIN:
+  case OP_BUDGET_MK:
+  case OP_BUDGET_LEFT:
+  case OP_SPEND:
+  case OP_SPLIT:
   case OP_FLAG_IF:
   case OP_NAT_DIV:
   case OP_NAT_MOD:
@@ -2922,6 +2957,7 @@ static const Value *reduce_op(Machine *m, Op op, uint32_t inst, uint32_t field, 
   case OP_FAMILY:
   case OP_RES_ROOT:
   case OP_RES_CHILD:
+  case OP_BUDGET_MK:
   case OP_UNIT_VAL:
   case OP_FLAG_YES:
   case OP_FLAG_NO:
@@ -2991,6 +3027,10 @@ static const Value *reduce_op(Machine *m, Op op, uint32_t inst, uint32_t field, 
   case OP_RES_EQ:
   case OP_RES_WITHIN:
     return res_test(m, op, a, n);
+  case OP_BUDGET_LEFT:
+  case OP_SPEND:
+  case OP_SPLIT:
+    return budget_op(m, op, a, n);
   case OP_NAT_DIV:
   case OP_NAT_MOD:
     return nat_divmod(m, op, a, n);
@@ -3444,6 +3484,7 @@ typedef struct {
   const char *extra[PRINT_NAMES_MAX];
   uint32_t extra_count;
   unsigned depth;
+  int diag;
 } Printer;
 
 static void put(Printer *p, const char *s) {
@@ -3480,6 +3521,7 @@ static const char *var_name(const Printer *p, uint64_t level) {
 }
 
 static void print_value(Printer *p, const Value *v, int atom);
+static int print_cofamily(Printer *p, const Value *v, int atom);
 
 static int is_glue(const Value *v) {
   return v != NULL && (v->kind == VAL_OP || v->kind == VAL_STUCK) && (v->op == OP_GLUE || v->op == OP_GLUE_ELEM || v->op == OP_UNGLUE);
@@ -3709,6 +3751,8 @@ static void print_other(Printer *p, const Value *v, int atom) {
   case VAL_PAPP:
     break;
   }
+  if (print_cofamily(p, v, atom))
+    return;
   if (atom)
     put(p, "(");
   switch (v->kind) {
@@ -3762,6 +3806,30 @@ static void print_kmap(Printer *p, const Value *v, int atom) {
     put(p, ")");
 }
 
+/* O19: the value of an affine cofamily type `D A` is the Pi `D.pos -> A`
+   (check.c cocell_text). A diagnostic prints it as D A, not as `?`. Eval
+   output does not: the generated name D.pos is not source syntax. */
+static int print_cofamily(Printer *p, const Value *v, int atom) {
+  const char *name;
+  char head[64];
+  size_t len;
+  if (!p->diag || v->kind != VAL_PI || v->name != NULL || !val_is(v->dom, OP_FAMILY))
+    return 0;
+  name = op_name(p->m, v->dom->op, v->dom->inst, v->dom->field);
+  len = strlen(name);
+  if (len < 5u || len - 4u >= sizeof head || strcmp(name + len - 4u, ".pos") != 0)
+    return 0;
+  snprintf(head, sizeof head, "%.*s", (int)(len - 4u), name);
+  if (atom)
+    put(p, "(");
+  put(p, head);
+  put(p, " ");
+  print_value(p, closure_apply(p->m, v, val_var(p->m, p->name_count + p->extra_count)), 1);
+  if (atom)
+    put(p, ")");
+  return 1;
+}
+
 /* An operation prints as its name and its arguments. The last argument is
    printed in the loop, so a long list does not nest. */
 static void print_value(Printer *p, const Value *v, int atom) {
@@ -3810,7 +3878,8 @@ static void print_value(Printer *p, const Value *v, int atom) {
   p->depth--;
 }
 
-int value_print(Machine *m, const char *const *names, uint32_t name_count, const Value *v, char *buf, size_t cap) {
+static int print_into(Machine *m, const char *const *names, uint32_t name_count, const Value *v, char *buf, size_t cap,
+                      int diag) {
   Printer p;
   if (cap == 0)
     return 0;
@@ -3823,6 +3892,15 @@ int value_print(Machine *m, const char *const *names, uint32_t name_count, const
   p.cap = cap;
   p.names = names;
   p.name_count = name_count;
+  p.diag = diag;
   print_value(&p, v, 0);
   return !p.full && !m->diag->set;
+}
+
+int value_print(Machine *m, const char *const *names, uint32_t name_count, const Value *v, char *buf, size_t cap) {
+  return print_into(m, names, name_count, v, buf, cap, 0);
+}
+
+int value_show(Machine *m, const char *const *names, uint32_t name_count, const Value *v, char *buf, size_t cap) {
+  return print_into(m, names, name_count, v, buf, cap, 1);
 }

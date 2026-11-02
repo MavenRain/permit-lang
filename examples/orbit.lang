@@ -66,7 +66,7 @@ def disjoint : (X : Type 0) -> Path Choice (inl unit) (inr unit) -> X :=
 
 def allA : Member -> Choice := fun (m : Member) => inl unit
 def allB : Member -> Choice := fun (m : Member) => inr unit
-def split : Member -> Choice := fun (m : Member) => m
+def pick : Member -> Choice := fun (m : Member) => m
 
 -- The glue path: act (inr unit) sends allA to allB, so orbitEq gives a path in Orbit.
 def flipSame : Path Orbit (orbitProj allB) (orbitProj allA) :=
@@ -98,8 +98,8 @@ def agree : Orbit -> Choice :=
 def agreeOnFlip : Path Choice (agree (orbitProj allB)) (agree (orbitProj allA)) := cong agree flipSame
 
 def agreeAll : Choice := agree (orbitProj allA)
-def agreeSplit : Choice := agree (orbitProj split)
-def agreeFlipped : Choice := agree (orbitProj (act (inr unit) split))
+def agreeSplit : Choice := agree (orbitProj pick)
+def agreeFlipped : Choice := agree (orbitProj (act (inr unit) pick))
 
 -- Univalence on Choice (S5): flip is its own inverse, so isoToEquiv makes it an equivalence, and transport along its ua line reduces to flip.
 def flipEquiv : Equiv Choice Choice := isoToEquiv Choice Choice flip flip flipFlip flipFlip
