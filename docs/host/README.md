@@ -14,9 +14,16 @@ These files make the language and its Wasm target:
 - the target files: `src/wasm.c` and its opcode list `src/wasmop.h`
 - the domain and its embed tool: `domain/` and `gen/`
 - the examples: `examples/`
+- the host engine of `permitd` (S9): `host/engine.c`, `host/engine.h`,
+  `host/wasmread.c`, `host/wasmread.h`, `host/sha256.c`,
+  `host/sha256.h`, `host/jsonin.c`, `host/jsonin.h`, `host/jcs.c` and
+  `host/jcs.h`
+- the MCP gate (S9 U3): `host/permitd.c`
 - the tests: `test/parse/`, `test/check/`, `test/eval/`, `test/ir/`,
-  `test/notrap/`, `test/review.sh`, `test/fronttool.c`,
-  `test/pathtool.c` and `test/notraptool.c`
+  `test/notrap/`, `test/engine/`, `test/host/deploy.lang`,
+  `test/review.sh`, `test/fronttool.c`, `test/pathtool.c`,
+  `test/notraptool.c`, `test/enginetool.c`, `test/shatool.c`,
+  `test/jcstool.c`, `test/fakedeploy.c` and `test/hosttool.c`
 - the differential files: `test/grid.awk` and `test/run-wasm.mjs`. They
   are out of the gate until S8 (see "Gate").
 - the build and gate files: `Makefile`, `test/gate.sh` and `PIN`
@@ -39,6 +46,10 @@ make check-clang
 `check-clang` compiles the same sources with
 `cc -std=c99 -Wall -Wextra -Wswitch-enum -Werror -fsyntax-only`.
 `check` does both steps, then runs `test/gate.sh`.
+`build` and `check` also build `build/shatool`, `build/enginetool`,
+`build/jcstool`, `build/permitd` and `build/fakedeploy` (S9) with
+`-Ihost`, and `build/hosttool` (S9). `check-clang` compiles their
+sources.
 The gate needs `wasm-validate`, `wasm-objdump` and `wat2wasm` on the
 `PATH`. It runs no `node` until S8.
 `PIN` records the tool versions of the last GREEN gate.
@@ -233,6 +244,102 @@ section 2 (N1 to N5 and the S3 result).
 Only this file can declare a `family` (rule R1). `domain/README.md` tells
 how to replace the sample domain.
 
+## Host engine
+
+`permitd` (S9) runs the gate module in its own C99 engine,
+`host/engine.c`. The engine is relay-lang 4781ca7 `host/engine.c` and
+`src/wasmread.c` (file commit 8d4382a) with these changes (Q-S9-1 (a)):
+
+- Bindings. `engine_load` takes an `EngineBinding`: a table of host
+  functions (a module name, an import name, a parameter count and a C
+  function each) and one context pointer for all of them. Each import of
+  the module gets the row with its module and name. Two bindings use the
+  table: O5 (the stubs of `test/run-wasm.mjs`, in `test/enginetool.c`)
+  and the real binding of `permitd` (S9 U2 and U3).
+- Load refusals. An import with no row is `unbound import`. An import
+  whose type does not have the parameter count of its row and 1 result is
+  `import type`. Each is `ENGINE_REFUSE`, and `engine_message` gives the
+  text.
+- Import index. The imports come first in the function index space. A
+  `call` with an index below the import count calls the host function. A
+  larger index calls the module function at the index minus the import
+  count.
+- Data. At load, an active data segment at an `i32.const` offset goes
+  into the memory. A segment of another form is `data segment`, a
+  segment with no memory is `data with no memory`, and a segment outside
+  the memory is `data bounds`.
+- Memory export. The engine keeps a note of an export of memory 0 (any
+  name). `engine_word` reads and `engine_put_word` writes an 8-byte
+  little-endian word at an address of the memory. Each gives 0 when the
+  module does not export its memory or the word is not in the memory.
+
+`build/enginetool SCRIPT FILE` loads FILE with the O5 binding and runs a
+`test/decide` script on one instance. Before the first call it reads the
+words 0 and 1 (the steps and the budget left) and writes each back with
+`engine_put_word`. The U3 state file puts its saved words on this path
+(Q-S9-5 (a)). `host/sha256.c` is the SHA-256 of quorum-lang be2c329
+`src/crypto/sha256.c` (file commit 8e18ebf, Q-S9-2 (a)), and
+`build/shatool` checks it.
+
+## JSON, JCS, envelope and pointer
+
+`permitd` reads the arguments of a `tools/call`, makes their canonical
+bytes and hashes them (S9 U2, Q-S9-3 (a)).
+
+- `host/jsonin.c` and `host/jsonin.h` are the JSON reader of relay-lang
+  4781ca7 `src/front/jsonin.c` (file commit 4781ca7). `json_parse` reads
+  RFC 8259 text into a tree of `JsonValue` in an arena. Invalid UTF-8, a
+  lone surrogate escape and a depth above 64 fail. The permit change: a
+  duplicate key in one object fails (`a duplicate key`). Each failure is
+  `deny malformed` (PLAN sec 4).
+- `jcs_write` (`host/jcs.c`, `host/jcs.h`) writes the RFC 8785 (JCS) form
+  of a value. The keys of an object are in the order of their UTF-16 code
+  units (RFC 8785 3.2.3). A string has the RFC 8785 3.2.2.2 escapes only.
+  There is no white space. A number is `-?(0|[1-9][0-9]*)` with a
+  magnitude of at most 2^53 - 1, and `-0` writes `0`. A fraction, an
+  exponent or a larger magnitude gives `JCS_MALFORMED`. A full buffer
+  gives `JCS_FULL`.
+- `jcs_envelope` writes `{"payload":P,"target":[S...]}`. P is the JCS
+  form of the canonical tool-call object, and each S is one segment string
+  of the target path (PLAN sec 4, the review clarification of Q-S0-4).
+  The `hash` of the real binding is the SHA-256 of these bytes.
+- `jcs_pointer` finds the value at an RFC 6901 pointer: `~1` is `/`, `~0`
+  is `~`, and an array index is `0` or `[1-9][0-9]*` below the item
+  count. A bad escape, a `~` at the end, a missing key or `-` gives no
+  value. The `bind` pointer of `permit.bind` selects the payload with it.
+
+`build/jcstool` checks these files on 32 rows: 17 JCS rows, 3 envelope
+rows, 1 envelope digest row (the SHA-256 of the first envelope row, from
+`shasum -a 256`) and 11 pointer rows.
+
+## permitd
+
+`build/permitd` is the MCP gate (S9 U3, Q-S9-4, 5, 6 and 9 (a)):
+
+```sh
+permitd [--state FILE] [--approvals FILE | --approver tty]
+        [--cost TOOL=N]... [--cred-file PATH | --cred-env NAME]
+        [--cred-var NAME] MODULE -- CMD ARGS
+```
+
+The agent talks to `permitd` on stdin and stdout. `permitd` starts CMD,
+the upstream MCP server, as a child on two pipes. Each `tools/call` goes
+through the `decide` export of MODULE in the steps of "The call steps" in
+`docs/MCP.md`. Each other line goes through unchanged. `docs/MCP.md` also
+gives the upstream failures, the approvals, the state file and the
+credential.
+
+The exit codes of `permitd`:
+
+- 0: the end of the input
+- 1: MODULE does not load
+- 2: a usage error or a bad state file
+
+For each permitted call, `permitd` writes one line to stderr:
+`permitd: permit TOOL approver WHO`. WHO is `FILE:LINE` (the approvals
+file and the line number of the digest), `tty`, or `none` when the call
+has no approval.
+
 ## Gate
 
 `make check` prints these lines when it is GREEN (`test/gate.sh`, then
@@ -258,6 +365,12 @@ how to replace the sample domain.
 | `wasm runs: 16 checked` | node and wasmtime (`test/run-wasm.mjs`, `--wasmtime`) run 16 calls of the module of `test/ir/natops.lang`; each result is equal to the `langc --kit eval` result (S8, Q-S8-6 (a), Q-S8-11 (b)) |
 | `differential cases: 694 checked, 0 mismatches` | `test/grid.awk` makes the cases from the `langc --kit ir` text of 10 modules (`natops`, `block`, `functions`, `state-no-history` and the S8 lowerings `sizestep`, `judgesteps`, `actcase`, `decision`, `fmlen` and `judgeaction`); node and wasmtime run each case, and each result is equal to the `langc --kit eval` result. `langc eval` has no trap, so a Wasm `trap` is a mismatch |
 | `decide scripts: 8 checked, 12 calls, 0 mismatches` | each of `test/decide/D1.txt` to `D8.txt` is a call script on one instance of the module of `examples/gate.lang` (`test/run-wasm.mjs --decide`). node and wasmtime print the decision codes, then the steps and the budget left (words 0 and 1 of `memory`). Each line is equal to `langc --kit eval` of the judge chain that `test/run-wasm.mjs --lang` prints (Q-S8-10 (a), Q-S8-12 (a)). The 8 scripts give the codes 0 (`permit`); 1; 4; 8; 0 0 0 2 (the steps run out); 0 6 (a second use of one approval); 5; 3 |
+| `engine decide scripts: 8 checked, 12 calls, 0 mismatches` | `build/enginetool` runs each `test/decide/DN.txt` on the module of `examples/gate.lang` in the own engine (`host/engine.c`) with the O5 binding. Each line is equal to the node line of the `decide scripts` row (S9, Q-S9-1 (a), L8) |
+| `engine refusals: 2 checked` | `build/enginetool` refuses the modules of `test/engine/unbound.wat` (`unbound import`: no O5 row for `permit` `nope`) and `test/engine/badtype.wat` (`import type`: `permit` `hash` with 2 parameters) at load. Each gives exit 1 and the one line `enginetool: load: MESSAGE` (S9) |
+| `sha256 vectors: 7 checked` | `build/shatool` checks `host/sha256.c` on the 4 FIPS 180-4 vectors and 3 pad rows (55, 56 and 64 bytes of `a`) (S9, Q-S9-2 (a)) |
+| `engine hash rows: 2 checked` | `build/enginetool` script line `hash N` gives the O5 hash stub of N. The 2 rows (N 0 and 9223372036854775809) compare it with the number of the `test/run-wasm.mjs` formula `(N * 1000003 + 7) mod 2^64` (S9 U2, mutant O1) |
+| `jcs rows: 32 checked` | `build/jcstool` checks `host/jsonin.c` and `host/jcs.c`: 17 JCS rows, 3 envelope rows, 1 envelope digest row and 11 pointer rows (S9 U2, Q-S9-3 (a)) |
+| `host rows: 28 checked` | `build/hosttool` runs `build/permitd` on the module of `test/host/deploy.lang` with `build/fakedeploy` as the upstream server, one line at a time. The 12 rows of S9 U3: a line that is not JSON, a tool with no bind row, a target that is not a string, a bad approval hex, `--error` and `--exit` of the upstream server, a bad state file (exit 2), the forwarded bytes (no `permit/approval` key and no empty `_meta`), the `isError` of a deny, `--cost`, an approvals line added between two calls, and `--state` in a missing directory (N6). Six review rows check refusal of batches and scalars before forwarding, the retained metadata key with an embedded NUL, the maximum 64-bit cost, cost overflow, and a large state budget across a restart. The 10 demo rows of S9 U4 (PLAN section 8.3): D1 to D8, D10 and D11, each with the want of its PLAN row; D9 is the static row `test/check/delegate-widen.lang` in `check refusals`. The script line `! L` closes the input of permitd, wants exit 0 and no extra answer, and starts permitd again with the same flags (row D6: the approval stays used after a restart) |
 | `gate: 0 failures` | the sum of all failures of `test/gate.sh` |
 | `review regressions: passed` | `test/review.sh` passes |
 | `domain regressions: passed` | `build/fronttool` (the domain declaration rows, the 54 affine rows of S4 and the 4 time rows and 3 affine cofamily rows of S5 and the 2 guest `spend` and `split` rows of S6) passes |

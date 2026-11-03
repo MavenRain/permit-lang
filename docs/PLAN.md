@@ -33,7 +33,11 @@ program with `bind` lines: `res` literals, `bind` lines, `def start`, the
 `permit` imports, the state region, the exports `decide`, `malformed` and
 `memory`, the custom sections `permit.res` and `permit.bind`, and the
 `wasm runs`, differential and decide rows on node and wasmtime (sections
-1, 4 and 8.2; the S8 row of section 12). Next: S9 (T1 part 2, section 12).
+1, 4 and 8.2; the S8 row of section 12). S9 DONE: `permitd`, the Wasm
+engine of the host, SHA-256, the canonical bytes, the approver, the state
+file, the stdio MCP proxy, `fakedeploy` and the demo rows D1 to D11
+(sections 8.3 and 10; the S9 row of section 12). Next: S10 (T2, section
+12).
 
 ## 1. Rulings
 
@@ -114,6 +118,17 @@ program with `bind` lines: `res` literals, `bind` lines, `def start`, the
 | 2026-11-03 | Q-S8-10 The memory export: (a). Memory 0 is exported as `memory` only in a module with `bind` lines; a host reads the steps (word 0) and the budget left (word 1). Edit: `docs/host/README.md`. | USER, S8 |
 | 2026-11-03 | Q-S8-11 wasmtime: (b). Each Wasm row runs on wasmtime through `test/run-wasm.mjs --wasmtime`. Edit: `docs/host/README.md`. | USER, S8 |
 | 2026-11-03 | Q-S8-12 The decide oracle: (a). The oracle is `langc --kit eval` of the judge chain that `test/run-wasm.mjs --lang` prints. Edit: `docs/host/README.md`. | USER, S8 |
+| 2026-11-03 | Q-S9-1 The engine port and the import binding: (a) ("take the recommendations, Q-S9-1 to Q-S9-10 all (a)"). `host/engine.c` and `host/wasmread.c` are copies of relay-lang 4781ca7 host/engine.c and src/wasmread.c (file commit 8d4382a). U1 adds the import section (the function index moves by the import count), the data section (active segments at a constant offset), a host import table bound by (module, name) at load (an import with no row is a load refusal), a memory word write and the kept `memory` export. Two bindings: O5 (the `test/run-wasm.mjs` stubs) and real (JCS envelope, SHA-256, segment prefix). L8 row: `engine decide scripts`. Edit: section 11; `docs/host/README.md`. | USER, S9 |
+| 2026-11-03 | Q-S9-2 The SHA-256 port: (a). `host/sha256.c` and `host/sha256.h` from quorum-lang be2c329 src/crypto/sha256.c (file commit 8e18ebf, no U256). `test/shatool.c` from cairn-lang 60768e8 with the 4 FIPS 180-4 vectors and 3 pad rows (55, 56 and 64 bytes). Gate line `sha256 vectors: 7 checked`. Edit: section 11; `docs/host/README.md`. | USER, S9 |
+| 2026-11-03 | Q-S9-3 The JSON reader and the JCS number rule: (a). `host/jsonin.c` from relay-lang 4781ca7 src/front/jsonin.c with duplicate key detection (`deny malformed`). A new `host/jcs.c`: keys sorted by UTF-16 code units (RFC 8785 3.2.3), the RFC 8785 string escapes only, no white space. A number is `-?(0\|[1-9][0-9]*)` with a magnitude of at most 2^53 - 1; `-0` writes `0`; a fraction, an exponent or a larger magnitude is malformed. Rows: `test/jcstool.c`. Edit: S9 U2. | USER, S9 |
+| 2026-11-03 | Q-S9-4 The approver channel: (a). The agent names the approval in `params._meta["permit/approval"]` (64 lower-case hex characters). The gate removes that key before it makes the payload. Test mode (O9): `--approvals FILE`, one digest a line, read again at each `tools/call`. Terminal mode: `--approver tty` writes the canonical envelope bytes and their digest to /dev/tty and reads `y`. The gate records who approved. Edit: S9 U3. | USER, S9 |
+| 2026-11-03 | Q-S9-5 The state across a restart: (a). One text state file `--state FILE`: the steps, the budget left, the used count, then each used digest as 64 hex characters. The gate writes it (a temp file, `fsync`, `rename`) after `decide` or `malformed` and before it forwards a permitted call. At start the gate interns each used digest again; a file that does not parse is exit 2 before any call. Row: D6 after a restart. Edit: S9 U3. | USER, S9 |
+| 2026-11-03 | Q-S9-6 The MCP pin, the proxy subset and the deny form: (a). MCP 2025-11-25 is pinned in `docs/MCP.md`. `permitd ... -- CMD ARGS` starts the upstream server with `posix_spawn` on two pipes, one JSON-RPC message a line (1 MiB cap). Only `tools/call` goes through `decide`. A deny is an `isError` tool result that never reaches the child; an upstream failure is the `Outcome` `toolFailed`. Credential (O11): `--cred-file PATH` or `--cred-env NAME`, given only to the child in the variable that `--cred-var NAME` names. Edit: S9 U3. | USER, S9 |
+| 2026-11-03 | Q-S9-7 D9: (a). D9 is a static row: `langc check` refuses a sub-agent program that delegates a closed scope wider than its parent (`REFUSE_DELEGATE_WIDEN`, as `test/check/delegate-widen.lang`). The run-time `deny widen` is O22. Edit: sections 2, 8.3 and 13. | USER, S9 |
+| 2026-11-03 | Q-S9-8 The unit split: (a). U1: the engine, SHA-256, `test/shatool.c` and the L8 rows. U2: the JSON reader, JCS, the envelope, the RFC 6901 pointer and `test/jcstool.c`. U3: the proxy, the child, the approver, the state, `fakedeploy`, the N6 rows and `docs/MCP.md`. U4: the demo D1 to D11 (`test/hosttool.c`), the mutants, the docs and the close. Edit: none. | USER, S9 |
+| 2026-11-03 | Q-S9-9 The cost of a call: (a). Each call costs 1 unit (the budget counts calls); `--cost TOOL=N` changes it for one tool. No kit change. One host row gives `budgetShort` with `--cost`. Edit: S9 U3. | USER, S9 |
+| 2026-11-03 | Q-S9-10 The demo tools and program: (a). `fakedeploy` has `inspect`, `propose`, `execute`, `sync_left` and `sync_right` (D10), `restart` and `delete` (D11). One demo program `test/host/deploy.lang` has the 7 bind lines and a `start` whose scope holds `prod` and `dev`. `fakedeploy` keeps its state in one file. Edit: section 8.3 at S9 U4. | USER, S9 |
+| 2026-11-03 | Q-S9-U4-1 The D10 mutant: (a). The payload holds the tool name (section 4, D11), so the D10 deny holds also when the envelope has no target. The D10 mutant drops both the target of the envelope and the name of the payload. A row where only the target changes is O23. Edit: section 13, O23. | USER, S9 |
 
 The seed is `bin/new-lang.sh permit-lang tcc-wasm` from lang-template
 5265a2a. The kit gives the parser, the checker, the evaluator, the lowering
@@ -139,8 +154,9 @@ never an error:
 - An execute with no approval: `deny noApproval`.
 - An approval whose digest is not the digest of the call: `deny digestDiffers`.
 - An approval that the gate saw before: `deny approvalUsed`.
-- A delegation that widens the parent: `deny widen` at run time, and
-  `REFUSE_DELEGATE_WIDEN` at check time when the checker can see it.
+- A delegation that widens the parent: `deny widen` at run time (O22: no
+  run-time row at S9), and `REFUSE_DELEGATE_WIDEN` at check time when the
+  checker can see it (D9).
 - A request from the agent that the gate cannot read: `deny malformed`.
 - The upstream tool fails (a socket error, an HTTP 5xx): the gate gives the
   `Outcome` value `toolFailed code`. The failure never reaches the program
@@ -576,9 +592,12 @@ authoring server for agents that write permit-lang (check, fmt, explain).
 
 ### 8.3 The demo
 
-A fake deployment tool `host/fakedeploy.c` (C99, TinyCC; state in one
-file) has three tools: `inspect`, `propose` and `execute`. The agent gets
-the permit program, never the credential. The rows:
+A fake deployment tool `test/fakedeploy.c` (C99, TinyCC) has seven tools:
+`inspect`, `propose`, `execute`, `sync_left`, `sync_right`, `restart` and
+`delete` (Q-S9-10 (a)). The agent gets the permit program, never the
+credential. The rows D1 to D8, D10 and D11 are rows of `test/hosttool.c`
+on the module of `test/host/deploy.lang` (S9 U4). D9 is the static row
+`test/check/delegate-widen.lang` (Q-S9-7 (a)). The rows:
 
 | Row | Call | Want |
 |---|---|---|
@@ -590,7 +609,7 @@ the permit program, never the credential. The rows:
 | D6 | a second `execute` with the same approval | `deny approvalUsed` |
 | D7 | a call when the steps are at 0 | `deny boundSpent` |
 | D8 | a call outside the scope | `deny scopeMiss` |
-| D9 | a sub-agent with a delegated capability asks for a wider scope | `deny widen` |
+| D9 | a sub-agent program delegates a closed scope wider than its parent | `REFUSE_DELEGATE_WIDEN` at check time (static, Q-S9-7 (a)); the run-time `deny widen` is O22 |
 | D10 | two tools bind `execute` with target pointers `/left` and `/right`; both targets are in scope, both calls have `{"left":"prod","right":"dev"}`, and an unused approval is for the first call | the second call is `deny digestDiffers`: the effective target changed from `prod` to `dev` even though the arguments did not |
 | D11 | tools `restart` and `delete` both bind `execute` at `/target`, have identical arguments `{"target":"prod"}`, and an unused approval is for `restart` | `delete` is `deny digestDiffers`: the tool name changed even though the target, action and arguments did not |
 
@@ -641,7 +660,14 @@ segment, `*`, a trailing `/` and the empty text; `pointer_ok`: no first
 action that is not an arm; `start_def` false and true; the `bind` stop
 of `parse_app`; the reason and the step of `judgeMalformed`; the
 `judgeMalformed` pick of the `malformed` export), 15 killed in the first
-run by the S8 rows. S8 total: 26 mutants, 26 killed.
+run by the S8 rows. S8 total: 26 mutants, 26 killed. S9: 32 mutants of the host (U1: 8, the engine, SHA-256 and
+`test/enginetool.c`; U2: 7, the JSON reader, JCS and the pointer; U3: 7,
+the proxy, the approver, the state and the cost; U4: 10, the demo rows D1 to D8,
+D10 and D11), 31 killed in the first run. The survivor O1 (the hash of
+`test/enginetool.c`) got the `engine hash` rows, and the rerun killed it.
+C1 (the cost of a call) was a compile kill only; C1b keeps the function
+in use, and the `--cost` row killed it. Each U4 mutant is killed by its
+own D row (Q-S9-U4-1 (a) for D10). S9 total: 32 mutants, 32 killed.
 
 ## 11. Port sources
 
@@ -659,6 +685,10 @@ it read.
 | mandate-lang | 33556e9 | the budget law (`spent` does not decrease, `spent <= cap`); the `autoLimit` confirmation rule as a reading for Q-S0-11; S5: the `cofamily Machine` shape (`eps`, `mStep : Req -> Machine A`), the shape of `Allowance` with `Call` for `Req` | docs/PLAN.md line 583; lines 410 to 415; domain/domain.lang lines 70 to 71 |
 | tranche-lang | 9aafbf8 | S5: the idiom of a prefix test over a `FreeMon` (`prefix`, `fmRun`), read for `scopeWithin`; permit counts the matches with `fmBindNat` and `len` instead, because it has no `fmRun` | domain/domain.lang lines 201 to 222 |
 | zkpolicy-lang | 1d263fb | overlap only (DESIGN.md 3.1); the later target | none in v1 |
+| relay-lang | 4781ca7 (file commit 8d4382a) | S9: the Wasm engine, copied to `host/engine.c` and `host/wasmread.c`; S9 adds the import section, the data section, the (module, name) binding, the memory word write and the kept `memory` export | host/engine.c, src/wasmread.c |
+| quorum-lang | be2c329 (file commit 8e18ebf) | S9: SHA-256, copied to `host/sha256.c` and `host/sha256.h` (no U256 dependency) | src/crypto/sha256.c |
+| cairn-lang | 60768e8 | S9: `test/shatool.c`, the 4 FIPS 180-4 vectors; S9 adds 3 pad rows (55, 56 and 64 bytes) | test/shatool.c |
+| relay-lang | 4781ca7 (file commit 4781ca7) | S9 U2: the JSON reader, copied to `host/jsonin.c` and `host/jsonin.h`; S9 adds the duplicate key refusal and a static `utf8_char_size` | src/front/jsonin.c, src/front/jsonin.h |
 
 The overlap note in DESIGN.md 3 names mandate-lang d368d5f. Its HEAD is
 33556e9 on 2026-11-01.
@@ -678,7 +708,7 @@ One session for each slice: scope, gate, mutants, docs, close.
 | S6 | The `Budget` ops `spend` and `split` (kit-only `budget` and `budgetLeft`), `Capability`, `sizeLe`, `delegate`; `REFUSE_DELEGATE_WIDEN` and `REFUSE_BUDGET_OVERSPEND` on closed rows at a term level of 1; L1 and L2 as refl laws and eval rows in `examples/capability.lang`. Rulings Q-S6-1 to Q-S6-8 (section 1); O17 and O18 closed with no change; O19 fixed. Gate EXIT 0: 32 examples, 21 parse refusals, 219 check refusals, 11 kit-only refusals, 1 time hint, 88 evals, 1 build, 1 ir lowered, 5 ir refusals, 2 ir lowerings, 4 notrap modules, 7 notrap bad rows, 10 spine evals, 2 natops evals, review, domain and path regressions passed. New rows: `test/check/budget-overspend-{spend,split}.lang` and `delegate-overspend.lang` (`REFUSE_BUDGET_OVERSPEND`), `delegate-widen.lang` (`REFUSE_DELEGATE_WIDEN`), `capability-reuse.lang` (`REFUSE_AFFINE_REUSE`), `capability-omega.lang` (`REFUSE_AFFINE_OMEGA`), 3 `sizeLe` eval rows of `examples/capability.lang`, 2 guest rows (`spend`, `split`) in `test/fronttool.c` and the O19 message row in `test/gate.sh`. 18 mutants, 18 killed. | DONE |
 | S7 | `Payload`, `Mutation`, `canon`, `Digest`, `hash`, `Approval`, `Call`, `Plan` (CM), `Trace` (CC), `decide`; `REFUSE_EXECUTE_UNAPPROVED`; L3, L5, L7. Takes the host cost in `Call` (Q-S6-3 (a)) and the `Plan` path sum of `REFUSE_BUDGET_OVERSPEND` (Q-S6-6 (a)). Built: the kernel sorts `Payload`, `Bytes` and `Digest` with kit-only `payloadOf` and `approval`; `Mutation`, `canon`, the copyable `Ticket`, the affine `Call`, `Authority`, `judge`, `decide`, `Reply`, the first-order `Plan`, `Entry` and `Trace = Stream Entry`; `REFUSE_EXECUTE_UNAPPROVED` on a closed `Plan` def; `langc ir` refuses a `Payload` at run time (S8). Rulings Q-S7-1 to Q-S7-12 (section 1); the path sum is O20. Gate EXIT 0: 33 examples, 21 parse refusals, 224 check refusals, 12 kit-only refusals, 1 time hint, 92 evals, 1 build, 1 ir lowered, 6 ir refusals, 2 ir lowerings, 4 notrap modules, 7 notrap bad rows, 10 spine evals, 2 natops evals, review, domain and path regressions passed. 21 mutants, 21 killed (section 10). | DONE |
 | S8 | T1 part 1: the Wasm module of `decide`, the binding (Q-S0-5), the notrap rows; the differential and wasm runs lines (Q-S3-2 (b)). Takes a `Payload` at run time (the S7 `REFUSE_LOWER` row `test/ir/payload.lang`). Built: guest `res` literals (`REFUSE_RES`), `bind` lines (`REFUSE_BIND`), `def start` with its guest Nat literals, domain `judgeMalformed`; the host handles and the `permit` imports `envelope`, `hash` and `within`; the S8 lowerings (the `Size` word, the `REPEAT` elim, the nullary switch, `len`, `usedHas`, `IR_STMT_STORE`); the state region and its data section; the exports `decide`, `malformed` and `memory`; the custom sections `permit.res` and `permit.bind`; the notraptool import rows; `test/run-wasm.mjs` on node and wasmtime (`--wasmtime`, `--decide`, `--lang`) and the call scripts `test/decide/`. Rulings Q-S8-1 to Q-S8-12 (section 1); `needsApproval` is O21. Gate EXIT 0: 35 examples, 22 parse refusals, 236 check refusals, 13 kit-only refusals, 1 time hint, 92 evals, 1 build, 1 ir lowered, 8 ir refusals, 10 ir lowerings, 3 custom sections, 5 notrap modules, 11 notrap bad rows, 10 spine evals, 2 natops evals, 16 wasm runs, 694 differential cases with 0 mismatches, 8 decide scripts (12 calls, 0 mismatches), review, domain and path regressions passed. 26 mutants, 26 killed (section 10). | DONE |
-| S9 | T1 part 2: `permitd`: the Wasm engine, SHA-256, the canonical bytes, the approver channel, the state, the stdio MCP proxy, `fakedeploy`, N6; the demo D1 to D11; L8. | |
+| S9 | T1 part 2: `permitd`: the Wasm engine, SHA-256, the canonical bytes, the approver channel, the state, the stdio MCP proxy, `fakedeploy`, N6; the demo D1 to D11; L8. Built: `host/engine.c` and `host/wasmread.c` (the import and data sections, the (module, name) binding), `host/sha256.c`, `host/jsonin.c` and `host/jcs.c` (JCS, the envelope, the RFC 6901 pointer), `host/permitd.c` (the stdio MCP gate, the approver, the state file, the cost), `test/fakedeploy.c` (7 tools), `test/host/deploy.lang` (7 bind lines), the tools `test/shatool.c`, `test/enginetool.c`, `test/jcstool.c` and `test/hosttool.c`, `docs/MCP.md` (MCP 2025-11-25). Rulings Q-S9-1 to Q-S9-10 and Q-S9-U4-1 (section 1); the run-time `deny widen` is O22, a D10 row with the target only is O23. Gate EXIT 0: 35 examples, 22 parse refusals, 236 check refusals, 13 kit-only refusals, 1 time hint, 92 evals, 1 build, 1 ir lowered, 8 ir refusals, 10 ir lowerings, 3 custom sections, 5 notrap modules, 11 notrap bad rows, 10 spine evals, 2 natops evals, 16 wasm runs, 694 differential cases with 0 mismatches, 8 decide scripts (12 calls, 0 mismatches), 8 engine decide scripts (12 calls, 0 mismatches), 2 engine refusals, 2 engine hash rows, 7 sha256 vectors, 32 jcs rows, 28 host rows, review, domain and path regressions passed. 32 mutants, 32 killed (section 10). | DONE |
 | S10 | T2: the JSON authority report, `docs/REPORT-JSON.md`. | |
 | S11 | T3: the Cedar export, the golden files. | |
 | S12 | A1: canonical forms and `langc fmt`. | |
@@ -759,6 +789,18 @@ One session for each slice: scope, gate, mutants, docs, close.
   action. The `needsApproval` form comes when a demo row needs another
   marked action. The `Authority` shape and the 13 USER laws stay as they
   are.
+- O22 OPEN (Q-S9-7 (a)). D9 is a static row (`REFUSE_DELEGATE_WIDEN`). No
+  run-time path gives `deny widen`: the module does not hold the child
+  scope, and the proxy has no delegation request. A run-time row needs
+  both (for example a `permit.scope` custom section and a parent module
+  in `permitd`).
+- O23 OPEN (Q-S9-U4-1 (a)). The target of a call comes from the bind
+  pointer of its tool into the arguments, and the payload holds the name
+  and the arguments. In one module each tool has one bind line, so no
+  host row changes the target of the envelope alone. The D10 mutant drops
+  the target and the name. A row where only the target changes needs one
+  tool name with two bind pointers, so two modules (a rebind with the
+  same approvals file).
 
 ## 14. Questions for the USER (S0)
 

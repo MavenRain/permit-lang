@@ -470,6 +470,107 @@ for s in test/decide/D*.txt; do
   [ "$bad" -eq 0 ] || { echo "FAIL decide $d: $bad mismatches: eval $(paste -s -d ' ' "$tmp/$d.eval"), node $(paste -s -d ' ' "$tmp/$d.node"), wasmtime $(paste -s -d ' ' "$tmp/$d.wasmtime")"; fail=$((fail + 1)); }
 done
 echo "decide scripts: $decidescripts checked, $decidecalls calls, $decidebad mismatches"
+# The engine rows (S9 U1, Q-S9-1 (a), L8): build/enginetool runs each
+# test/decide/DN.txt on gate.wasm in the own C99 engine (host/engine.c) with
+# the O5 binding and prints the lines of `test/run-wasm.mjs --decide`. Each
+# line must be the node line of the decide block above.
+enginescripts=0
+enginecalls=0
+enginebad=0
+for s in test/decide/D*.txt; do
+  d=$(basename "$s" .txt)
+  enginescripts=$((enginescripts + 1))
+  enginecalls=$((enginecalls + $(rg -c '.' "$s" || echo 0)))
+  if [ ! -f "$tmp/$d.node" ]; then
+    echo "FAIL engine $d: no node lines"
+    fail=$((fail + 1))
+    continue
+  fi
+  status=0
+  build/enginetool "$s" "$tmp/gate.wasm" >"$tmp/$d.engine" 2>"$tmp/err" || status=$?
+  if [ "$status" -ne 0 ]; then
+    echo "FAIL engine $d: run exit $status: $(head -n 1 "$tmp/err")"
+    fail=$((fail + 1))
+    continue
+  fi
+  bad=$(paste -d '|' "$tmp/$d.node" "$tmp/$d.engine" | awk -F '|' '($1 "") != ($2 "")' | rg -c '.' || echo 0)
+  enginebad=$((enginebad + bad))
+  [ "$bad" -eq 0 ] || { echo "FAIL engine $d: $bad mismatches: node $(paste -s -d ' ' "$tmp/$d.node"), engine $(paste -s -d ' ' "$tmp/$d.engine")"; fail=$((fail + 1)); }
+done
+echo "engine decide scripts: $enginescripts checked, $enginecalls calls, $enginebad mismatches"
+# The engine load refusals (S9 U1): each line below is `NAME MESSAGE`.
+# wat2wasm makes $tmp/engine-NAME.wasm from test/engine/NAME.wat.
+# build/enginetool must exit 1 and print the one line
+# `enginetool: load: MESSAGE` (an import with no O5 row, an import with the
+# wrong type).
+enginerefusals=0
+while read -r name msg; do
+  enginerefusals=$((enginerefusals + 1))
+  status=0
+  got=$(wat2wasm "test/engine/$name.wat" -o "$tmp/engine-$name.wasm" 2>&1 && build/enginetool test/decide/D1.txt "$tmp/engine-$name.wasm" 2>&1) || status=$?
+  [ "$status" -eq 1 ] && [ "$got" = "enginetool: load: $msg" ] ||
+    { echo "FAIL engine refusal $name: want exit 1 and $msg, got exit $status: $got"; fail=$((fail + 1)); }
+done <<'EOF'
+unbound unbound import
+badtype import type
+EOF
+echo "engine refusals: $enginerefusals checked"
+# The O5 hash stub against fixed numbers (S9 U2, the U1 mutant O1): each
+# line below is `N WANT`, WANT from the test/run-wasm.mjs `hash` formula
+# (N * 1000003 + 7) mod 2^64. The second row wraps at 2^64.
+enginehash=0
+while read -r n want; do
+  enginehash=$((enginehash + 1))
+  status=0
+  got=$(echo "hash $n" >"$tmp/hash.txt" && build/enginetool "$tmp/hash.txt" "$tmp/gate.wasm" 2>&1 | head -n 1) || status=$?
+  [ "$status" -eq 0 ] && [ "$got" = "$want" ] ||
+    { echo "FAIL engine hash $n: want $want, got exit $status: $got"; fail=$((fail + 1)); }
+done <<'EOF'
+0 7
+9223372036854775809 9223372036855775818
+EOF
+echo "engine hash rows: $enginehash checked"
+# SHA-256 (S9 U1, Q-S9-2 (a)): build/shatool checks host/sha256.c on the 4
+# FIPS 180-4 vectors and 3 pad rows (55, 56 and 64 bytes of "a").
+status=0
+build/shatool >"$tmp/sha.txt" 2>"$tmp/err" || status=$?
+if [ "$status" -ne 0 ]; then
+  echo "FAIL sha256: exit $status: $(head -n 1 "$tmp/err")"
+  fail=$((fail + 1))
+else
+  cat "$tmp/sha.txt"
+fi
+# JSON, JCS, the envelope and the pointer (S9 U2, Q-S9-3 (a)): build/jcstool
+# checks host/jsonin.c and host/jcs.c on its rows (RFC 8785 key order and
+# escapes, the 2^53 - 1 bound, -0, a duplicate key, RFC 6901 escapes).
+status=0
+build/jcstool >"$tmp/jcs.txt" 2>"$tmp/err" || status=$?
+if [ "$status" -ne 0 ]; then
+  echo "FAIL jcs: exit $status: $(head -n 1 "$tmp/err")"
+  fail=$((fail + 1))
+else
+  cat "$tmp/jcs.txt"
+fi
+
+# The MCP gate (S9 U3, N6, docs/MCP.md): build/hosttool runs build/permitd
+# on test/host/deploy.lang with build/fakedeploy as the child, one line at
+# a time (malformed lines, toolFailed, the state file, the forwarded bytes,
+# the cost and the approvals file).
+status=0
+build/langc build test/host/deploy.lang -o "$tmp/deploy.wasm" 2>"$tmp/err" || status=$?
+if [ "$status" -ne 0 ]; then
+  echo "FAIL host: langc exit $status: $(head -n 1 "$tmp/err")"
+  fail=$((fail + 1))
+else
+  mkdir -p "$tmp/host"
+  build/hosttool build/permitd build/fakedeploy "$tmp/deploy.wasm" "$tmp/host" >"$tmp/host.txt" 2>"$tmp/err" || status=$?
+  if [ "$status" -ne 0 ]; then
+    echo "FAIL host: exit $status: $(head -n 1 "$tmp/err")"
+    fail=$((fail + 1))
+  else
+    cat "$tmp/host.txt"
+  fi
+fi
 
 status=0
 build/langc 2>/dev/null || status=$?

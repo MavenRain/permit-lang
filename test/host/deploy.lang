@@ -1,0 +1,16 @@
+-- The deploy program of the permitd rows (S9 U3): two resources, four
+-- grants and the 7 tools of test/fakedeploy.c. An execute needs an
+-- approval, so a test gives one with --approvals.
+def prod : Resource := res "prod"
+def dev : Resource := res "dev"
+def sc : Scope := fmMul (Prod Resource Action) (fmEta (Prod Resource Action) (pair prod inspect)) (fmMul (Prod Resource Action) (fmEta (Prod Resource Action) (pair prod propose)) (fmMul (Prod Resource Action) (fmEta (Prod Resource Action) (pair prod execute)) (fmEta (Prod Resource Action) (pair dev execute))))
+def start : Authority := authority sc (szS (szS (szS (szS (szS (szS sz0)))))) 10 (fmUnit Digest)
+-- The tools: the action of each tool and the RFC 6901 pointer to the
+-- target in its arguments.
+bind "inspect" inspect "/target"
+bind "propose" propose "/target"
+bind "execute" execute "/target"
+bind "sync_left" execute "/left"
+bind "sync_right" execute "/right"
+bind "restart" execute "/target"
+bind "delete" execute "/target"
