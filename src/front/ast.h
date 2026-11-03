@@ -22,7 +22,8 @@ typedef enum {
      (NULL in the cell of `[ ]`), right the next cell or NULL. Only the
      body of a `fun` can be a system (the tube of hcomp, S2 R2 (a)). */
   TERM_SYSTEM,
-  TERM_BRANCH /* left -> right: left the key, right the branch */
+  TERM_BRANCH, /* left -> right: left the key, right the branch */
+  TERM_RES     /* res "a/b" (S8, Q-S8-3 (a)): name is the path text */
 } TermKind;
 
 /* The multiplicity of a binder (S4, PLAN section 6). A binder with no mark
@@ -72,7 +73,8 @@ typedef enum {
   DECL_DEF,    /* def [rec] name : type := body */
   DECL_AXIOM,  /* axiom name : type */
   DECL_FAMILY, /* family name params [: index] := ctor | ... [and ...] */
-  DECL_COFAMILY /* cofamily name params := corec field* (S4): elaborated */
+  DECL_COFAMILY, /* cofamily name params := corec field* (S4): elaborated */
+  DECL_BIND      /* bind "tool" action "/pointer" (S8, Q-S8-4 (a)): name is the tool */
 } DeclKind;
 
 /* A family is legal only in the domain file (rule R1). ORIGIN_KIT is the
@@ -104,6 +106,9 @@ typedef struct {
   /* The index telescope `: T1 -> ... -> Type 0` of a family (S6), or NULL
      for a uniform family. */
   const Term *index;
+  /* DECL_BIND (S8): the Action arm and the RFC 6901 pointer text. */
+  const char *bind_action;
+  const char *bind_pointer;
   /* The block of the declaration (S6): the list position of its first sort
      and the number of sorts. A declaration outside a block is a block of
      one. */

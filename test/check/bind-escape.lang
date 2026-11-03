@@ -1,0 +1,2 @@
+-- REFUSE_BIND (S8, Q-S8-4 (a)): ~0 and ~1 are the only escapes.
+bind "x" execute "/~2"

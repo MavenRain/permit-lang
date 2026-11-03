@@ -3196,8 +3196,15 @@ static int resolve_head(Checker *c, const Term *head, Head *h) {
 }
 
 /* A Nat literal is a kit item (orbit-lang S3). */
+/* S8 (Q-S8-8 (a)): 1 in the program declaration `def start`. A guest writes
+   the budget of the start authority there, and in no other place. */
+static int start_def(const Checker *c) {
+  const Decl *d = &c->decls->items[c->decl_index];
+  return d->kind == DECL_DEF && !d->is_law && d->name != NULL && strcmp(d->name, "start") == 0;
+}
+
 static int literal_ok(Checker *c, const char *what) {
-  return guest(c) ? kit_refused(c, what) : 1;
+  return guest(c) && !start_def(c) ? kit_refused(c, what) : 1;
 }
 
 static uint32_t known_arity(const Checker *c, const Head *h) {
@@ -3732,6 +3739,71 @@ static const Core *elab_ival(Checker *c, const Term *t, CoreKind kind, const Val
   return finish(c, core_iop(c, kind, a, b), hint, type);
 }
 
+/* S8 (Q-S8-3 (a)): 1 when S is segments of a-z, 0-9, _ and - with one /
+   between two segments. */
+static int res_text_ok(const char *s) {
+  size_t i;
+  uint32_t seg = 0;
+  for (i = 0; s[i] != '\0'; i++) {
+    char ch = s[i];
+    int word = (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-';
+    if (ch == '/' ? seg == 0 : !word)
+      return 0;
+    seg = ch == '/' ? 0 : seg + 1;
+  }
+  return seg != 0;
+}
+
+/* S8: the number of the segment S[0..len) in the program table, a new number
+   when it is new, or RES_TABLE_MAX when the table is full. */
+static uint32_t res_segment(Machine *m, const char *s, uint32_t len) {
+  uint32_t i;
+  for (i = 0; i < m->res_seg_count; i++)
+    if (m->res_segs[i].len == len && strncmp(m->res_segs[i].text, s, len) == 0)
+      return i;
+  if (m->res_seg_count == RES_TABLE_MAX)
+    return RES_TABLE_MAX;
+  m->res_segs[i].text = s;
+  m->res_segs[i].len = len;
+  m->res_seg_count++;
+  return i;
+}
+
+/* S8: puts the path S in the program table once (the handle of a literal is
+   its index, Q-S8-3 (a)). 0 when the table is full. */
+static int res_path(Machine *m, const char *s) {
+  uint32_t i;
+  for (i = 0; i < m->res_path_count; i++)
+    if (strcmp(m->res_paths[i], s) == 0)
+      return 1;
+  if (m->res_path_count == RES_TABLE_MAX)
+    return 0;
+  m->res_paths[m->res_path_count++] = s;
+  return 1;
+}
+
+/* S8 (Q-S8-3 (a)): res "a/b" is resChild (resRoot i) j, with i and j the
+   numbers of the segments a and b in the program table. */
+static const Core *elab_res(Checker *c, const Term *t, const Value *hint, const Value **type) {
+  const char *s = t->name;
+  const Core *r = NULL;
+  if (!res_text_ok(s))
+    return nul(FAIL(c, "REFUSE_RES", "\"%s\" is not a resource path: segments of a-z, 0-9, _ and - with one / between two segments, and no * (PLAN 4)", s));
+  if (!res_path(c->m, s))
+    return nul(FAIL(c, "REFUSE_RES", "the program has more than %u resource paths", RES_TABLE_MAX));
+  while (*s != '\0') {
+    uint32_t len = (uint32_t)strcspn(s, "/");
+    uint32_t seg = res_segment(c->m, s, len);
+    const Core *n = core_leaf(c, CORE_NAT, seg);
+    if (seg == RES_TABLE_MAX)
+      return nul(FAIL(c, "REFUSE_RES", "the program has more than %u resource segments", RES_TABLE_MAX));
+    r = r == NULL ? op3(c, OP_RES_ROOT, 0, 1, n, NULL, NULL) : op3(c, OP_RES_CHILD, 0, 2, r, n, NULL);
+    s += len + (s[len] == '/');
+  }
+  *type = tyop(c, OP_RESOURCE, 0, NULL, NULL, NULL);
+  return finish(c, r, hint, type);
+}
+
 static const Core *elab_inner(Checker *c, const Term *t, const Value *hint, const Value **type) {
   switch (t->kind) {
   case TERM_VAR:
@@ -3775,6 +3847,8 @@ static const Core *elab_inner(Checker *c, const Term *t, const Value *hint, cons
     return elab_ival(c, t, CORE_IMEET, hint, type);
   case TERM_IJOIN:
     return elab_ival(c, t, CORE_IJOIN, hint, type);
+  case TERM_RES:
+    return elab_res(c, t, hint, type);
   case TERM_SYSTEM:
   case TERM_BRANCH:
     return nul(FAIL(c, "TYPE_MISMATCH", "a system [ phi -> t, ... ] is only the tube of hcomp, fun (i : I) => [ ... ]"));
@@ -5329,6 +5403,47 @@ static int check_cofamily(Checker *c, const Decl *d) {
   return 1;
 }
 
+/* S8 (Q-S8-4 (a)): 1 when S is an RFC 6901 pointer: empty, or parts that
+   each start with /, and ~ only in ~0 or ~1. */
+static int pointer_ok(const char *s) {
+  size_t i;
+  if (s[0] != '\0' && s[0] != '/')
+    return 0;
+  for (i = 0; s[i] != '\0'; i++)
+    if (s[i] == '~' && s[i + 1] != '0' && s[i + 1] != '1')
+      return 0;
+  return 1;
+}
+
+/* S8 (Q-S8-4 (a)): bind "tool" action "/pointer". The tool names are
+   unique, the action is an arm of Action and the pointer is RFC 6901. The
+   row goes to the bind table (program order). */
+static int check_bind(Checker *c, const Decl *d) {
+  Machine *m = c->m;
+  uint32_t fam = find_family(m, "Action");
+  uint32_t arm = 0;
+  uint32_t i;
+  int found = 0;
+  for (i = 0; i < m->bind_count; i++)
+    if (strcmp(m->binds[i].tool, d->name) == 0)
+      return FAIL(c, "REFUSE_BIND", "the tool \"%s\" has two bind lines (PLAN 4)", d->name);
+  for (i = 0; i < m->ctor_count && !found; i++) {
+    found = fam != NO_FAMILY && m->ctors[i].family == fam && m->ctors[i].name != NULL && strcmp(m->ctors[i].name, d->bind_action) == 0;
+    arm += !found && m->ctors[i].family == fam;
+  }
+  if (!found)
+    return FAIL(c, "REFUSE_BIND", "%s is not an arm of Action (inspect, propose or execute) (PLAN 4)", d->bind_action);
+  if (!pointer_ok(d->bind_pointer))
+    return FAIL(c, "REFUSE_BIND", "\"%s\" is not an RFC 6901 pointer: empty, or parts that each start with /, and ~ only in ~0 or ~1 (PLAN 4)", d->bind_pointer);
+  if (m->bind_count == BIND_TABLE_MAX)
+    return FAIL(c, "REFUSE_BIND", "the program has more than %u bind lines", BIND_TABLE_MAX);
+  m->binds[m->bind_count].tool = d->name;
+  m->binds[m->bind_count].action = arm;
+  m->binds[m->bind_count].pointer = d->bind_pointer;
+  m->bind_count++;
+  return 1;
+}
+
 static int check_decl(Checker *c, const Decl *d) {
   if (d->is_state && guest(c))
     return kit_refused(c, "the state form");
@@ -5344,6 +5459,8 @@ static int check_decl(Checker *c, const Decl *d) {
     return FAIL(c, "REFUSE_AXIOM", "an axiom has no proof (rule R2)");
   if (d->is_rec)
     return FAIL(c, "REFUSE_REC", "def rec is refused (rule R3); use fold or unfold");
+  if (d->kind == DECL_BIND)
+    return check_bind(c, d);
   if (!kernel_sig(c, d) || !name_free(c, d->name))
     return 0;
   switch (d->kind) {
@@ -5353,6 +5470,7 @@ static int check_decl(Checker *c, const Decl *d) {
     return check_cofamily(c, d);
   case DECL_DEF:
   case DECL_AXIOM:
+  case DECL_BIND:
     break;
   }
   return check_def(c, d);

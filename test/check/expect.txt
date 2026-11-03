@@ -222,3 +222,15 @@ execute-unapproved-none.lang REFUSE_EXECUTE_UNAPPROVED
 execute-unapproved-refused.lang REFUSE_EXECUTE_UNAPPROVED
 execute-unapproved-other.lang REFUSE_EXECUTE_UNAPPROVED
 digest-payload-changed.lang PATH_END
+res-upper.lang REFUSE_RES
+res-empty-segment.lang REFUSE_RES
+res-star.lang REFUSE_RES
+res-empty.lang REFUSE_RES
+res-trailing.lang REFUSE_RES
+res-leading.lang REFUSE_RES
+bind-twice.lang REFUSE_BIND
+bind-action.lang REFUSE_BIND
+bind-pointer.lang REFUSE_BIND
+bind-escape.lang REFUSE_BIND
+bind-tilde-end.lang REFUSE_BIND
+start-literal-other.lang REFUSE_KIT

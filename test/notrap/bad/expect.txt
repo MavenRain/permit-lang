@@ -5,3 +5,7 @@ rem-no-guard div_u or rem_u with no guard
 max-above-min memory max is not equal to min
 no-max memory with no max
 outside opcode 0x6A outside the list
+import-module import module is not permit
+import-name import name outside the list
+import-type import type does not match its name
+import-kind import is not a function

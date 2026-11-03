@@ -18,10 +18,12 @@ on 2026-10-08 on AArch64 Darwin. The gate facts below describe permit S3.
   C wraps modulo 2^64, so the evaluator and the IR use explicit carry
   tests to find an overflow.
 - `src/wasm.c` writes the Wasm binary format directly: the type,
-  function, memory, global, export and code sections, with LEB128
-  numbers. It needs no library. The gate validates each module with
-  `wasm-validate` and `wasm-objdump -x`, and checks its no-trap forms with
-  `build/notraptool`. Runtime rows return at S8.
+  import, function, memory, global, export, code and data sections and
+  the custom sections (S8), with LEB128 numbers. It needs no library. The
+  gate validates each module with `wasm-validate` and `wasm-objdump -x`,
+  and checks its no-trap forms with `build/notraptool`. Since S8, node
+  and wasmtime run the modules (the `wasm runs`, `differential cases` and
+  `decide scripts` rows).
 
 ## Values
 
@@ -30,7 +32,10 @@ on 2026-10-08 on AArch64 Darwin. The gate facts below describe permit S3.
 - `natAdd` gives `Option Nat`, with `none` on overflow. `natSub` stops at
   0. `natDiv` and `natMod` take a `NonZero Nat` divisor. The kernel has no
   `natMul` word. `docs/host/README.md` gives the no-trap rule.
-- There is no text type. The lexer refuses `"` (`test/parse/string.lang`).
+- There is no text type. A string is only the text of a `res` literal or
+  a `bind` line (S8). A string at another place gives `PARSE_EXPECT`
+  (`test/parse/string.lang`), and a string with no end gives `LEX_STRING`
+  (`test/parse/unclosed-string.lang`).
 - On Wasm, each op is total; a value is one word.
 
 ## Overflow tests on Wasm
@@ -40,9 +45,10 @@ on 2026-10-08 on AArch64 Darwin. The gate facts below describe permit S3.
 - `test/ir/natops.lang` covers the edge value 18446744073709551615:
   `addOr 18446744073709551615 1` is 0 (`natAdd` gives `none`),
   `addOr 18446744073709551615 0` is 18446744073709551615, and
-  `pickSecond 18446744073709551615 1` is 1. The S3 gate checks the IR text
-  and validates the module. The `wasm runs` and differential rows come
-  back at S8 (Q-S3-2 (b), `docs/PLAN.md` section 1).
+  `pickSecond 18446744073709551615 1` is 1. The gate checks the IR text
+  and validates the module. The `wasm runs` and differential rows run
+  these calls on node and on wasmtime (S8, Q-S8-6 (a), `docs/PLAN.md`
+  section 1).
 
 ## Limits
 
@@ -52,8 +58,7 @@ on 2026-10-08 on AArch64 Darwin. The gate facts below describe permit S3.
   stack bounded. `test/gate.sh` checks a nesting of 1100 parentheses.
 - The evaluator has a fuel of 20000000 steps (`src/front/core.h:15`).
   A large loop count can reach `EVAL_FUEL` or the arena limit. The
-  differential grid uses large values only for entries with no loop;
-  its runtime row returns at S8.
+  differential grid uses large values only for entries with no loop.
 - All memory of `langc` comes from one arena with a limit of 1 GiB
   (`src/main.c:13`). A run that reaches it stops with `OOM`.
   `langc eval test/ir/spine.lang foldOnes 4294967296` stops with `OOM`.
@@ -70,9 +75,10 @@ on 2026-10-08 on AArch64 Darwin. The gate facts below describe permit S3.
 
 ## Measured numbers
 
-- At S3, `make check` validates 4 modules with `wasm-validate` and
-  `build/notraptool`, and checks 7 bad modules. It executes no Wasm calls.
-  The 16-call `wasm runs` row and the differential row return at S8.
+- At S8, `make check` validates 5 modules with `wasm-validate` and
+  `build/notraptool`, and checks 11 bad modules. node and wasmtime each
+  run the 16 `wasm runs` calls, 694 differential cases of 10 modules and
+  8 decide scripts (12 calls).
 - `langc --kit build examples/entries.lang -o OUT` writes a module of
   193 bytes for three entries.
 

@@ -56,6 +56,7 @@ const char *tok_kind_name(TokKind kind) {
     case TOK_LBRACKET: return "'['";
     case TOK_RBRACKET: return "']'";
     case TOK_COMMA: return "','";
+    case TOK_STRING: return "a string literal";
     case TOK_KW_DEF: return "'def'";
     case TOK_KW_REC: return "'rec'";
     case TOK_KW_FUN: return "'fun'";
@@ -163,6 +164,22 @@ static int lex_nat(Lexer *lx) {
   return 1;
 }
 
+/* S8: a string literal `"..."` (Q-S8-3, Q-S8-4). The token text is the
+   bytes between the quotes, with no escape; the checker tests them. */
+static int lex_string(Lexer *lx) {
+  int line = lx->line;
+  int col = lx->col;
+  advance(lx, 1);
+  size_t start = lx->pos;
+  while (lx->pos < lx->len && peek(lx, 0) != '"' && peek(lx, 0) != '\n') advance(lx, 1);
+  if (peek(lx, 0) != '"') {
+    return diag_fail(lx->diag, "LEX_STRING", NULL, "%s:%d:%d: a string literal has no closing quote on its line", lx->source, line, col);
+  }
+  push(lx, TOK_STRING, start, line, col);
+  advance(lx, 1);
+  return 1;
+}
+
 static int lex_symbol(Lexer *lx) {
   size_t start = lx->pos;
   int line = lx->line;
@@ -230,7 +247,7 @@ static int lex_text(Arena *arena, const char *source, const char *text, size_t l
     skip_trivia(&lx);
     if (lx.pos >= lx.len) break;
     char c = peek(&lx, 0);
-    int ok = is_ident_start(c) || (lx.internal && c == '.') ? lex_ident(&lx) : is_digit(c) ? lex_nat(&lx) : lex_symbol(&lx);
+    int ok = is_ident_start(c) || (lx.internal && c == '.') ? lex_ident(&lx) : is_digit(c) ? lex_nat(&lx) : c == '"' ? lex_string(&lx) : lex_symbol(&lx);
     if (!ok) return 0;
   }
   push(&lx, TOK_EOF, lx.pos, lx.line, lx.col);

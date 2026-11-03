@@ -1,0 +1,2 @@
+-- REFUSE_RES (S8, Q-S8-3 (a)): a capital letter in a segment.
+def r : Resource := res "A/b"

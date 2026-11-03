@@ -28,7 +28,12 @@ leaf-lang 47a6f36 (section 6, "S4 result"). S5 DONE: `Resource`,
 and 7; the S6 row of section 12). S7 DONE: `Payload`, `Digest`,
 `Mutation`, `Ticket`, `Call`, `Authority`, `judge`, `decide`, the
 first-order `Plan`, `Trace` and `REFUSE_EXECUTE_UNAPPROVED` (sections 3,
-4 and 7; the S7 row of section 12). Next: S8 (T1 part 1, section 12).
+4 and 7; the S7 row of section 12). S8 DONE: the Wasm module of a
+program with `bind` lines: `res` literals, `bind` lines, `def start`, the
+`permit` imports, the state region, the exports `decide`, `malformed` and
+`memory`, the custom sections `permit.res` and `permit.bind`, and the
+`wasm runs`, differential and decide rows on node and wasmtime (sections
+1, 4 and 8.2; the S8 row of section 12). Next: S9 (T1 part 2, section 12).
 
 ## 1. Rulings
 
@@ -97,6 +102,18 @@ first-order `Plan`, `Trace` and `REFUSE_EXECUTE_UNAPPROVED` (sections 3,
 | 2026-11-02 | Q-S7-10 `Plan`: "First-order Plan (Recommended)". `family Plan (A : Type 0) := planDone (planOf : A) \| planInspect (piTarget : Resource) (piOk) (piDenied) (piFailed : Plan A) \| planPropose (ppMutation : Mutation) (ppApproved) (ppRefused : Plan A) \| planExecute (peMutation : Mutation) (peOk) (peDenied) (peFailed : Plan A)`. No `Approval` field: the gate pairs an execute with the approval that its propose got. The plan does not see the deny `Reason`. `def Trace : Type 0 := Stream Entry` (R1: a cofamily has one type parameter). Edit: section 3. | USER, S7 |
 | 2026-11-02 | Q-S7-11 `Ticket`: "Ticket split (Recommended)". The affine `Call := call (callMutation : Mutation) (callCost : Nat) (callApproval : Option Approval)` is the `decide` input. The copyable `Ticket := ticket (tkMutation : Mutation) (tkCost : Nat) (tkDigest : Option Digest)` drives `advance : Ticket -> Allowance A` and `alOpen : Allowance A -o Prod A (Ticket -o Allowance A)`. `decide` uses the approval one time (`approvalDigest`), then advances with the ticket. Edit: section 4. | USER, S7 |
 | 2026-11-02 | Q-S7-12 `Authority`: "Copyable state, Nat left (Recommended)". Copyable `Authority := authority (auScope : Scope) (auSteps : StepBound) (auLeft : Nat) (auUsed : FreeMon Digest)` under `alCorec`; `judge` compares the cost with `auLeft`; L2 stays on the `Budget` ops; the gate holds the `Budget` (S9). Edit: section 4. | USER, S7 |
+| 2026-11-02 | Q-S8-1 The `decide` export: "(a) State in module". `langc build` writes an export `decide` that takes one call as flat words and gives a decision code (0 = `permit`, 1 to 8 = the `Reason` arms). The module keeps the `Authority` in linear memory, runs the step of `judge` on it for each call and stores the next `Authority`. The instance is the one live `Allowance` (O17). Edit: sections 8.2 and 12. | USER, S8 |
+| 2026-11-02 | Q-S8-2 Opaque sorts at run time: "(a) Handles + imports". Each of `Payload`, `Bytes`, `Digest` and `Resource` is one `i64` handle that the host makes. `payloadEq` and `digestEq` lower to `i64.eq`; `envelope`, `hash` and `within` lower to calls of the imports `permit.envelope`, `permit.hash` and `permit.within`. The node and wasmtime runs bind the O5 model; `permitd` binds JCS, SHA-256 and the segment prefix test (S9). `test/ir/payload.lang` lowers. Edit: section 4; `docs/host/README.md`. | USER, S8 |
+| 2026-11-02 | Q-S8-3 Resource names: "(a) `res "a/b"` literal". A guest literal `res "deploy/prod/web"` of type `Resource`; the checker tests the text (`REFUSE_RES`). `langc` writes the paths into the custom section `permit.res` in program order, and the handle of a literal is its index. Eval reads `res "a/b"` as `resChild (resRoot i) j`. Edit: section 4. | USER, S8 |
+| 2026-11-02 | Q-S8-4 The `bind` form: "(a) bind + malformed export". A top-level `bind "restart" execute "/target"` (the tool name, an `Action` arm, an RFC 6901 pointer); the checker refuses a second `bind` of one tool, an unknown action and a bad pointer (`REFUSE_BIND`). `langc` writes the table into the custom section `permit.bind`. A call with no binding goes to the export `malformed` (domain `judgeMalformed`, one step). Edit: section 4. | USER, S8 |
+| 2026-11-02 | Q-S8-5 The start authority: "(a) Closed `start`, cap = k". A program with a `bind` line has `def start : Authority` with a closed `StepBound` k; `langc build` refuses a `bind` with no `start` (`REFUSE_LOWER`). `auUsed` holds at most k digests (F9), so the memory is fixed from k (N3). Edit: section 4. | USER, S8 |
+| 2026-11-02 | Q-S8-6 The differential and `wasm runs` lines: "(a) node + wasmtime now". The two relay-lang 5c386bb rows come back on node and wasmtime (a Wasm trap is a mismatch), with a `decide` script row set in `test/decide/`. The own C99 engine stays at S9. Edit: section 13, O12. | USER, S8 |
+| 2026-11-02 | Q-S8-7 The `needsApproval` mark: "(a) Not at S8, O21". `judge` keeps `execute` as the one marked action. Edit: section 13, O21. | USER, S8 |
+| 2026-11-02 | Q-S8-8 The start literal: (a). A Nat literal is a guest item in `def start` only; a literal in a law about `start` stays `REFUSE_KIT` (`test/check/start-literal-other.lang`). Edit: section 4. | USER, S8 |
+| 2026-11-02 | Q-S8-9 The state step: (a), targeted lowering. A `Size` is a Nat word; an elim over a `Size` is a `REPEAT`; an elim over a run-time nullary family is a switch on the word; `len` over a closed-shape `FreeMon` tree is the sum of the leaf words; `usedHas` is a bounded `REPEAT`; `decide` and `malformed` are synthesized exports over a state region of 3 + k words. Edit: `docs/host/README.md`. | USER, S8 |
+| 2026-11-03 | Q-S8-10 The memory export: (a). Memory 0 is exported as `memory` only in a module with `bind` lines; a host reads the steps (word 0) and the budget left (word 1). Edit: `docs/host/README.md`. | USER, S8 |
+| 2026-11-03 | Q-S8-11 wasmtime: (b). Each Wasm row runs on wasmtime through `test/run-wasm.mjs --wasmtime`. Edit: `docs/host/README.md`. | USER, S8 |
+| 2026-11-03 | Q-S8-12 The decide oracle: (a). The oracle is `langc --kit eval` of the judge chain that `test/run-wasm.mjs --lang` prints. Edit: `docs/host/README.md`. | USER, S8 |
 
 The seed is `bin/new-lang.sh permit-lang tcc-wasm` from lang-template
 5265a2a. The kit gives the parser, the checker, the evaluator, the lowering
@@ -265,10 +282,11 @@ The lines of pasted 1 (DESIGN.md 1):
 | `Budget` | kernel sort, affine; guest `spend` and `split` (Q-S6-2 (a)); kit-only `budget : Nat -> Budget` and `budgetLeft : Budget -o Nat` (Q-S6-1 (a)) | P6 | Section 6. `spend` and `split` give an `Option`. A guest cannot make a budget; the gate makes the values (S9). |
 | `Capability` | domain `family Capability := cap (capScope : Scope) (capSteps : StepBound) (capBudget : Budget)` (Q-S6-4 (a)) | P1, P5 | A resource type, because it holds a `Budget` (`test/check/capability-{reuse,omega}.lang`). |
 | `delegate` | a domain def, `Capability -o Scope -> StepBound -> Nat -> Option (Prod Capability Capability)` (Q-S6-4 (a)) | P5 | Attenuation only: the child scope is within the parent scope, the child steps are not more than the parent steps (`sizeLe`), and the child budget is split from the parent budget (L1). The result is (child, rest): the rest keeps the parent scope, the parent steps and the remaining units. |
-| `Payload` | kernel sort, copyable, opaque canonical tool-call bytes; kit-only `payloadOf : Nat -> Payload`, guest `payloadEq` (Q-S7-1 (a)); equality and `canon` input only | P7, P9, P10 | The gate canonicalizes the tool name, arguments and each forwarded call parameter before it constructs a `Payload`. Raw JSON spellings are not payload values. `langc ir` refuses a `Payload` at run time (S8). |
+| `Payload` | kernel sort, copyable, opaque canonical tool-call bytes; kit-only `payloadOf : Nat -> Payload`, guest `payloadEq` (Q-S7-1 (a)); equality and `canon` input only | P7, P9, P10 | The gate canonicalizes the tool name, arguments and each forwarded call parameter before it constructs a `Payload`. Raw JSON spellings are not payload values. At run time a `Payload` is one `i64` host handle (S8, Q-S8-2 (a)). |
 | `Mutation` | domain `family Mutation := mutation (mTarget : Resource) (mAction : Action) (mPayload : Payload)` (Q-S7-2 (a)) | P7, P9 | Copyable. |
 | `canon` | domain def `Mutation -> Bytes`, `envelope (mTarget m) (mPayload m)`: the canonical bytes of (target, payload) | P9 | Q-S0-4; the target envelope below. |
 | `Bytes`, `Digest`, `hash`, `envelope` | kernel sorts `Bytes` and `Digest` (copyable, opaque); guest `digestEq`, `hash : Bytes -> Digest` and `envelope : Resource -> Payload -> Bytes` (Q-S7-1 (a)) | P7, P9 | v1 binds SHA-256 (ruling). Eval reads `hash` as injective (the O5 model). |
+| `res`, `bind`, `start`, `judgeMalformed` | guest `res "a/b"` of type `Resource` (Q-S8-3 (a), `REFUSE_RES`); a top-level `bind "tool" action "/pointer"` (Q-S8-4 (a), `REFUSE_BIND`); `def start : Authority`, closed, with a closed `StepBound` k (Q-S8-5 (a)), the one place of a guest Nat literal (Q-S8-8 (a)); domain `judgeMalformed : Authority -> Prod Decision Authority` | P2, P3, P10 | S8. Eval reads `res "a/b"` as `resChild (resRoot i) j`, with i and j the segment numbers in program order. `langc` writes the paths and the bind table into the custom sections `permit.res` and `permit.bind` (`docs/host/README.md`). A call of a tool with no `bind`, or with no value at the pointer, goes to the export `malformed`: `judgeMalformed` gives `deny malformed` and takes one step (Q-S0-6). |
 | `Approval` | the S4 kernel sort, affine, over one `Digest`; kit-only `approval : Digest -> Approval`, guest `approvalDigest : Approval -o Digest` (Q-S7-3 (a)) | P7 | Section 6. The gate records who approved; the program does not read it. |
 | `Call` | domain `family Call := call (callMutation : Mutation) (callCost : Nat) (callApproval : Option Approval)` (Q-S7-4 (a)) | P2, P10 | One request from the agent, the `decide` input. A resource type, because it holds an `Approval`. `callCost` is the host cost (Q-S7-5 (a)). It replaces the S5 stand-in `call (target : Resource) (action : Action)` (Q-S5-4 (b)). |
 | `Ticket` | domain `family Ticket := ticket (tkMutation : Mutation) (tkCost : Nat) (tkDigest : Option Digest)`, copyable; `callTicket : Call -o Ticket` (Q-S7-11 (a)) | P2, P10 | `callTicket` uses the approval one time (`approvalDigest`). Fact P7: a copyable constructor and `some` at a copyable `Option` take their arguments at omega, so the digest goes through a `-o` binder (`someDigest`, `ticketWith`). |
@@ -514,7 +532,7 @@ neutral term stops the walk. `planPropose m'` adds `m'` for the
 `ppApproved` branch only. Each `planExecute m` needs a convertible `m'`.
 There is no use count: a second execute of `m` under one propose checks,
 and the gate denies the reuse at run time (`usedHas`, `deny
-approvalUsed`). The other names stay proposals until the slice that adds
+approvalUsed`; at S8 `usedHas` is a bounded `REPEAT` over the used words). The other names stay proposals until the slice that adds
 the code.
 
 ## 8. Route
@@ -548,7 +566,7 @@ refusal, the path regressions. The counts are those of relay 05dd63b.
 
 | Target | Code | Output | Check |
 |---|---|---|---|
-| T1 MCP gate | `src/wasm.c` (kit) writes one `.wasm` for each program, with the export `decide`. New `host/` in C99 that TinyCC builds: the gate `build/permitd`. It sits between the agent and the upstream MCP server (a child process on stdio), holds the credential, makes the canonical bytes of each call, hashes them (SHA-256), reads approvals from the approver channel, runs `decide` in its Wasm engine (Q-S0-1), and forwards only a permitted call. | one `.wasm` for each program, and `build/permitd` | node and wasmtime run each module as differential oracles (L8); the demo rows in `test/host/` |
+| T1 MCP gate | `src/wasm.c` (kit) writes one `.wasm` for each program, with the exports `decide (target, action, payload, cost, has_digest, digest : i64) -> i64`, `malformed () -> i64` and `memory` (S8, `docs/host/README.md`): the code is 0 for `permit` and 1 to 8 for the `Reason` arms. New `host/` in C99 that TinyCC builds: the gate `build/permitd`. It sits between the agent and the upstream MCP server (a child process on stdio), holds the credential, makes the canonical bytes of each call, hashes them (SHA-256), reads approvals from the approver channel, runs `decide` in its Wasm engine (Q-S0-1), and forwards only a permitted call. | one `.wasm` for each program, and `build/permitd` | node and wasmtime run each module as differential oracles (L8); the demo rows in `test/host/` |
 | T2 JSON authority report | `src/report.c`: the static summary from `langc` (scope, steps, budgets, laws), and one line for each call from the gate (the call, the decision, the reason code, the steps and the budget left, the digest that the gate checked). Schema in `docs/REPORT-JSON.md`. | JSON text | byte-equal rows in `test/report/` |
 | T3 Cedar export | `src/cedar.c`: the static scope as Cedar `permit` policies. Steps, budgets, the sequence guard and the approval binding have no Cedar form. The export writes one comment for each part that it leaves out. | `.cedar` text | golden files in `test/cedar/` (O3) |
 
@@ -611,7 +629,19 @@ of it. S7: 21 mutants, 15 killed in the first run. The 6 survivors got
 rows (`examples/decide.lang` `nestedPlan`, `lawOrderScope`,
 `lawOrderBound`, `lawOrderBudget` and `lawOtherRoot`;
 `test/ir/payload.lang`; `test/check/kit-payload-of.lang`), and the rerun
-killed each one.
+killed each one. S8: 11 mutants (the `memory` export, the export count,
+the bind export names, the `within` of the node and the wasmtime host, the
+gate code map, the signed words, the steps and the budget left of the
+`decide` epilogue, the deny code and the used count), 11 killed in the
+first run. The bind export name row (`test/ir/bindmemory.lang`) came
+before the run. A second S8 run added 15 mutants of the S8 checker,
+parser, domain and lowering sites (`res_text_ok`: upper case, an empty
+segment, `*`, a trailing `/` and the empty text; `pointer_ok`: no first
+`/`, `~2`, `~` at the end; `check_bind`: two bind lines for one tool, an
+action that is not an arm; `start_def` false and true; the `bind` stop
+of `parse_app`; the reason and the step of `judgeMalformed`; the
+`judgeMalformed` pick of the `malformed` export), 15 killed in the first
+run by the S8 rows. S8 total: 26 mutants, 26 killed.
 
 ## 11. Port sources
 
@@ -647,7 +677,7 @@ One session for each slice: scope, gate, mutants, docs, close.
 | S5 | `Resource`, `Action`, `Scope`, `StepBound`, the affine `Allowance` (CC), `Decision`, `Reason`; `REFUSE_TIME` with 10 words; L4 and L6 as refl laws and eval rows in `examples/scope.lang`. Rulings Q-S5-1 to Q-S5-8 (section 1); sources in section 11; gate EXIT 0: 31 examples, 21 parse refusals, 213 check refusals, 11 kit-only refusals, 1 time hint, 85 evals, 1 build, 1 ir lowered, 5 ir refusals, 2 ir lowerings, 4 notrap modules, 7 notrap bad rows, 10 spine evals, 2 natops evals, review, domain and path regressions passed. New rows: `test/check/time-{date,ttl,deadline,expires}.lang`, `kit-res-root.lang`, `allowance-{reuse,omega,open-twice,open-parts,unpack-twice,capture-budget,capture-allowance,capture-polymorphic}.lang`, `test/parse/affine-no-cofamily.lang`, 6 eval rows of `examples/scope.lang`, the `natops evals` line (O15). The original 17-mutant run killed 16; the live one (`trusted` for each generated decl of a cofamily, not only the last) is equivalent, because no other generated decl uses a 1-variable two times. Review adds three capture refusals: each rejects the checker before the review fix. Position closures cannot capture affine values, since `alOpen` observes more than one position. The generated destructors preserve positions; their other affine use checks still apply. Copyable captures and linear continuations still check (`lawConstant`, `lawKeep` in `examples/scope.lang`). | DONE |
 | S6 | The `Budget` ops `spend` and `split` (kit-only `budget` and `budgetLeft`), `Capability`, `sizeLe`, `delegate`; `REFUSE_DELEGATE_WIDEN` and `REFUSE_BUDGET_OVERSPEND` on closed rows at a term level of 1; L1 and L2 as refl laws and eval rows in `examples/capability.lang`. Rulings Q-S6-1 to Q-S6-8 (section 1); O17 and O18 closed with no change; O19 fixed. Gate EXIT 0: 32 examples, 21 parse refusals, 219 check refusals, 11 kit-only refusals, 1 time hint, 88 evals, 1 build, 1 ir lowered, 5 ir refusals, 2 ir lowerings, 4 notrap modules, 7 notrap bad rows, 10 spine evals, 2 natops evals, review, domain and path regressions passed. New rows: `test/check/budget-overspend-{spend,split}.lang` and `delegate-overspend.lang` (`REFUSE_BUDGET_OVERSPEND`), `delegate-widen.lang` (`REFUSE_DELEGATE_WIDEN`), `capability-reuse.lang` (`REFUSE_AFFINE_REUSE`), `capability-omega.lang` (`REFUSE_AFFINE_OMEGA`), 3 `sizeLe` eval rows of `examples/capability.lang`, 2 guest rows (`spend`, `split`) in `test/fronttool.c` and the O19 message row in `test/gate.sh`. 18 mutants, 18 killed. | DONE |
 | S7 | `Payload`, `Mutation`, `canon`, `Digest`, `hash`, `Approval`, `Call`, `Plan` (CM), `Trace` (CC), `decide`; `REFUSE_EXECUTE_UNAPPROVED`; L3, L5, L7. Takes the host cost in `Call` (Q-S6-3 (a)) and the `Plan` path sum of `REFUSE_BUDGET_OVERSPEND` (Q-S6-6 (a)). Built: the kernel sorts `Payload`, `Bytes` and `Digest` with kit-only `payloadOf` and `approval`; `Mutation`, `canon`, the copyable `Ticket`, the affine `Call`, `Authority`, `judge`, `decide`, `Reply`, the first-order `Plan`, `Entry` and `Trace = Stream Entry`; `REFUSE_EXECUTE_UNAPPROVED` on a closed `Plan` def; `langc ir` refuses a `Payload` at run time (S8). Rulings Q-S7-1 to Q-S7-12 (section 1); the path sum is O20. Gate EXIT 0: 33 examples, 21 parse refusals, 224 check refusals, 12 kit-only refusals, 1 time hint, 92 evals, 1 build, 1 ir lowered, 6 ir refusals, 2 ir lowerings, 4 notrap modules, 7 notrap bad rows, 10 spine evals, 2 natops evals, review, domain and path regressions passed. 21 mutants, 21 killed (section 10). | DONE |
-| S8 | T1 part 1: the Wasm module of `decide`, the binding (Q-S0-5), the notrap rows; the differential and wasm runs lines (Q-S3-2 (b)). Takes a `Payload` at run time (the S7 `REFUSE_LOWER` row `test/ir/payload.lang`). | NEXT |
+| S8 | T1 part 1: the Wasm module of `decide`, the binding (Q-S0-5), the notrap rows; the differential and wasm runs lines (Q-S3-2 (b)). Takes a `Payload` at run time (the S7 `REFUSE_LOWER` row `test/ir/payload.lang`). Built: guest `res` literals (`REFUSE_RES`), `bind` lines (`REFUSE_BIND`), `def start` with its guest Nat literals, domain `judgeMalformed`; the host handles and the `permit` imports `envelope`, `hash` and `within`; the S8 lowerings (the `Size` word, the `REPEAT` elim, the nullary switch, `len`, `usedHas`, `IR_STMT_STORE`); the state region and its data section; the exports `decide`, `malformed` and `memory`; the custom sections `permit.res` and `permit.bind`; the notraptool import rows; `test/run-wasm.mjs` on node and wasmtime (`--wasmtime`, `--decide`, `--lang`) and the call scripts `test/decide/`. Rulings Q-S8-1 to Q-S8-12 (section 1); `needsApproval` is O21. Gate EXIT 0: 35 examples, 22 parse refusals, 236 check refusals, 13 kit-only refusals, 1 time hint, 92 evals, 1 build, 1 ir lowered, 8 ir refusals, 10 ir lowerings, 3 custom sections, 5 notrap modules, 11 notrap bad rows, 10 spine evals, 2 natops evals, 16 wasm runs, 694 differential cases with 0 mismatches, 8 decide scripts (12 calls, 0 mismatches), review, domain and path regressions passed. 26 mutants, 26 killed (section 10). | DONE |
 | S9 | T1 part 2: `permitd`: the Wasm engine, SHA-256, the canonical bytes, the approver channel, the state, the stdio MCP proxy, `fakedeploy`, N6; the demo D1 to D11; L8. | |
 | S10 | T2: the JSON authority report, `docs/REPORT-JSON.md`. | |
 | S11 | T3: the Cedar export, the golden files. | |
@@ -683,11 +713,13 @@ One session for each slice: scope, gate, mutants, docs, close.
 - O11 The gate reads the credential from a file or an environment variable
   that its flags name, and gives it only to the upstream child. A run on a
   real SaaS tool is a USER-run check.
-- O12 The S2 kernel port had no Wasm writer in the build (Q-S2-3 (a)).
+- O12 CLOSED at S8. The S2 kernel port had no Wasm writer in the build
+  (Q-S2-3 (a)).
   S3 brings back the IR lines (`ir`, `ir refusals`, `ir lowerings`), the
   build line (`builds`) and the notrap lines (`notrap modules`, `notrap
   bad rows`) (Q-S3-2 (b)). The differential line and the `wasm runs`
-  line run node: they stay open until S8.
+  line ran node, so they were out of the S3 gate. S8 brings them back on
+  node and wasmtime (Q-S8-6 (a)).
 - O13 CLOSED at S3. The port source is relay-lang 5c386bb (Q-S3-1 (a));
   section 2, "S3 result".
 - O14 CLOSED at S5 (Q-S5-2 (a)). `REFUSE_TIME` has 10 words: the cairn
@@ -723,6 +755,10 @@ One session for each slice: scope, gate, mutants, docs, close.
   `Plan` path: a `Plan` has no cost field. The cost comes with the
   `Ticket` at run time, and `judge` gives `deny budgetShort` when it is
   more than `auLeft`.
+- O21 OPEN (Q-S8-7 (a)). `judge` keeps `execute` as the one marked
+  action. The `needsApproval` form comes when a demo row needs another
+  marked action. The `Authority` shape and the 13 USER laws stay as they
+  are.
 
 ## 14. Questions for the USER (S0)
 

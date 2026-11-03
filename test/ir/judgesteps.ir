@@ -1,0 +1,89 @@
+func eAk (nat) -> nat, 59 locals, 27 heap words
+  l7 := eq(l0, 0)
+  if l7 {
+    l6 := 0
+  } else {
+    l8 := add(0, 1)
+    l6 := l8
+  }
+  l4 := 0
+  l5 := 0
+  repeat l9 := l6 {
+    l4 := 1
+    l5 := add(l5, 1)
+  }
+  if l4 {
+    l11 := le(l0, l0)
+    if l11 {
+      l12 := alloc [0]
+      l13 := alloc [0]
+      l14 := alloc [0, 0, l13]
+      l15 := alloc [0, l14]
+      l16 := alloc [2]
+      l17 := alloc [0, 2, l16]
+      l18 := alloc [0, l17]
+      l19 := alloc [2, l15, l18]
+      l20 := 0
+      l21 := 0
+      repeat l22 := l6 {
+        l20 := l21
+        l21 := add(l21, 1)
+      }
+      l23 := sub(l0, l0)
+      l24 := alloc [1]
+      l25 := alloc [0, l19, l20, l23, l24]
+      l26 := alloc [0, l12, l25]
+      l10 := l26
+    } else {
+      l27 := alloc [2]
+      l28 := alloc [1, l27]
+      l29 := alloc [0]
+      l30 := alloc [0, 0, l29]
+      l31 := alloc [0, l30]
+      l32 := alloc [2]
+      l33 := alloc [0, 2, l32]
+      l34 := alloc [0, l33]
+      l35 := alloc [2, l31, l34]
+      l36 := 0
+      l37 := 0
+      repeat l38 := l6 {
+        l36 := l37
+        l37 := add(l37, 1)
+      }
+      l39 := sub(l0, 0)
+      l40 := alloc [1]
+      l41 := alloc [0, l35, l36, l39, l40]
+      l42 := alloc [0, l28, l41]
+      l10 := l42
+    }
+    l3 := l10
+  } else {
+    l43 := alloc [1]
+    l44 := alloc [1, l43]
+    l45 := alloc [0]
+    l46 := alloc [0, 0, l45]
+    l47 := alloc [0, l46]
+    l48 := alloc [2]
+    l49 := alloc [0, 2, l48]
+    l50 := alloc [0, l49]
+    l51 := alloc [2, l47, l50]
+    l52 := 0
+    l53 := 0
+    repeat l54 := l6 {
+      l52 := l53
+      l53 := add(l53, 1)
+    }
+    l55 := sub(l0, 0)
+    l56 := alloc [1]
+    l57 := alloc [0, l51, l52, l55, l56]
+    l58 := alloc [0, l44, l57]
+    l3 := l58
+  }
+  l2 := load(l3, 2)
+  l1 := load(l2, 3)
+  return l1
+res 0 "docs"
+res 1 "docs/report"
+res 2 "mail/out"
+res 3 "mail/in"
+res 4 "mail"

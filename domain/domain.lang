@@ -407,6 +407,10 @@ def judge : Authority -> Ticket -> Prod Decision Authority :=
           (pair (deny budgetShort) (auTake s 0 (auUsed s))))
         (pair (deny boundSpent) (auTake s 0 (auUsed s))))
       (pair (deny scopeMiss) (auTake s 0 (auUsed s)))
+-- S8 (Q-S8-4 (a)): a call of a tool with no bind line, or with no value at
+-- the pointer, is malformed. It takes one step (Q-S0-6 (a)).
+def judgeMalformed : Authority -> Prod Decision Authority :=
+  fun (s : Authority) => pair (deny malformed) (auTake s 0 (auUsed s))
 -- The allowance of an authority: eps is the authority now and advance
 -- judges the ticket.
 def allowanceOf : Authority -> Allowance Authority :=

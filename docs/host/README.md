@@ -162,9 +162,10 @@ The Wasm writer emits no trap form (N4):
 - Each `div_u` and `rem_u` has a guard on its divisor.
 
 `test/notraptool.c` reads each built module and refuses each of these
-forms. The differential row runs each case on the module and compares
-the result with the `langc eval` result. That row runs node, so it is out
-of the gate until S8 (Q-S3-2 (b)).
+forms. It also refuses an import that is not one of the `permit` imports
+with its type (S8). The differential row runs each case on the module on
+node and on wasmtime and compares the result with the `langc eval` result
+(S8, Q-S8-6 (a)).
 
 The lowering lowers a value one time in a block. The blocks in that
 block use the same result, but the two arms of a branch do not share
@@ -178,22 +179,53 @@ section 2 (N1 to N5 and the S3 result).
 ## Wasm layout
 
 - The module has one memory of a fixed size and one mutable `i64` global,
-  the heap pointer. The size is the pages of the largest heap bound of an
-  entry (at least 1 page). `langc` adds the words of each heap block on the
+  the heap pointer. The size is the pages of the state region (S8, below)
+  and the largest heap bound of an entry (at least 1 page). `langc` adds the words of each heap block on the
   longest path of an entry. When an entry makes heap blocks in a loop with a
   run-time count, its heap use has no static bound: `langc ir` and `langc
   build` refuse it with `REFUSE_LOWER` (`heap use has no static bound`). A
   bound larger than 1 GiB gets the same refusal.
-- Function 0 is the internal allocator `alloc (bytes : i32) -> i64`. It
+- The functions 0 to I - 1 are the host imports of module `permit` that
+  an entry calls (S8, Q-S8-2 (a)): `envelope (i64, i64) -> i64`, `hash
+  (i64) -> i64` and `within (i64, i64) -> i64`. A `Payload`, `Bytes`,
+  `Digest` or `Resource` value is one `i64` handle that the host makes.
+  `payloadEq` and `digestEq` lower to `i64.eq`. I is 0 when no entry
+  calls an import, and then the module has no import section.
+- Function I is the internal allocator `alloc (bytes : i32) -> i64`. It
   increases the heap pointer. It does not check the size, because the
   memory holds the heap bound of each entry.
-- Function 1 + K is entry K. Each entry first sets the heap pointer to 0,
-  so each call starts with an empty heap.
+- Function I + 1 + K is entry K. Each entry first sets the heap pointer to
+  the heap start, so each call starts with an empty heap. The heap start
+  is 0, or 8 * R when the program has a state region of R words (S8).
 - A `Flag` argument is true when it is not 0. The entry sets it to 1.
 - A word is 8 bytes. A heap block holds the tag in word 0 and the word of
   field K in word 1 + K. Each op is total; a value is one word.
 - A tag switch is nested blocks and `br_table`. The last arm is the
   default, so a tag out of range runs the last arm.
+- The S8 lowerings (Q-S8-9 (a)): a `Size` is a Nat word (`szS` adds 1,
+  and `sizePred` stops at 0). An elim over a `Size` is a `REPEAT`, and an
+  elim over a run-time nullary family (`Action`, `Reason`) is a switch on
+  the word. `len` over a `FreeMon` tree with a closed shape is the sum of
+  the leaf words. `usedHas` is a bounded `REPEAT` over the used words of
+  the state region. `IR_STMT_STORE` writes one word of a block.
+- A program with a `bind` line (Q-S8-4 (a)) has a `def start`
+  (Q-S8-5 (a)). Its module has a state region of R = 3 + k words at
+  address 0: the steps, the budget left, the used count, then k used
+  words. k is the closed `StepBound` of `start`. The data section writes
+  the start words. Two synthesized exports run the state step and write
+  the next state: `decide (target, action, payload, cost, has_digest,
+  digest : i64) -> i64` (one step of `judge`) and `malformed () -> i64`
+  (`judgeMalformed`). The result is a decision code: 0 is `permit`, and 1
+  to 8 are the arms of the domain `Reason` in order (`scopeMiss` is 1,
+  `malformed` is 8). Memory 0 is exported as `memory` after the entries
+  (Q-S8-10 (a)), so a host reads the steps in word 0 and the budget left
+  in word 1. `langc` refuses an entry with the name `decide`, `malformed`
+  or `memory` in this program.
+- After the code section: the custom section `permit.res` when the
+  program has a path literal (the paths in program order; the handle of
+  a literal is its index, Q-S8-3 (a)), then the custom section
+  `permit.bind` when it has a bind line (one row for each line: the tool
+  name, the `Action` arm number and the pointer, Q-S8-4 (a)).
 
 ## Domain slot
 
@@ -208,20 +240,24 @@ how to replace the sample domain.
 
 | Line | What the gate does |
 |---|---|
-| `examples: 33 checked, 0 failed` | `langc check` accepts each `examples/*.lang` file; the files in `examples/kit.txt` run with `--kit` (`scope.lang`, the S5 demo, `capability.lang`, the S6 demo, and `decide.lang`, the S7 demo, are three of them) |
-| `parse refusals: 21 checked` | each `test/parse` file fails with the code in `test/parse/expect.txt`; one file has 1100 nested parentheses. 4 files (S4) have a bad mark (`@2`, a marked parameter, a marked field) or `-ops`. 1 file (S5, `affine-no-cofamily.lang`) has `affine` with no `cofamily` after it |
-| `check refusals: 224 checked` | each `test/check` file fails with the code in `test/check/expect.txt`; the `TYPE_REFL` message shows both normal forms. The 45 `affine-*.lang` files (S4) give `REFUSE_AFFINE_REUSE` (11), `REFUSE_AFFINE_OMEGA` (24), `REFUSE_AFFINE_FIX` (3), `REFUSE_AFFINE_PATH` (4) or `TYPE_MISMATCH` (3). 16 of them are in `test/check/kit.txt`, so they run with `--kit`. The 13 S5 files: `time-{date,ttl,deadline,expires}.lang` (`REFUSE_TIME`), `kit-res-root.lang` (`REFUSE_KIT`), `allowance-{reuse,open-twice,open-parts,unpack-twice}.lang` (`REFUSE_AFFINE_REUSE`: a second use of an `Allowance`, of its opened pair, or of its parts) and `allowance-{omega,capture-budget,capture-allowance,capture-polymorphic}.lang` (`REFUSE_AFFINE_OMEGA`: an omega binder or a position closure that captures a resource or an unknown payload). The 6 S6 files: `budget-overspend-{spend,split}.lang` and `delegate-overspend.lang` (`REFUSE_BUDGET_OVERSPEND`), `delegate-widen.lang` (`REFUSE_DELEGATE_WIDEN`), `capability-reuse.lang` (`REFUSE_AFFINE_REUSE`) and `capability-omega.lang` (`REFUSE_AFFINE_OMEGA`); the first 4 are in `test/check/kit.txt`. The 5 S7 files: `execute-unapproved-{none,other,refused}.lang` (`REFUSE_EXECUTE_UNAPPROVED`: an execute with no propose, in the branch of a propose of another mutation, or in the `ppRefused` branch), `digest-payload-changed.lang` (`PATH_END`: a changed payload changes the digest) and `kit-payload-of.lang` (`REFUSE_KIT`); the first 4 are in `test/check/kit.txt` |
-| `kit-only refusals: 12 checked` | each `REFUSE_KIT` row refuses a kit item in guest mode only: `langc --kit check` accepts the file (`kit-res-root.lang`, S5, is a guest `resRoot`; `kit-payload-of.lang`, S7, is a guest `payloadOf`) |
+| `examples: 35 checked, 0 failed` | `langc check` accepts each `examples/*.lang` file; the files in `examples/kit.txt` run with `--kit` (`scope.lang`, the S5 demo, `capability.lang`, the S6 demo, and `decide.lang`, the S7 demo, are three of them; S8 adds `resources.lang`). `examples/gate.lang` (S8) is the bind demo: `bind` lines and a `def start` |
+| `parse refusals: 22 checked` | each `test/parse` file fails with the code in `test/parse/expect.txt`; one file has 1100 nested parentheses. 4 files (S4) have a bad mark (`@2`, a marked parameter, a marked field) or `-ops`. 1 file (S5, `affine-no-cofamily.lang`) has `affine` with no `cofamily` after it. 1 file (S8, `unclosed-string.lang`) has a string with no end (`LEX_STRING`); `string.lang` gives `PARSE_EXPECT` at S8, because a string lexes for `res` and `bind` |
+| `check refusals: 236 checked` | each `test/check` file fails with the code in `test/check/expect.txt`; the `TYPE_REFL` message shows both normal forms. The 45 `affine-*.lang` files (S4) give `REFUSE_AFFINE_REUSE` (11), `REFUSE_AFFINE_OMEGA` (24), `REFUSE_AFFINE_FIX` (3), `REFUSE_AFFINE_PATH` (4) or `TYPE_MISMATCH` (3). 16 of them are in `test/check/kit.txt`, so they run with `--kit`. The 13 S5 files: `time-{date,ttl,deadline,expires}.lang` (`REFUSE_TIME`), `kit-res-root.lang` (`REFUSE_KIT`), `allowance-{reuse,open-twice,open-parts,unpack-twice}.lang` (`REFUSE_AFFINE_REUSE`: a second use of an `Allowance`, of its opened pair, or of its parts) and `allowance-{omega,capture-budget,capture-allowance,capture-polymorphic}.lang` (`REFUSE_AFFINE_OMEGA`: an omega binder or a position closure that captures a resource or an unknown payload). The 6 S6 files: `budget-overspend-{spend,split}.lang` and `delegate-overspend.lang` (`REFUSE_BUDGET_OVERSPEND`), `delegate-widen.lang` (`REFUSE_DELEGATE_WIDEN`), `capability-reuse.lang` (`REFUSE_AFFINE_REUSE`) and `capability-omega.lang` (`REFUSE_AFFINE_OMEGA`); the first 4 are in `test/check/kit.txt`. The 5 S7 files: `execute-unapproved-{none,other,refused}.lang` (`REFUSE_EXECUTE_UNAPPROVED`: an execute with no propose, in the branch of a propose of another mutation, or in the `ppRefused` branch), `digest-payload-changed.lang` (`PATH_END`: a changed payload changes the digest) and `kit-payload-of.lang` (`REFUSE_KIT`); the first 4 are in `test/check/kit.txt`. The 12 S8 files: `res-{upper,empty-segment,star,empty,trailing,leading}.lang` (`REFUSE_RES`: an upper-case letter, an empty segment, a wildcard, an empty path, a trailing or a leading slash), `bind-{twice,action,pointer,escape,tilde-end}.lang` (`REFUSE_BIND`: a second `bind` of one tool, an unknown action, a pointer with no leading slash, a bad `~` escape, a `~` at the end) and `start-literal-other.lang` (`REFUSE_KIT`: a guest Nat literal outside `def start`, Q-S8-8 (a)) |
+| `kit-only refusals: 13 checked` | each `REFUSE_KIT` row refuses a kit item in guest mode only: `langc --kit check` accepts the file (`kit-res-root.lang`, S5, is a guest `resRoot`; `kit-payload-of.lang`, S7, is a guest `payloadOf`; `start-literal-other.lang`, S8, is a guest Nat literal outside `def start`) |
 | `time hint: 1 checked` | a `REFUSE_TIME` refusal says to count operations: a deadline is a `StepBound` (a count of later operations) |
 | `evals: 92 checked` | `langc eval` gives each result in `test/eval/expect.txt`; 6 rows (S5) run `examples/scope.lang` with `--kit`: `within` and `resEq` (yes and no), `afterOne` and `openAfterOne` (L4); 3 rows (S6) run `examples/capability.lang` with `--kit`: `sizeLe` (`oneTwo`, `twoOne`, `twoTwo`); 4 rows (S7) run `examples/decide.lang` with `--kit`: `leftAfter` (3), `stepsAfter` (`sz0`), `decisionOk` (`permit`) and `decisionUsed` (`deny approvalUsed`) |
 | `builds: 1 checked` | `langc build examples/functions.lang` writes a module that `wasm-validate` accepts |
 | `ir: 1 lowered` | `langc ir examples/functions.lang` gives one `func` line for each `abi` line |
-| `ir refusals: 6 checked` | `langc --kit ir` refuses `test/ir/closure.lang`, `kmap.lang`, `tree.lang`, `spine.lang`, `hop.lang` and `payload.lang` (S7: a `Payload` at run time, S8), each with its code |
-| `ir lowerings: 2 lowered` | the `langc --kit ir` text of `test/ir/natops.lang` and `test/ir/block.lang` is `test/ir/natops.ir` and `test/ir/block.ir` |
-| `notrap modules: 4 checked` | `langc build` writes the modules of `test/ir/natops.lang`, `test/ir/block.lang` and `examples/state-no-history.lang`, and `wasm-validate` accepts each one. `build/notraptool` (`test/notraptool.c`) accepts these three modules and the module of `examples/functions.lang`: no `unreachable`, no `memory.grow`, only the opcodes of `src/wasmop.h`, a divisor guard before each `i64.div_u` and `i64.rem_u`, and memory 0 with maximum = minimum. `build` lowers the `state` family of `examples/state-no-history.lang` as a plain family (Q-S3-3 (b)) |
-| `notrap bad rows: 7 checked` | `build/notraptool` refuses each module of `test/notrap/bad/` (`wat2wasm` makes it from its `.wat` file): exit 1 and the message of its line in `test/notrap/bad/expect.txt`. The 7 modules have `unreachable`, `memory.grow`, an `i64.div_u` and an `i64.rem_u` with no guard, a memory maximum above the minimum, a memory with no maximum, and `i32.add` (an opcode that is not in `src/wasmop.h`) |
+| `ir refusals: 8 checked` | `langc --kit ir` refuses `test/ir/closure.lang`, `kmap.lang`, `tree.lang`, `spine.lang` and `hop.lang`, and (S8) `reschain.lang` (a `Resource` with no path literal), `bindnostart.lang` (a bind line and no `def start`) and `bindmemory.lang` (an entry with the name of a bind export), each with its code. `payload.lang` lowers at S8 (Q-S8-2 (a)) |
+| `ir lowerings: 10 lowered` | the `langc --kit ir` text of each file is its `.ir` file: `test/ir/natops.lang` and `test/ir/block.lang`, and (S8) `payload.lang`, `resource.lang`, `sizestep.lang`, `judgesteps.lang`, `actcase.lang`, `decision.lang`, `fmlen.lang` and `judgeaction.lang` |
+| `custom sections: 3 checked` | the custom sections of the modules of `test/ir/resource.lang` and `examples/gate.lang` (the name and the size of `permit.res` and `permit.bind`) are the lines of `test/ir/resource.sections` and `test/ir/gate.sections`, and the module of `examples/functions.lang` has no custom section (S8, Q-S8-3 (a), Q-S8-4 (a)) |
+| `notrap modules: 5 checked` | `langc build` writes the modules of `test/ir/natops.lang`, `test/ir/block.lang`, `examples/state-no-history.lang` and `test/ir/resource.lang` (S8), and `wasm-validate` accepts each one. `build/notraptool` (`test/notraptool.c`) accepts these four modules and the module of `examples/functions.lang`: no `unreachable`, no `memory.grow`, only the opcodes of `src/wasmop.h`, a divisor guard before each `i64.div_u` and `i64.rem_u`, memory 0 with maximum = minimum, and (S8) only the `permit` imports with their types. `build` lowers the `state` family of `examples/state-no-history.lang` as a plain family (Q-S3-3 (b)) |
+| `notrap bad rows: 11 checked` | `build/notraptool` refuses each module of `test/notrap/bad/` (`wat2wasm` makes it from its `.wat` file): exit 1 and the message of its line in `test/notrap/bad/expect.txt`. The 11 modules have `unreachable`, `memory.grow`, an `i64.div_u` and an `i64.rem_u` with no guard, a memory maximum above the minimum, a memory with no maximum, `i32.add` (an opcode that is not in `src/wasmop.h`), and (S8) an import of a module other than `permit`, an import name outside the list, an import type that does not match its name and an import that is not a function |
 | `spine evals: 10 checked` | `langc --kit eval` gives each eval of `test/ir/spine.lang` at 4 |
 | `natops evals: 2 checked` | `langc --kit eval` gives 1 for `reasonCode 0` and 2 for `reasonCode 1` of `test/ir/natops.lang` (the run-time case split over the domain `Reason`, O15) |
+| `wasm runs: 16 checked` | node and wasmtime (`test/run-wasm.mjs`, `--wasmtime`) run 16 calls of the module of `test/ir/natops.lang`; each result is equal to the `langc --kit eval` result (S8, Q-S8-6 (a), Q-S8-11 (b)) |
+| `differential cases: 694 checked, 0 mismatches` | `test/grid.awk` makes the cases from the `langc --kit ir` text of 10 modules (`natops`, `block`, `functions`, `state-no-history` and the S8 lowerings `sizestep`, `judgesteps`, `actcase`, `decision`, `fmlen` and `judgeaction`); node and wasmtime run each case, and each result is equal to the `langc --kit eval` result. `langc eval` has no trap, so a Wasm `trap` is a mismatch |
+| `decide scripts: 8 checked, 12 calls, 0 mismatches` | each of `test/decide/D1.txt` to `D8.txt` is a call script on one instance of the module of `examples/gate.lang` (`test/run-wasm.mjs --decide`). node and wasmtime print the decision codes, then the steps and the budget left (words 0 and 1 of `memory`). Each line is equal to `langc --kit eval` of the judge chain that `test/run-wasm.mjs --lang` prints (Q-S8-10 (a), Q-S8-12 (a)). The 8 scripts give the codes 0 (`permit`); 1; 4; 8; 0 0 0 2 (the steps run out); 0 6 (a second use of one approval); 5; 3 |
 | `gate: 0 failures` | the sum of all failures of `test/gate.sh` |
 | `review regressions: passed` | `test/review.sh` passes |
 | `domain regressions: passed` | `build/fronttool` (the domain declaration rows, the 54 affine rows of S4 and the 4 time rows and 3 affine cofamily rows of S5 and the 2 guest `spend` and `split` rows of S6) passes |
@@ -235,16 +271,14 @@ checks memory 0 of the modules of `test/ir/natops.lang` and
 check of lang-template (`perl bin/doc-check.pl` with this repository as
 the root) must report 0 problems.
 
-Two rows of relay-lang 5c386bb run node, so they are out of the S3 gate
-(Q-S3-2 (b)). Both come back at S8:
-
-- `wasm runs`: node runs 16 calls of the module of `test/ir/natops.lang`
-  (`test/run-wasm.mjs`); each result is equal to the `langc --kit eval`
-  result.
-- `differential cases`: `test/grid.awk` makes the cases from the
-  `langc ir` text of each module; node runs each case on the module, and
-  each result is equal to the `langc eval` result. `langc eval` has no
-  trap, so a Wasm `trap` is a mismatch.
+The `wasm runs` and `differential cases` rows of relay-lang 5c386bb ran
+node only, so they were out of the S3 gate (Q-S3-2 (b)). They are back at
+S8 (Q-S8-6 (a)): node and wasmtime run each call, and each result is
+equal to the `langc eval` result. `test/run-wasm.mjs --wasmtime` runs one
+`wasmtime run --invoke` for each call. When a module imports module
+`permit`, the two runs bind the O5 model of `langc eval`: `within` reads
+the `permit.res` table, and `envelope` and `hash` are injective stubs.
+`permitd` binds the real imports at S9.
 
 ## Known limits
 
@@ -257,11 +291,20 @@ Two rows of relay-lang 5c386bb run node, so they are out of the S3 gate
   entry. `ir` and `abi` skip it.
 - `langc eval` stops after 20000000 steps (`EVAL_FUEL`). The Wasm module
   has no step limit, so a large loop count can run on Wasm and stop in
-  `eval`. The grid of `test/grid.awk` (S8) uses large values only for
-  entries with no loop.
+  `eval`. The grid of `test/grid.awk` uses large values only for entries
+  with no loop.
 - The arena of `langc` stops at 1 GiB. The Wasm memory has a fixed size:
   minimum = maximum = the pages of the largest heap bound of an entry, at
   least 1 page. An entry with no static heap bound refuses
   (`REFUSE_LOWER`, `test/ir/spine.lang`).
+- A program with a `bind` line needs a `def start` that is a closed
+  `authority`: closed steps, a closed budget left and `fmUnit` used.
+  Otherwise `langc build` refuses it with `REFUSE_LOWER`
+  (`test/ir/bindnostart.lang`, Q-S8-5 (a)).
+- One `decide` call adds at most one digest to the used words: `judge`
+  does one `fmCons` for a permitted call. The lowering refuses a next used
+  trace of another form (`REFUSE_LOWER`, `a used trace other than fmCons
+  d used`). `auUsed` holds at most k digests (F9), so k words hold the
+  trace.
 - Source files are at most 1 MiB. `Nat` literals are at most
   18446744073709551615.

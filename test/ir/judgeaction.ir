@@ -1,0 +1,126 @@
+func eBa (nat) -> nat, 86 locals, 28 heap words
+  l8 := eq(l0, 0)
+  if l8 {
+    l9 := alloc [0]
+    l7 := l9
+  } else {
+    l10 := alloc [2]
+    l7 := l10
+  }
+  switch load(l7, 0) {
+  arm 0:
+    l6 := 1
+  arm 1:
+    l6 := 0
+  arm 2:
+    l6 := 0
+  }
+  if l6 {
+    l5 := 1
+  } else {
+    l5 := 0
+  }
+  l11 := add(l5, 0)
+  l12 := eq(l11, 0)
+  if l12 {
+    l4 := 0
+  } else {
+    l4 := 1
+  }
+  if l4 {
+    l14 := le(l0, 10)
+    if l14 {
+      switch load(l7, 0) {
+      arm 0:
+        l16 := alloc [0]
+        l17 := alloc [0]
+        l18 := alloc [0, 0, l17]
+        l19 := alloc [0, l18]
+        l20 := alloc [2]
+        l21 := alloc [0, 2, l20]
+        l22 := alloc [0, l21]
+        l23 := alloc [2, l19, l22]
+        l24 := add(0, 1)
+        l25 := add(l24, 1)
+        l26 := sub(10, l0)
+        l27 := alloc [1]
+        l28 := alloc [0, l23, l25, l26, l27]
+        l29 := alloc [0, l16, l28]
+        l15 := l29
+      arm 1:
+        l30 := alloc [0]
+        l31 := alloc [0]
+        l32 := alloc [0, 0, l31]
+        l33 := alloc [0, l32]
+        l34 := alloc [2]
+        l35 := alloc [0, 2, l34]
+        l36 := alloc [0, l35]
+        l37 := alloc [2, l33, l36]
+        l38 := add(0, 1)
+        l39 := add(l38, 1)
+        l40 := sub(10, l0)
+        l41 := alloc [1]
+        l42 := alloc [0, l37, l39, l40, l41]
+        l43 := alloc [0, l30, l42]
+        l15 := l43
+      arm 2:
+        l44 := alloc [3]
+        l45 := alloc [1, l44]
+        l46 := alloc [0]
+        l47 := alloc [0, 0, l46]
+        l48 := alloc [0, l47]
+        l49 := alloc [2]
+        l50 := alloc [0, 2, l49]
+        l51 := alloc [0, l50]
+        l52 := alloc [2, l48, l51]
+        l53 := add(0, 1)
+        l54 := add(l53, 1)
+        l55 := alloc [1]
+        l56 := alloc [0, l52, l54, 10, l55]
+        l57 := alloc [0, l45, l56]
+        l15 := l57
+      }
+      l13 := l15
+    } else {
+      l58 := alloc [2]
+      l59 := alloc [1, l58]
+      l60 := alloc [0]
+      l61 := alloc [0, 0, l60]
+      l62 := alloc [0, l61]
+      l63 := alloc [2]
+      l64 := alloc [0, 2, l63]
+      l65 := alloc [0, l64]
+      l66 := alloc [2, l62, l65]
+      l67 := add(0, 1)
+      l68 := add(l67, 1)
+      l69 := alloc [1]
+      l70 := alloc [0, l66, l68, 10, l69]
+      l71 := alloc [0, l59, l70]
+      l13 := l71
+    }
+    l3 := l13
+  } else {
+    l72 := alloc [0]
+    l73 := alloc [1, l72]
+    l74 := alloc [0]
+    l75 := alloc [0, 0, l74]
+    l76 := alloc [0, l75]
+    l77 := alloc [2]
+    l78 := alloc [0, 2, l77]
+    l79 := alloc [0, l78]
+    l80 := alloc [2, l76, l79]
+    l81 := add(0, 1)
+    l82 := add(l81, 1)
+    l83 := alloc [1]
+    l84 := alloc [0, l80, l82, 10, l83]
+    l85 := alloc [0, l73, l84]
+    l3 := l85
+  }
+  l2 := load(l3, 2)
+  l1 := load(l2, 3)
+  return l1
+res 0 "docs"
+res 1 "docs/report"
+res 2 "mail/out"
+res 3 "mail/in"
+res 4 "mail"

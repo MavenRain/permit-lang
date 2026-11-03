@@ -1,0 +1,2 @@
+-- REFUSE_RES (S8, Q-S8-3 (a)): no wildcard segment.
+def r : Resource := res "a/*"

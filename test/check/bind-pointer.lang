@@ -1,0 +1,2 @@
+-- REFUSE_BIND (S8, Q-S8-4 (a)): a pointer part starts with /.
+bind "x" execute "a"

@@ -51,6 +51,13 @@ typedef struct {
   Operand *levels; /* the operand of each de Bruijn level */
   uint32_t level_count;
   uint32_t level_cap;
+  uint32_t imports; /* bit K: a call of host import K (S8) */
+  int has_used;        /* S8 (R4): the decide or the malformed export */
+  uint32_t used_level; /* the level of the used trace of the start */
+  uint32_t count;      /* the local of the used digest count */
+  int has_acc;         /* in the REPEAT of fm_len_used */
+  uint32_t acc_level;  /* the level of the folded part */
+  uint32_t acc_len;    /* the local of its len */
 } Low;
 
 static int oom(Low *l) {
@@ -106,6 +113,19 @@ static const IrExpr *ex_load(Low *l, const IrExpr *base, uint32_t word) {
     return NULL;
   e->left = base;
   e->field = word;
+  return e;
+}
+
+/* S8 (Q-S8-2 (a)): host import IMP of A and B (B is NULL for one
+   argument). */
+static const IrExpr *ex_call(Low *l, IrImport imp, const IrExpr *a, const IrExpr *b) {
+  IrExpr *e = a == NULL ? NULL : expr_alloc(l, IR_EXPR_CALL);
+  if (e == NULL)
+    return NULL;
+  e->value = imp;
+  e->left = a;
+  e->right = b;
+  l->imports |= 1u << imp;
   return e;
 }
 
@@ -398,6 +418,13 @@ static const char *op_word(IrOp op) {
   return "?";
 }
 
+#define IR_IMPORT_ROW(name, text, params) {text, params},
+static const struct {
+  const char *text;
+  uint32_t params;
+} import_rows[] = {IR_IMPORTS(IR_IMPORT_ROW)};
+#undef IR_IMPORT_ROW
+
 static void expr_print(const IrExpr *e, FILE *out, unsigned depth) {
   if (depth > IR_PRINT_DEPTH_MAX) {
     fputs("...", out);
@@ -421,6 +448,15 @@ static void expr_print(const IrExpr *e, FILE *out, unsigned depth) {
     fputs("load(", out);
     expr_print(e->left, out, depth + 1u);
     fprintf(out, ", %u)", (unsigned)e->field);
+    return;
+  case IR_EXPR_CALL:
+    fprintf(out, "call permit.%s(", import_rows[e->value].text);
+    expr_print(e->left, out, depth + 1u);
+    if (e->right != NULL) {
+      fputs(", ", out);
+      expr_print(e->right, out, depth + 1u);
+    }
+    fputs(")", out);
     return;
   }
 }
@@ -488,6 +524,13 @@ static void stmt_print(const IrStmt *s, FILE *out, unsigned depth) {
     block_print(&s->body, out, depth + 1u);
     close_print(out, depth);
     return;
+  case IR_STMT_STORE:
+    fputs("store(", out);
+    expr_print(s->expr, out, 0);
+    fprintf(out, ", %u) := ", (unsigned)s->field);
+    expr_print(s->fields[0], out, 0);
+    fputs("\n", out);
+    return;
   case IR_STMT_RETURN:
     fputs("return ", out);
     expr_print(s->expr, out, 0);
@@ -528,12 +571,57 @@ void ir_print(const IrProgram *prog, FILE *out) {
             (unsigned)fn->heap_words);
     block_print(&fn->body, out, 1u);
   }
+  for (i = 0; i < prog->res_count; i++)
+    fprintf(out, "res %u \"%s\"\n", (unsigned)i, prog->res_paths[i]);
+  for (i = 0; i < prog->bind_count; i++)
+    fprintf(out, "bind \"%s\" action %u \"%s\"\n", prog->binds[i].tool, (unsigned)prog->binds[i].action,
+            prog->binds[i].pointer);
 }
 
 static int lower(Low *l, Buf *b, const Value *v, Operand *out);
 
 static int closure(Low *l) {
   return diag_fail(l->m->diag, "REFUSE_RUNTIME_CLOSURE", l->m->def, "a function value must exist at run time (HOST-LIMIT)");
+}
+
+static int nat_bin(Low *l, Buf *b, const Value *v, IrOp op, Operand *out);
+
+/* S8 (Q-S8-2 (a)): within, hash and envelope call the host imports
+   permit.within, permit.hash and permit.envelope. With too few arguments
+   the operation is a function. */
+static int host_call(Low *l, Buf *b, const Value *v, IrImport imp, Operand *out) {
+  Operand x;
+  Operand y = operand(NULL);
+  if (v->argc < import_rows[imp].params)
+    return closure(l);
+  if (!lower(l, b, v->args[0], &x) || (v->argc > 1u && !lower(l, b, v->args[1], &y)))
+    return 0;
+  *out = operand(atom(l, b, ex_call(l, imp, x.w, y.w)));
+  return out->w != NULL;
+}
+
+/* S8 (Q-S8-3 (a)): 1 when the closed chain C spells T[0..END): each
+   segment number names the segment text at its place, from the last
+   segment back to the root. Each step uses one segment and a '/', so the
+   depth is at most END. */
+static int res_spells(const Machine *m, const Value *c, const char *t, size_t end) {
+  int child = val_is(c, OP_RES_CHILD) && c->argc == 2u;
+  const Value *seg = child ? c->args[1] : val_is(c, OP_RES_ROOT) && c->argc == 1u ? c->args[0] : NULL;
+  size_t len = seg != NULL && seg->kind == VAL_NAT && seg->nat < m->res_seg_count ? m->res_segs[seg->nat].len : end + 1u;
+  if (len > end || memcmp(t + end - len, m->res_segs[seg->nat].text, len) != 0)
+    return 0;
+  return child ? end > len && t[end - len - 1u] == '/' && res_spells(m, c->args[0], t, end - len - 1u) : end == len;
+}
+
+/* S8 (Q-S8-3 (a)): a closed chain is the index of its path literal in
+   m->res_paths, the handle of the host (custom section permit.res). The
+   literal "a/b" does not enter "a". A chain with no literal is refused. */
+static int res_handle(Low *l, const Value *v, Operand *out) {
+  uint32_t i;
+  for (i = 0; i < l->m->res_path_count; i++)
+    if (res_spells(l->m, v, l->m->res_paths[i], strlen(l->m->res_paths[i])))
+      return give(l, out, i);
+  return refuse(l, "a Resource with no path literal (S8)");
 }
 
 /* 1 when the evaluator gave a value, else 0 after a diagnostic. */
@@ -576,10 +664,55 @@ static int ctor_full(Low *l, Buf *b, const Value *v, uint32_t skip, uint32_t n, 
   return v->argc < skip + n ? closure(l) : ctor_block(l, b, tag, v->args + skip, n, out);
 }
 
+/* S8 (Q-S8-9 (a)): the domain family Size is a Nat word at run time, sz0
+   = 0 and szS x = x + 1, so a fold or an elim over it is a REPEAT. */
+static int is_size(const Low *l, uint32_t family) {
+  const FamilyInfo *fam = &l->m->families[family];
+  return strcmp(fam->name, "Size") == 0 && fam->ctor_count == 2u && fam->param_count == 0u;
+}
+
+/* OUT := X + Y. */
+static int word_add(Low *l, Buf *b, Operand x, Operand y, Operand *out) {
+  *out = operand(atom(l, b, ex_bin(l, IR_OP_ADD, x.w, y.w)));
+  return out->w != NULL;
+}
+
+/* sz0 is the word 0 and szS X is X + 1 (TAG is the constructor index). */
+static int size_ctor(Low *l, Buf *b, const Value *v, uint32_t tag, Operand *out) {
+  Operand x;
+  if (tag == 0u)
+    return give(l, out, 0);
+  if (v->argc < 1u)
+    return closure(l);
+  return lower(l, b, v->args[0], &x) && word_add(l, b, x, operand(ex_const(l, 1)), out);
+}
+
+/* S8 (R5): 1 when argument K of V is the used trace of the start. */
+static int is_used(const Low *l, const Value *v, uint32_t k) {
+  return l->has_used && v->args[k]->kind == VAL_VAR && v->args[k]->nat == l->used_level;
+}
+
+/* S8 (R5): the used trace is the word 0 at run time and the epilogue of
+   decide reads one new digest, so a constructor takes the trace only as
+   fmMul (fmEta x) used (fmCons d used). C is the constructor of V, P the
+   param count of its family. */
+static int used_ok(const Low *l, const Value *v, const CtorInfo *c, uint32_t p) {
+  const Value *eta = v->argc == p + 2u ? v->args[p] : NULL;
+  int any = 0;
+  uint32_t k;
+  for (k = 0; k < v->argc; k++)
+    any = any || is_used(l, v, k);
+  return !any || strcmp(l->m->families[c->family].name, "FreeMon") != 0 || (strcmp(c->name, "fmMul") == 0 && eta != NULL && is_used(l, v, p + 1u) && eta->kind == VAL_OP &&
+                  eta->op == OP_CTOR && strcmp(l->m->ctors[eta->inst].name, "fmEta") == 0);
+}
+
 static int lower_ctor(Low *l, Buf *b, const Value *v, Operand *out) {
   const CtorInfo *c = &l->m->ctors[v->inst];
   const FamilyInfo *fam = &l->m->families[c->family];
-  return ctor_full(l, b, v, fam->param_count, c->field_count, v->inst - fam->first_ctor, out);
+  if (!used_ok(l, v, c, fam->param_count))
+    return refuse(l, "a used trace other than fmCons d used (S8)");
+  return is_size(l, c->family) ? size_ctor(l, b, v, v->inst - fam->first_ctor, out)
+                               : ctor_full(l, b, v, fam->param_count, c->field_count, v->inst - fam->first_ctor, out);
 }
 
 /* A canonical value. An eliminator here has too few arguments, so it is a
@@ -653,23 +786,33 @@ static int lower_canon(Low *l, Buf *b, const Value *v, Operand *out) {
   case OP_NONZERO:
     return give(l, out, 0);
   case OP_RES_ROOT:
+    return v->argc < 1u ? closure(l) : res_handle(l, v, out);
   case OP_RES_CHILD:
+    return v->argc < 2u ? closure(l) : res_handle(l, v, out);
+  /* S8 (Q-S8-3 (a)): the host interns the paths, so resEq is i64.eq. */
   case OP_RES_EQ:
+    return v->argc < 2u ? closure(l) : nat_bin(l, b, v, IR_OP_EQ, out);
   case OP_RES_WITHIN:
-    return refuse(l, "a Resource at run time (S8)");
+    return host_call(l, b, v, IR_IMPORT_WITHIN, out);
   case OP_BUDGET_MK:
   case OP_BUDGET_LEFT:
   case OP_SPEND:
   case OP_SPLIT:
     return refuse(l, "a Budget at run time (S8)");
+  /* S8 (Q-S8-2 (a)): a Payload is a host handle, so payloadOf n is the
+     word n. */
   case OP_PAYLOAD_OF:
-  case OP_APPROVAL_MK:
+    return v->argc < 1u ? closure(l) : lower(l, b, v->args[0], out);
   case OP_PAYLOAD_EQ:
   case OP_DIGEST_EQ:
+    return closure(l);
   case OP_HASH:
+    return host_call(l, b, v, IR_IMPORT_HASH, out);
   case OP_ENVELOPE:
+    return host_call(l, b, v, IR_IMPORT_ENVELOPE, out);
+  case OP_APPROVAL_MK:
   case OP_APPROVAL_DIGEST:
-    return refuse(l, "a Payload at run time (S8)");
+    return refuse(l, "an Approval at run time (S8)");
   case OP_FM_LEN:
     return refuse(l, "len (the op count of a FreeMon trace at run time)");
   case OP_ELIM:
@@ -1046,12 +1189,171 @@ static int family_spine(Low *l, Buf *b, const Value *v, const uint32_t *rec, Ope
          chain_node(l, &body, &w, &node) && fam_switch(l, &body, node, v, rec, 1, acc) && chain_end(l, b, &w, &body);
 }
 
+/* ACC := Z, then ACC := STEP ACC, N times. */
+static int repeat_fold(Low *l, Buf *b, const Value *nv, const Value *z, const Value *step, Operand *out) {
+  Operand n;
+  Operand a;
+  Slot acc = slot_new(l);
+  Buf in = buf_under(b);
+  Buf body = buf_under(&in);
+  *out = slot_get(l, acc);
+  a = slot_get(l, acc);
+  return lower(l, b, nv, &n) && lower_into(l, &in, z, acc) && apply_into(l, &body, step, &a, 1, acc) &&
+         st_repeat(l, &in, n.w, &body) && splice(l, b, &in);
+}
+
+/* elim P Z S N over Size (S8, Q-S8-9 (a)): ACC := Z and I := 0, then N
+   times ACC := S I ACC and I := I + 1. */
+static int size_elim(Low *l, Buf *b, const Value *v, Operand *out) {
+  Operand n;
+  Operand args[2];
+  Slot acc = slot_new(l);
+  Slot i = slot_new(l);
+  Buf in = buf_under(b);
+  Buf body = buf_under(&in);
+  *out = slot_get(l, acc);
+  args[0] = slot_get(l, i);
+  args[1] = slot_get(l, acc);
+  return lower(l, b, v->args[v->argc - 1u], &n) && lower_into(l, &in, v->args[1], acc) && set(l, &in, i.w, ex_const(l, 0)) &&
+         apply_into(l, &body, v->args[2], args, 2, acc) &&
+         set(l, &body, i.w, ex_bin(l, IR_OP_ADD, ex_local(l, i.w), ex_const(l, 1))) && st_repeat(l, &in, n.w, &body) &&
+         splice(l, b, &in);
+}
+
+/* 1 when the constructor C has no recursive field, no path field and no
+   interval; *N := its field count. */
+static int plain_ctor(const CtorInfo *c, uint32_t *n) {
+  uint32_t k;
+  for (k = 0; k < c->field_count; k++)
+    if (c->fields[k].recursive || c->fields[k].over_recursive || c->fields[k].path)
+      return 0;
+  *n = c->field_count;
+  return c->interval_count == 0u;
+}
+
+/* elim P C1 .. Cn X (S8, Q-S8-9 (a)). The field of V is the family + 1 (0
+   at Sum and Unit); the cases start at args[1] and X is last. Over Size it
+   is size_elim; over a family of plain constructors it is a SWITCH on the
+   tag (cases_of). Any other elim refuses. */
+static int lower_elim(Low *l, Buf *b, const Value *v, Operand *out) {
+  const FamilyInfo *fam = v->field != 0u ? &l->m->families[v->field - 1u] : NULL;
+  uint32_t *fields = fam != NULL ? arena_alloc(l->m->arena, ((size_t)fam->ctor_count + 1u) * sizeof *fields) : NULL;
+  uint32_t i;
+  if (fam != NULL && is_size(l, v->field - 1u))
+    return size_elim(l, b, v, out);
+  if (fam != NULL && fields == NULL)
+    return oom(l);
+  for (i = 0; fam != NULL && i < fam->ctor_count; i++)
+    if (!plain_ctor(&l->m->ctors[fam->first_ctor + i], &fields[i]))
+      fam = NULL;
+  return fam != NULL && v->argc == fam->ctor_count + 2u
+             ? cases_of(l, b, v->args[v->argc - 1u], v->args + 1, fields, fam->ctor_count, out)
+             : refuse(l, "an elim, KMap, Fin or Glue operation");
+}
+
+static int fm_len(Low *l, Buf *b, const Value *x, Operand *out);
+
+/* len (flagIf F T E) is IF F {len T} ELSE {len E}. */
+static int fm_len_if(Low *l, Buf *b, const Value *x, Operand *out) {
+  Operand f;
+  Operand n;
+  Slot res = slot_new(l);
+  Buf yes = buf_under(b);
+  Buf no = buf_under(b);
+  *out = slot_get(l, res);
+  return lower(l, b, x->args[0], &f) && fm_len(l, &yes, x->args[1], &n) && store(l, &yes, res, n) &&
+         fm_len(l, &no, x->args[2], &n) && store(l, &no, res, n) && if_flag(l, b, f.w, &yes, &no);
+}
+
+/* OUT := the local LOCAL. */
+static int local_op(Low *l, uint32_t local, Operand *out) {
+  *out = operand(ex_local(l, local));
+  return out->w != NULL;
+}
+
+/* S8 (R4): 1 when X is a fold over FreeMon (a block of one) of the used
+   trace. */
+static int used_fold(const Low *l, const Value *x) {
+  const FamilyInfo *fam = &l->m->families[x->inst];
+  const Value *u = x->argc == fam->ctor_count + 2u ? x->args[x->argc - 1u] : NULL;
+  return l->has_used && u != NULL && u->kind == VAL_VAR && u->nat == l->used_level && fam->block_count == 1u &&
+         strcmp(fam->name, "FreeMon") == 0;
+}
+
+/* len of the fold X of the used trace (S8, R4). The used digests are the
+   words 3 .. 3 + count - 1 of the region, the first one innermost
+   (fmCons). ACC := len of the fmUnit case and I := 0, then count times:
+   E := word 3 + I, ACC := len of the fmMul case applied to the fmEta case
+   of E and to a variable whose len is ACC, I := I + 1. The variable has
+   no operand (lower_value refuses it), so a strange fmMul case refuses. */
+static int fm_len_used(Low *l, Buf *b, const Value *x, Operand *out) {
+  const int has = l->has_acc;
+  const uint32_t level = l->acc_level;
+  const uint32_t len = l->acc_len;
+  Operand n;
+  Slot acc = slot_new(l);
+  Slot i = slot_new(l);
+  Slot e = slot_new(l);
+  Buf in = buf_under(b);
+  Buf body = buf_under(&in);
+  const Value *p;
+  const Value *q;
+  const Value *v;
+  int ok;
+  *out = slot_get(l, acc);
+  ok = fm_len(l, &in, x->args[1], &n) && store(l, &in, acc, n) && set(l, &in, i.w, ex_const(l, 0)) &&
+       set(l, &body, e.w,
+           ex_load(l, ex_bin(l, IR_OP_ADD, ex_const(l, 24), ex_bin(l, IR_OP_MUL, ex_local(l, i.w), ex_const(l, 8))), 0));
+  p = ok ? fresh(l, slot_get(l, e)) : NULL;
+  p = p != NULL ? apply_value(l->m, x->args[0], p) : NULL;
+  q = p != NULL ? fresh(l, operand(ex_const(l, 0))) : NULL;
+  l->has_acc = 1;
+  l->acc_level = q != NULL ? (uint32_t)q->nat : 0u;
+  l->acc_len = acc.w;
+  v = q != NULL ? apply_value(l->m, x->args[2], p) : NULL;
+  v = v != NULL ? apply_value(l->m, v, q) : NULL;
+  ok = got(l, v) && fm_len(l, &body, v, &n) && store(l, &body, acc, n) &&
+       set(l, &body, i.w, ex_bin(l, IR_OP_ADD, ex_local(l, i.w), ex_const(l, 1))) &&
+       st_repeat(l, &in, ex_local(l, l->count), &body) && splice(l, b, &in);
+  l->has_acc = has;
+  l->acc_level = level;
+  l->acc_len = len;
+  return ok;
+}
+
+/* len X (S8, Q-S8-9 (a)): fmUnit is 0, fmEta is 1, fmMul is the sum of its
+   two parts and a stuck flagIf is an IF on its flag. In decide and
+   malformed (R4), the used trace is its count and a fold of it is
+   fm_len_used. Any other trace refuses. */
+static int fm_len(Low *l, Buf *b, const Value *x, Operand *out) {
+  const CtorInfo *c = x->kind == VAL_OP && x->op == OP_CTOR ? &l->m->ctors[x->inst] : NULL;
+  uint32_t p = c != NULL ? l->m->families[c->family].param_count : 0u;
+  Operand y;
+  Operand z;
+  if (x->kind == VAL_STUCK && x->op == OP_FLAG_IF)
+    return fm_len_if(l, b, x, out);
+  if (x->kind == VAL_VAR && l->has_acc && x->nat == l->acc_level)
+    return local_op(l, l->acc_len, out);
+  if (x->kind == VAL_VAR && l->has_used && x->nat == l->used_level)
+    return local_op(l, l->count, out);
+  if (x->kind == VAL_STUCK && x->op == OP_FOLD_FAMILY && used_fold(l, x))
+    return fm_len_used(l, b, x, out);
+  if (c != NULL && strcmp(c->name, "fmUnit") == 0)
+    return give(l, out, 0);
+  if (c != NULL && strcmp(c->name, "fmEta") == 0)
+    return give(l, out, 1);
+  if (c != NULL && strcmp(c->name, "fmMul") == 0 && x->argc == p + 2u)
+    return fm_len(l, b, x->args[p], &y) && fm_len(l, b, x->args[p + 1u], &z) && word_add(l, b, y, z, out);
+  return refuse(l, "len (the op count of a FreeMon trace at run time)");
+}
+
 /* A fold over a family without a recursive field is a case split. With at
    most one recursive field in each constructor, it is a spine walk. The
    arguments are the cases of each constructor of the block, the target of
    each family of the block, then the value (stuck_fold). A family outside a
    block is a block of one. The cases of this family start at off. A
-   recursive fold over a block of families refuses (S3). */
+   recursive fold over a block of families refuses (S3). A fold over Size
+   is a REPEAT on the word (S8, Q-S8-9 (a)). */
 static int family_fold(Low *l, Buf *b, const Value *v, Operand *out) {
   const FamilyInfo *fam = &l->m->families[v->inst];
   uint32_t off = fam->first_ctor - l->m->families[fam->block_first].first_ctor;
@@ -1062,6 +1364,8 @@ static int family_fold(Low *l, Buf *b, const Value *v, Operand *out) {
   uint32_t here;
   uint32_t i;
   uint32_t k;
+  if (is_size(l, v->inst))
+    return repeat_fold(l, b, v->args[v->argc - 1u], v->args[0], v->args[1], out);
   if (fields == NULL || recs == NULL)
     return oom(l);
   for (i = 0; i < fam->ctor_count; i++) {
@@ -1146,17 +1450,9 @@ static int not_option(Low *l, Buf *b, const Value *v, Operand *out) {
   return v->inst == CARRIER_LIST ? list_filter(l, b, v, out) : internal(l, "a filter over a sum");
 }
 
-/* ACC := Z, then ACC := STEP ACC, N times. */
+/* foldNat: the arguments are STEP, Z, N. */
 static int fold_nat(Low *l, Buf *b, const Value *v, Operand *out) {
-  Operand n;
-  Operand a;
-  Slot acc = slot_new(l);
-  Buf in = buf_under(b);
-  Buf body = buf_under(&in);
-  *out = slot_get(l, acc);
-  a = slot_get(l, acc);
-  return lower(l, b, v->args[2], &n) && lower_into(l, &in, v->args[1], acc) && apply_into(l, &body, v->args[0], &a, 1, acc) &&
-         st_repeat(l, &in, n.w, &body) && splice(l, b, &in);
+  return repeat_fold(l, b, v->args[2], v->args[1], v->args[0], out);
 }
 
 /* An eliminator on a variable. */
@@ -1243,25 +1539,34 @@ static int lower_stuck(Low *l, Buf *b, const Value *v, Operand *out) {
     return internal(l, "a stuck canonical value");
   case OP_RES_ROOT:
   case OP_RES_CHILD:
-  case OP_RES_EQ:
-  case OP_RES_WITHIN:
     return refuse(l, "a Resource at run time (S8)");
+  case OP_RES_EQ:
+    return nat_bin(l, b, v, IR_OP_EQ, out);
+  case OP_RES_WITHIN:
+    return host_call(l, b, v, IR_IMPORT_WITHIN, out);
   case OP_BUDGET_MK:
   case OP_BUDGET_LEFT:
   case OP_SPEND:
   case OP_SPLIT:
     return refuse(l, "a Budget at run time (S8)");
+  /* S8 (Q-S8-2 (a)): the host interns the Payload and Digest values, so
+     equal values have equal handles and the test is i64.eq. */
   case OP_PAYLOAD_OF:
-  case OP_APPROVAL_MK:
+    return lower(l, b, v->args[0], out);
   case OP_PAYLOAD_EQ:
   case OP_DIGEST_EQ:
+    return nat_bin(l, b, v, IR_OP_EQ, out);
   case OP_HASH:
+    return host_call(l, b, v, IR_IMPORT_HASH, out);
   case OP_ENVELOPE:
+    return host_call(l, b, v, IR_IMPORT_ENVELOPE, out);
+  case OP_APPROVAL_MK:
   case OP_APPROVAL_DIGEST:
-    return refuse(l, "a Payload at run time (S8)");
+    return refuse(l, "an Approval at run time (S8)");
   case OP_FM_LEN:
-    return refuse(l, "len (the op count of a FreeMon trace at run time)");
+    return fm_len(l, b, v->args[1], out);
   case OP_ELIM:
+    return lower_elim(l, b, v, out);
   case OP_KMAP:
   case OP_KMAP_OF:
   case OP_KMAP_GET:
@@ -1297,6 +1602,8 @@ static int lower_value(Low *l, Buf *b, const Value *v, Operand *out) {
   case VAL_VAR:
     if (v->nat >= l->level_count)
       return internal(l, "a variable without an operand");
+    if (l->has_acc && v->nat == l->acc_level)
+      return refuse(l, "a used trace other than its len (S8)");
     *out = l->levels[v->nat];
     return 1;
   case VAL_OP:
@@ -1344,6 +1651,7 @@ static int heap_stmt(const IrStmt *s, uint64_t *out) {
   *out = 0;
   switch (s->kind) {
     case IR_STMT_SET:
+    case IR_STMT_STORE:
     case IR_STMT_RETURN:
       return 1;
     case IR_STMT_ALLOC:
@@ -1412,28 +1720,257 @@ static int lower_entry(Machine *m, uint32_t index, const Entry *e, IrFunc *fn) {
   fn->local_count = l.local_count;
   fn->body = block_of(&body);
   fn->heap_words = 0;
+  fn->imports = l.imports;
   if (!heap_block(&fn->body, &fn->heap_words) || fn->heap_words > IR_HEAP_WORDS_MAX)
     return diag_fail(m->diag, "REFUSE_LOWER", m->def, "heap use has no static bound");
   return 1;
 }
 
+/* 1 when the program has a def start (S8, Q-S8-5 (a)). */
+static int has_start(const Machine *m) {
+  uint32_t i;
+  int found = 0;
+  for (i = 0; i < m->def_count && !found; i++)
+    found = m->defs[i].origin == ORIGIN_PROGRAM && m->defs[i].name != NULL && strcmp(m->defs[i].name, "start") == 0;
+  return found;
+}
+
+static int is_ctor(const Machine *m, const Value *v, const char *name) {
+  return v->kind == VAL_OP && v->op == OP_CTOR && strcmp(m->ctors[v->inst].name, name) == 0;
+}
+
+/* The def NAME of the program (PROGRAM 1) or of the domain or a kit
+   (PROGRAM 0), else def_count (S8). */
+static uint32_t def_named(const Machine *m, const char *name, int program) {
+  uint32_t i;
+  for (i = 0; i < m->def_count; i++)
+    if ((m->defs[i].origin == ORIGIN_PROGRAM) == program && m->defs[i].name != NULL && strcmp(m->defs[i].name, name) == 0)
+      return i;
+  return m->def_count;
+}
+
+/* The state region (S8, R1 and R2): [steps, left, count, used_0 ..
+   used_{K-1}], K the steps of start, from the closed start authority
+   *START. */
+static int region_of(Machine *m, IrProgram *prog, const Value **start) {
+  const uint32_t si = def_named(m, "start", 1);
+  const Value *s;
+  const Value *k;
+  uint64_t steps = 0;
+  uint64_t *init;
+  uint64_t i;
+  m->def = "start";
+  m->fuel = EVAL_FUEL_STEPS;
+  s = si < m->def_count ? def_value(m, si) : NULL;
+  if (s == NULL)
+    return m->diag->set ? 0 : diag_fail(m->diag, "INTERNAL", m->def, "the lowering found a missing start");
+  if (!is_ctor(m, s, "authority") || s->argc != 4u)
+    return diag_fail(m->diag, "REFUSE_LOWER", m->def, "start is not a closed authority (S8)");
+  for (k = s->args[1]; is_ctor(m, k, "szS") && k->argc == 1u && steps <= IR_HEAP_WORDS_MAX; k = k->args[0])
+    steps++;
+  if (!is_ctor(m, k, "sz0") || steps > IR_HEAP_WORDS_MAX)
+    return diag_fail(m->diag, "REFUSE_LOWER", m->def, "start steps are not closed (S8)");
+  if (s->args[2]->kind != VAL_NAT)
+    return diag_fail(m->diag, "REFUSE_LOWER", m->def, "start left is not closed (S8)");
+  if (!is_ctor(m, s->args[3], "fmUnit"))
+    return diag_fail(m->diag, "REFUSE_LOWER", m->def, "start used is not fmUnit (S8)");
+  init = arena_alloc(m->arena, (size_t)(steps + 3u) * sizeof *init);
+  if (init == NULL)
+    return diag_fail(m->diag, "OOM", m->def, "out of memory");
+  init[0] = steps;
+  init[1] = s->args[2]->nat;
+  for (i = 2; i < steps + 3u; i++)
+    init[i] = 0;
+  prog->region_words = (uint32_t)(steps + 3u);
+  prog->region_init = init;
+  *start = s;
+  return 1;
+}
+
+/* A new block of the N words W (S8: a tag known at run time). */
+static int alloc_words(Low *l, Buf *b, const IrExpr *const *w, uint32_t n, Operand *out) {
+  const IrExpr **fields = arena_alloc(l->m->arena, (size_t)n * sizeof *fields);
+  IrStmt *s = stmt_new(l, IR_STMT_ALLOC);
+  uint32_t i;
+  if (fields == NULL || s == NULL)
+    return fields == NULL ? oom(l) : 0;
+  for (i = 0; i < n; i++)
+    if ((fields[i] = w[i]) == NULL)
+      return 0;
+  s->local = local_new(l);
+  s->fields = fields;
+  s->field_count = n;
+  *out = operand(ex_local(l, s->local));
+  return emit(l, b, s);
+}
+
+/* Word FIELD of the block at ADDR := E (S8, R3). */
+static int store_word(Low *l, Buf *b, const IrExpr *addr, uint32_t field, const IrExpr *e) {
+  IrStmt *s = e == NULL ? NULL : stmt_expr(l, IR_STMT_STORE, addr);
+  const IrExpr **fields = s == NULL ? NULL : arena_alloc(l->m->arena, sizeof *fields);
+  if (fields == NULL)
+    return s == NULL ? 0 : oom(l);
+  fields[0] = e;
+  s->field = field;
+  s->fields = fields;
+  s->field_count = 1;
+  return emit(l, b, s);
+}
+
+/* S8 (R6): the export NAME, decide (PARAMS 6: target, action, payload,
+   cost, has_digest, digest) or malformed (PARAMS 0). The prologue reads
+   steps, left and count from the region; the authority is START with
+   those 3 fields as variables (used is the word 0, R5). The result is
+   judge of it and the ticket of the params, or judgeMalformed of it. The
+   epilogue writes the new steps and left, adds a new used digest and
+   returns the code of the decision: permit 0, deny k k + 1. */
+static int lower_export(Machine *m, const Value *start, const char *name, uint32_t param_n, IrFunc *fn) {
+  Low l;
+  Buf body = buf_under(NULL);
+  Buf yes = buf_under(&body);
+  Buf deny = buf_under(&body);
+  Buf none = buf_under(&body);
+  IrScalar *params = arena_alloc(m->arena, ((size_t)param_n + 1u) * sizeof *params);
+  const Value **args = arena_alloc(m->arena, 4u * sizeof *args);
+  const uint32_t ji = def_named(m, param_n != 0u ? "judge" : "judgeMalformed", 0);
+  const IrExpr *w[4];
+  const Value *s;
+  const Value *t;
+  const Value *v;
+  Operand r;
+  Operand d;
+  Operand a;
+  Operand n;
+  Operand act;
+  Operand opt;
+  Operand mut;
+  Operand tk;
+  Slot steps;
+  Slot left;
+  Slot code;
+  uint32_t k;
+  int ok;
+  memset(&l, 0, sizeof l);
+  l.m = m;
+  l.local_count = param_n;
+  m->def = name;
+  m->fuel = EVAL_FUEL_STEPS;
+  if (params == NULL || args == NULL)
+    return oom(&l);
+  if (ji >= m->def_count)
+    return internal(&l, "no domain judge");
+  for (k = 0; k < param_n; k++)
+    params[k] = IR_SCALAR_NAT;
+  steps = slot_new(&l);
+  left = slot_new(&l);
+  l.count = local_new(&l);
+  ok = set(&l, &body, steps.w, ex_load(&l, ex_const(&l, 0), 0)) && set(&l, &body, left.w, ex_load(&l, ex_const(&l, 0), 1)) &&
+       set(&l, &body, l.count, ex_load(&l, ex_const(&l, 0), 2));
+  args[0] = start->args[0];
+  args[1] = ok ? fresh(&l, slot_get(&l, steps)) : NULL;
+  args[2] = args[1] != NULL ? fresh(&l, slot_get(&l, left)) : NULL;
+  args[3] = args[2] != NULL ? fresh(&l, operand(ex_const(&l, 0))) : NULL;
+  l.has_used = 1;
+  l.used_level = args[3] != NULL ? (uint32_t)args[3]->nat : 0u;
+  s = args[3] != NULL ? val_op(m, start->kind, start->op, start->inst, start->field, args, 4u) : NULL;
+  v = s != NULL ? apply_value(m, def_value(m, ji), s) : NULL;
+  if (v != NULL && param_n != 0u) {
+    w[0] = ex_local(&l, 1);
+    ok = alloc_words(&l, &body, w, 1, &act);
+    w[0] = ex_local(&l, 4);
+    w[1] = ex_local(&l, 5);
+    ok = ok && alloc_words(&l, &body, w, 2, &opt);
+    w[0] = ex_const(&l, 0);
+    w[1] = ex_local(&l, 0);
+    w[2] = act.w;
+    w[3] = ex_local(&l, 2);
+    ok = ok && alloc_words(&l, &body, w, 4, &mut);
+    w[1] = mut.w;
+    w[2] = ex_local(&l, 3);
+    w[3] = opt.w;
+    ok = ok && alloc_words(&l, &body, w, 4, &tk);
+    t = ok ? fresh(&l, tk) : NULL;
+    v = t != NULL ? apply_value(m, v, t) : NULL;
+  }
+  code = slot_new(&l);
+  if (!got(&l, v) || !lower(&l, &body, v, &r))
+    return 0;
+  d = operand(atom(&l, &body, ex_load(&l, r.w, 1)));
+  a = operand(atom(&l, &body, ex_load(&l, r.w, 2)));
+  ok = d.w != NULL && a.w != NULL && store_word(&l, &body, ex_const(&l, 0), 0, ex_load(&l, a.w, 2)) &&
+       store_word(&l, &body, ex_const(&l, 0), 1, ex_load(&l, a.w, 3));
+  n = operand(ok ? atom(&l, &body, ex_load(&l, a.w, 4)) : NULL);
+  ok = n.w != NULL &&
+       store_word(&l, &yes, ex_bin(&l, IR_OP_ADD, ex_const(&l, 24), ex_bin(&l, IR_OP_MUL, ex_local(&l, l.count), ex_const(&l, 8))), 0,
+                  ex_load(&l, ex_load(&l, n.w, 1), 1)) &&
+       store_word(&l, &yes, ex_const(&l, 0), 2, ex_bin(&l, IR_OP_ADD, ex_local(&l, l.count), ex_const(&l, 1))) &&
+       if_flag(&l, &body, n.w, &yes, &none) && set(&l, &body, code.w, ex_const(&l, 0)) &&
+       set(&l, &deny, code.w, ex_bin(&l, IR_OP_ADD, ex_load(&l, ex_load(&l, d.w, 1), 0), ex_const(&l, 1))) &&
+       if_flag(&l, &body, ex_load(&l, d.w, 0), &deny, &none) &&
+       emit(&l, &body, stmt_expr(&l, IR_STMT_RETURN, ex_local(&l, code.w)));
+  if (!ok)
+    return 0;
+  fn->name = name;
+  fn->params = params;
+  fn->param_count = param_n;
+  fn->result = IR_SCALAR_NAT;
+  fn->local_count = l.local_count;
+  fn->body = block_of(&body);
+  fn->heap_words = 0;
+  fn->imports = l.imports;
+  if (!heap_block(&fn->body, &fn->heap_words) || fn->heap_words > IR_HEAP_WORDS_MAX)
+    return diag_fail(m->diag, "REFUSE_LOWER", m->def, "heap use has no static bound");
+  return 1;
+}
+
+/* 1 when NAME is the name of a bind export (S8, R6) or of the memory
+   export (S8, Q-S8-10 (a)). */
+static int is_export(const char *name) {
+  return name != NULL &&
+         (strcmp(name, "decide") == 0 || strcmp(name, "malformed") == 0 || strcmp(name, "memory") == 0);
+}
+
 int lower_program(Machine *m, IrProgram *prog) {
-  IrFunc *funcs = arena_alloc(m->arena, ((size_t)m->def_count + 1u) * sizeof *funcs);
+  IrFunc *funcs = arena_alloc(m->arena, ((size_t)m->def_count + 3u) * sizeof *funcs);
+  IrBind *binds = arena_alloc(m->arena, ((size_t)m->bind_count + 1u) * sizeof *binds);
   Entry e;
   size_t n = 0;
   uint32_t i;
   int entry;
+  const Value *start = NULL;
   prog->funcs = funcs;
   prog->func_count = 0;
-  if (funcs == NULL)
+  prog->res_paths = m->res_paths;
+  prog->res_count = m->res_path_count;
+  prog->binds = binds;
+  prog->bind_count = 0;
+  prog->region_words = 0;
+  prog->region_init = NULL;
+  if (funcs == NULL || binds == NULL)
     return diag_fail(m->diag, "OOM", m->def, "out of memory");
+  if (m->bind_count > 0 && !has_start(m))
+    return diag_fail(m->diag, "REFUSE_LOWER", m->binds[0].tool, "a bind line needs a def start (S8, Q-S8-5 (a))");
+  for (i = 0; i < m->bind_count; i++) {
+    binds[i].tool = m->binds[i].tool;
+    binds[i].action = m->binds[i].action;
+    binds[i].pointer = m->binds[i].pointer;
+  }
+  prog->bind_count = m->bind_count;
+  if (m->bind_count > 0 && !region_of(m, prog, &start))
+    return 0;
   for (i = 0; i < m->def_count; i++) {
     m->fuel = EVAL_FUEL_STEPS;
     entry = m->defs[i].origin == ORIGIN_PROGRAM && entry_of(m, m->defs[i].type, &e) && !e.result_option;
+    if (entry && m->bind_count > 0 && is_export(m->defs[i].name))
+      return diag_fail(m->diag, "REFUSE_LOWER", m->defs[i].name, "the entry %s has the name of a bind export (S8)", m->defs[i].name);
     if (entry && !lower_entry(m, i, &e, &funcs[n]))
       return 0;
     n += entry ? 1u : 0u;
   }
+  if (m->bind_count > 0 &&
+      (!lower_export(m, start, "decide", 6u, &funcs[n]) || !lower_export(m, start, "malformed", 0u, &funcs[n + 1u])))
+    return 0;
+  n += m->bind_count > 0 ? 2u : 0u;
   prog->func_count = n;
   return 1;
 }

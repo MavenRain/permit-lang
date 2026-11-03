@@ -1,0 +1,13 @@
+func eLen (nat) -> nat, 3 locals, 0 heap words
+  l2 := eq(l0, 1)
+  if l2 {
+    l1 := 0
+  } else {
+    l1 := 1
+  }
+  return l1
+res 0 "docs"
+res 1 "docs/report"
+res 2 "mail/out"
+res 3 "mail/in"
+res 4 "mail"

@@ -1,0 +1,4 @@
+-- A closed chain with no path literal has no host handle (S8, Q-S8-3
+-- (a)): resChild (res "a") 0 spells "a/a", and no literal names it.
+def far : (n : Nat) -> Nat :=
+  fun (n : Nat) => flagIf (within (flagIf (natEq n 0) (resChild (res "a") 0) (res "a")) (res "a")) 1 0

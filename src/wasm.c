@@ -1,14 +1,26 @@
 /* The Wasm back end. It writes a Wasm 1.0 (MVP) binary module directly.
 
    Module layout:
-   - Function 0 is the internal allocator `alloc (bytes : i32) -> i64`. It
+   - The functions 0 to I - 1 are the host imports of module permit that an
+     entry calls (S8, Q-S8-2 (a)), in IR_IMPORTS order. I is 0 when no entry
+     calls one, and then the module has no import section.
+   - Function I is the internal allocator `alloc (bytes : i32) -> i64`. It
      bumps the mutable i64 global 0 (the heap pointer) over memory 0, with no
      check. Memory 0 has a fixed size (minimum = maximum): the pages of the
      largest heap bound of an entry (IrFunc heap_words), at least 1 page.
-   - Function 1 + K is IR entry K, exported as its name. Each parameter and the
-     result is an i64. Each entry first resets the heap pointer to 0, and it
-     sets a Flag parameter to 1 when it is not 0.
+     When the program has a bind line, memory 0 is exported as `memory`
+     after the entries (S8, Q-S8-10 (a)), so a host reads the state region.
+   - Function I + 1 + K is IR entry K, exported as its name. Each parameter and the
+     result is an i64. Each entry first resets the heap pointer to the heap
+     start (8 * the state region words, S8; 0 when the program has no bind
+     line), and it sets a Flag parameter to 1 when it is not 0.
    - A word is 8 bytes. Word K of the block at address A is at A + 8K.
+   - After the code section (S8): the custom section permit.res when the
+     program has a path literal (a vector of the path names in program
+     order; the handle of a literal is its index, Q-S8-3 (a)), then the
+     custom section permit.bind when it has a bind line (a vector of rows:
+     the tool name, the Action arm number as a uleb, the pointer name;
+     Q-S8-4 (a)).
 
    Each entry has three i64 scratch locals after the IR locals: S and S + 1
    hold the operands of SUB and ADD_CARRY, and S + 2 holds the
@@ -41,12 +53,15 @@ enum {
 #undef WASM_OP_ENUM
 
 enum {
+  SECTION_CUSTOM = 0,
   SECTION_TYPE = 1,
+  SECTION_IMPORT = 2,
   SECTION_FUNCTION = 3,
   SECTION_MEMORY = 5,
   SECTION_GLOBAL = 6,
   SECTION_EXPORT = 7,
-  SECTION_CODE = 10
+  SECTION_CODE = 10,
+  SECTION_DATA = 11
 };
 
 /* A byte sink. With out == NULL it only counts. */
@@ -54,6 +69,8 @@ typedef struct {
   FILE *out;
   size_t count;
   FILE *err;
+  uint32_t imports; /* bit K: host import K is in the module (S8) */
+  uint64_t base;    /* the heap start in bytes, 8 * the region words (S8) */
 } Sink;
 
 typedef int (*Part)(Sink *s, const void *arg);
@@ -91,8 +108,33 @@ static int put_name(Sink *s, const char *name) {
 
 /* Writes the byte size of PART, then PART. */
 static int sized(Sink *s, Part part, const void *arg) {
-  Sink count = {NULL, 0, s->err};
+  Sink count = {NULL, 0, s->err, s->imports, s->base};
   return part(&count, arg) && put_uleb(s, count.count) && part(s, arg);
+}
+
+#define IR_IMPORT_ROW(name, text, params) {text, params},
+static const struct {
+  const char *text;
+  uint32_t params;
+} import_rows[] = {IR_IMPORTS(IR_IMPORT_ROW)};
+#undef IR_IMPORT_ROW
+
+/* The function index of host import K (S8): the imports of the module
+   before it. With K = IR_IMPORT_COUNT it is the import count, the index of
+   alloc. */
+static uint32_t import_index(uint32_t mask, uint32_t k) {
+  uint32_t n = 0;
+  uint32_t i;
+  for (i = 0; i < k; i++) n += (mask >> i) & 1u;
+  return n;
+}
+
+/* The type of host import K: its i64 parameters, one i64 result. */
+static int import_type(Sink *s, uint32_t k) {
+  uint32_t p;
+  int ok = put_byte(s, TYPE_FUNC) && put_uleb(s, import_rows[k].params);
+  for (p = 0; p < import_rows[k].params && ok; p++) ok = put_byte(s, TYPE_I64);
+  return ok && put_uleb(s, 1) && put_byte(s, TYPE_I64);
 }
 
 static int section(Sink *s, unsigned id, Part part, const void *arg) {
@@ -171,6 +213,9 @@ static int emit_expr(Sink *s, const IrExpr *e, uint32_t t, unsigned depth) {
       return emit_expr(s, e->left, t, depth + 1u) && emit_expr(s, e->right, t, depth + 1u) && emit_op(s, e->op, t);
     case IR_EXPR_LOAD:
       return emit_expr(s, e->left, t, depth + 1u) && put_byte(s, OP_I32_WRAP_I64) && memarg(s, OP_I64_LOAD, e->field);
+    case IR_EXPR_CALL:
+      return emit_expr(s, e->left, t, depth + 1u) && (e->right == NULL || emit_expr(s, e->right, t, depth + 1u)) &&
+             op2(s, OP_CALL, import_index(s->imports, (uint32_t)e->value));
   }
   return 0;
 }
@@ -180,7 +225,8 @@ static int emit_block(Sink *s, const IrBlock *b, uint32_t t, unsigned depth);
 /* local := alloc(8 * n); word k := fields[k]. The address waits in T + 2. */
 static int emit_alloc(Sink *s, const IrStmt *st, uint32_t t, unsigned depth) {
   size_t k;
-  int ok = i32_const(s, 8u * (uint64_t)st->field_count) && op2(s, OP_CALL, 0) && op2(s, OP_LOCAL_SET, t + 2u);
+  int ok = i32_const(s, 8u * (uint64_t)st->field_count) && op2(s, OP_CALL, import_index(s->imports, IR_IMPORT_COUNT)) &&
+           op2(s, OP_LOCAL_SET, t + 2u);
   for (k = 0; k < st->field_count && ok; k++) {
     ok = op2(s, OP_LOCAL_GET, t + 2u) && put_byte(s, OP_I32_WRAP_I64) && emit_expr(s, st->fields[k], t, depth + 1u) &&
          memarg(s, OP_I64_STORE, (uint32_t)k);
@@ -241,6 +287,9 @@ static int emit_stmt(Sink *s, const IrStmt *st, uint32_t t, unsigned depth) {
       return emit_loop(s, st, 1, t, depth);
     case IR_STMT_RETURN:
       return emit_expr(s, st->expr, t, depth + 1u) && put_byte(s, OP_RETURN);
+    case IR_STMT_STORE:
+      return emit_expr(s, st->expr, t, depth + 1u) && put_byte(s, OP_I32_WRAP_I64) &&
+             emit_expr(s, st->fields[0], t, depth + 1u) && memarg(s, OP_I64_STORE, st->field);
   }
   return 0;
 }
@@ -272,7 +321,7 @@ static int part_entry(Sink *s, const void *arg) {
   uint32_t t = fn->local_count;
   size_t k;
   int ok = put_uleb(s, 1) && put_uleb(s, (uint64_t)(fn->local_count - fn->param_count) + 3u) &&
-           put_byte(s, TYPE_I64) && i64_const(s, 0) && op2(s, OP_GLOBAL_SET, 0);
+           put_byte(s, TYPE_I64) && i64_const(s, s->base) && op2(s, OP_GLOBAL_SET, 0);
   for (k = 0; k < fn->param_count && ok; k++) ok = flag_norm(s, fn, k);
   /* The body ends in RETURN (lower_entry), so no code follows it. */
   return ok && emit_block(s, &fn->body, t, 0) && put_byte(s, OP_END);
@@ -282,13 +331,26 @@ static int part_types(Sink *s, const void *arg) {
   const IrProgram *prog = arg;
   size_t i;
   size_t k;
-  int ok = put_uleb(s, 1u + prog->func_count) && put_byte(s, TYPE_FUNC) && put_uleb(s, 1) && put_byte(s, TYPE_I32) &&
-           put_uleb(s, 1) && put_byte(s, TYPE_I64);
+  int ok = put_uleb(s, 1u + prog->func_count + import_index(s->imports, IR_IMPORT_COUNT)) && put_byte(s, TYPE_FUNC) &&
+           put_uleb(s, 1) && put_byte(s, TYPE_I32) && put_uleb(s, 1) && put_byte(s, TYPE_I64);
   for (i = 0; i < prog->func_count && ok; i++) {
     ok = put_byte(s, TYPE_FUNC) && put_uleb(s, prog->funcs[i].param_count);
     for (k = 0; k < prog->funcs[i].param_count && ok; k++) ok = put_byte(s, TYPE_I64);
     ok = ok && put_uleb(s, 1) && put_byte(s, TYPE_I64);
   }
+  for (i = 0; i < IR_IMPORT_COUNT && ok; i++) ok = ((s->imports >> i) & 1u) == 0 || import_type(s, (uint32_t)i);
+  return ok;
+}
+
+/* The host imports that the entries call (S8, Q-S8-2 (a)): module permit.
+   The type of an import comes after the entry types. */
+static int part_imports(Sink *s, const void *arg) {
+  const IrProgram *prog = arg;
+  uint32_t i;
+  int ok = put_uleb(s, import_index(s->imports, IR_IMPORT_COUNT));
+  for (i = 0; i < IR_IMPORT_COUNT && ok; i++)
+    ok = ((s->imports >> i) & 1u) == 0 || (put_name(s, "permit") && put_name(s, import_rows[i].text) && put_byte(s, 0) &&
+                                            put_uleb(s, 1u + prog->func_count + import_index(s->imports, i)));
   return ok;
 }
 
@@ -300,15 +362,15 @@ static int part_functions(Sink *s, const void *arg) {
   return ok;
 }
 
-/* One memory: minimum = maximum = the pages of the largest heap bound of an
-   entry, at least 1. */
+/* One memory: minimum = maximum = the pages of the state region (S8) and
+   the largest heap bound of an entry, at least 1. */
 static int part_memory(Sink *s, const void *arg) {
   const IrProgram *prog = arg;
   uint64_t words = 0;
   uint64_t pages;
   size_t i;
   for (i = 0; i < prog->func_count; i++) words = prog->funcs[i].heap_words > words ? prog->funcs[i].heap_words : words;
-  pages = (8u * words + WASM_PAGE_BYTES - 1u) / WASM_PAGE_BYTES;
+  pages = (8u * (words + prog->region_words) + WASM_PAGE_BYTES - 1u) / WASM_PAGE_BYTES;
   pages = pages == 0 ? 1u : pages;
   return put_uleb(s, 1) && put_byte(s, 1) && put_uleb(s, pages) && put_uleb(s, pages);
 }
@@ -321,11 +383,11 @@ static int part_global(Sink *s, const void *arg) {
 static int part_exports(Sink *s, const void *arg) {
   const IrProgram *prog = arg;
   size_t i;
-  int ok = put_uleb(s, prog->func_count);
+  int ok = put_uleb(s, prog->func_count + (prog->bind_count > 0 ? 1u : 0u));
   for (i = 0; i < prog->func_count && ok; i++) {
-    ok = put_name(s, prog->funcs[i].name) && put_byte(s, 0) && put_uleb(s, 1u + i);
+    ok = put_name(s, prog->funcs[i].name) && put_byte(s, 0) && put_uleb(s, import_index(s->imports, IR_IMPORT_COUNT) + 1u + i);
   }
-  return ok;
+  return ok && (prog->bind_count == 0 || (put_name(s, "memory") && put_byte(s, 2) && put_uleb(s, 0)));
 }
 
 static int part_code(Sink *s, const void *arg) {
@@ -336,23 +398,62 @@ static int part_code(Sink *s, const void *arg) {
   return ok;
 }
 
+/* The custom section permit.res (S8, Q-S8-3 (a)). */
+static int part_res(Sink *s, const void *arg) {
+  const IrProgram *prog = arg;
+  size_t i;
+  int ok = put_name(s, "permit.res") && put_uleb(s, prog->res_count);
+  for (i = 0; i < prog->res_count && ok; i++) ok = put_name(s, prog->res_paths[i]);
+  return ok;
+}
+
+/* The custom section permit.bind (S8, Q-S8-4 (a)). */
+static int part_bind(Sink *s, const void *arg) {
+  const IrProgram *prog = arg;
+  size_t i;
+  int ok = put_name(s, "permit.bind") && put_uleb(s, prog->bind_count);
+  for (i = 0; i < prog->bind_count && ok; i++)
+    ok = put_name(s, prog->binds[i].tool) && put_uleb(s, prog->binds[i].action) && put_name(s, prog->binds[i].pointer);
+  return ok;
+}
+
+/* The data section (S8): one active segment of memory 0 at address 0, the
+   initial words of the state region, little-endian. */
+static int part_data(Sink *s, const void *arg) {
+  const IrProgram *prog = arg;
+  size_t i;
+  int ok = put_uleb(s, 1) && put_uleb(s, 0) && i32_const(s, 0) && put_byte(s, OP_END) &&
+           put_uleb(s, 8u * (uint64_t)prog->region_words);
+  for (i = 0; i < 8u * (size_t)prog->region_words && ok; i++)
+    ok = put_byte(s, (unsigned)((prog->region_init[i / 8u] >> (8u * (i % 8u))) & 0xFFu));
+  return ok;
+}
+
 int target_abi_line(const IrFunc *fn, FILE *out, FILE *err) {
   (void)err;
   fprintf(out, "%s\n", fn->name);
   return 1;
 }
 
-/* Both parts are the module bytes. */
+/* Both parts are the module bytes. The data section of the state region
+   and the custom sections permit.res and permit.bind come after the code
+   section, each only when its table is not empty (S8). */
 int target_write(const IrProgram *prog, TargetPart part, FILE *out, FILE *err) {
   static const unsigned char header[8] = {0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00};
-  Sink s = {out, 0, err};
+  Sink s = {out, 0, err, 0, 8u * (uint64_t)prog->region_words};
   size_t i;
   int ok = 1;
   (void)part;
+  for (i = 0; i < prog->func_count; i++) s.imports |= prog->funcs[i].imports;
   for (i = 0; i < sizeof header && ok; i++) ok = put_byte(&s, header[i]);
-  ok = ok && section(&s, SECTION_TYPE, part_types, prog) && section(&s, SECTION_FUNCTION, part_functions, prog) &&
+  ok = ok && section(&s, SECTION_TYPE, part_types, prog) &&
+       (s.imports == 0 || section(&s, SECTION_IMPORT, part_imports, prog)) &&
+       section(&s, SECTION_FUNCTION, part_functions, prog) &&
        section(&s, SECTION_MEMORY, part_memory, prog) && section(&s, SECTION_GLOBAL, part_global, NULL) &&
-       section(&s, SECTION_EXPORT, part_exports, prog) && section(&s, SECTION_CODE, part_code, prog);
+       section(&s, SECTION_EXPORT, part_exports, prog) && section(&s, SECTION_CODE, part_code, prog) &&
+       (prog->region_words == 0 || section(&s, SECTION_DATA, part_data, prog)) &&
+       (prog->res_count == 0 || section(&s, SECTION_CUSTOM, part_res, prog)) &&
+       (prog->bind_count == 0 || section(&s, SECTION_CUSTOM, part_bind, prog));
   if (!ok && ferror(out)) fputs("langc: IO: -: cannot write the wasm module\n", err);
   return ok;
 }

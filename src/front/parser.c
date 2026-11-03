@@ -155,6 +155,7 @@ static int starts_atom(TokKind kind) {
     case TOK_LBRACKET:
     case TOK_RBRACKET:
     case TOK_COMMA:
+    case TOK_STRING:
     case TOK_KW_DEF:
     case TOK_KW_REC:
     case TOK_KW_FUN:
@@ -374,10 +375,32 @@ static const Term *parse_neg(Parser *p) {
   return term;
 }
 
+/* S8: 1 when the token is the name WORD and a string literal follows: the
+   `res` literal and the `bind` line. */
+static int at_word(const Parser *p, const char *word) {
+  const Token *tok = cur(p);
+  return tok->kind == TOK_IDENT && tok->len == strlen(word) && memcmp(tok->text, word, tok->len) == 0 &&
+         peek_at(p, 1)->kind == TOK_STRING;
+}
+
+/* S8 (Q-S8-3 (a)): res "a/b", a TERM_RES with the path text. */
+static const Term *parse_res(Parser *p) {
+  const Token *tok = cur(p);
+  Term *term = make_term(p, TERM_RES, tok->line, tok->col);
+  if (term == NULL) return NULL;
+  bump(p);
+  term->nat = 0;
+  term->left = NULL;
+  term->right = NULL;
+  term->name = token_text(p, cur(p));
+  bump(p);
+  return term->name == NULL ? NULL : term;
+}
+
 static const Term *parse_atom(Parser *p) {
   const Token *tok = cur(p);
   switch (tok->kind) {
-    case TOK_IDENT: return parse_leaf(p, TERM_VAR);
+    case TOK_IDENT: return at_word(p, "res") ? parse_res(p) : parse_leaf(p, TERM_VAR);
     case TOK_NAT: return parse_leaf(p, TERM_NAT);
     case TOK_LPAREN: return parse_paren(p);
     case TOK_KW_TYPE: return parse_universe(p);
@@ -399,6 +422,7 @@ static const Term *parse_atom(Parser *p) {
     case TOK_LBRACKET:
     case TOK_RBRACKET:
     case TOK_COMMA:
+    case TOK_STRING:
     case TOK_KW_DEF:
     case TOK_KW_REC:
     case TOK_KW_FUN:
@@ -418,7 +442,8 @@ static const Term *parse_atom(Parser *p) {
 
 static const Term *parse_app(Parser *p) {
   const Term *head = parse_atom(p);
-  while (head != NULL && starts_atom(cur(p)->kind)) {
+  /* S8: a `bind "tool"` line ends the body before it. */
+  while (head != NULL && starts_atom(cur(p)->kind) && !at_word(p, "bind")) {
     const Term *arg = parse_atom(p);
     Term *app = arg == NULL ? NULL : make_term(p, TERM_APP, head->line, head->col);
     if (app == NULL) return NULL;
@@ -596,6 +621,29 @@ static int parse_and(Parser *p, Decl *d) {
   return parse_family(p, d);
 }
 
+/* S8 (Q-S8-4 (a)): bind "tool" action "/pointer". The checker tests the
+   tool, the action and the pointer. */
+static int parse_bind(Parser *p, Decl *d) {
+  bump(p);
+  d->kind = DECL_BIND;
+  d->is_rec = 0;
+  d->type = NULL;
+  d->body = NULL;
+  d->params = NULL;
+  d->param_count = 0;
+  d->ctors = NULL;
+  d->ctor_count = 0;
+  d->index = NULL;
+  d->name = token_text(p, cur(p));
+  bump(p);
+  d->bind_action = d->name == NULL ? NULL : take_name(p, "an Action arm after the tool name");
+  if (d->bind_action == NULL) return 0;
+  if (!at(p, TOK_STRING)) return fail_at(p, cur(p), "a string literal (the RFC 6901 pointer)");
+  d->bind_pointer = token_text(p, cur(p));
+  bump(p);
+  return d->bind_pointer != NULL;
+}
+
 static int parse_decl(Parser *p, Decl *d) {
   const Token *tok = cur(p);
   p->def = NULL;
@@ -606,6 +654,7 @@ static int parse_decl(Parser *p, Decl *d) {
   d->is_sealed = 0;
   d->is_affine = 0;
   d->is_law = 0;
+  if (at_word(p, "bind")) return parse_bind(p, d);
   switch (tok->kind) {
     /* `sealed family`, `affine cofamily` and `law def` (S5): domain-only
        modifiers; the checker refuses them in a program (REFUSE_DATA). */
@@ -646,6 +695,7 @@ static int parse_decl(Parser *p, Decl *d) {
     case TOK_LBRACKET:
     case TOK_RBRACKET:
     case TOK_COMMA:
+    case TOK_STRING:
     case TOK_KW_REC:
     case TOK_KW_FUN:
     case TOK_KW_TYPE:

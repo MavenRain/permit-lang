@@ -1,0 +1,2 @@
+-- LEX_STRING (S8): a string literal closes on its line.
+def r : Resource := res "a/b

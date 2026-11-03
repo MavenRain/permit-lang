@@ -25,6 +25,7 @@ typedef enum {
   TOK_LBRACKET, /* [ */
   TOK_RBRACKET, /* ] */
   TOK_COMMA,
+  TOK_STRING,   /* "text" (S8): the bytes between the quotes */
   TOK_KW_DEF,
   TOK_KW_REC,
   TOK_KW_FUN,

@@ -1,0 +1,2 @@
+-- REFUSE_RES (S8, Q-S8-3 (a)): a / at the end.
+def r : Resource := res "a/"

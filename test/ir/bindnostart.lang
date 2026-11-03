@@ -1,0 +1,5 @@
+-- A bind line needs a def start (S8, Q-S8-5 (a)): the state of the module
+-- starts from it. This program has a bind line and no start.
+bind "read_doc" inspect "/path"
+def got : (n : Nat) -> Nat :=
+  fun (n : Nat) => n

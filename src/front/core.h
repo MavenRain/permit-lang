@@ -350,6 +350,25 @@ typedef struct {
   /* Each Glue that a true key reduced, newest first. transp at Glue reads
      them to get A, phi and sys at an end. */
   const struct GlueRec *glue_recs;
+  /* S8 (Q-S8-3 (a)): the resource paths of the program in program order
+     (the handle of a literal is its index) and the segment names. */
+#define RES_TABLE_MAX 256u
+  const char *res_paths[RES_TABLE_MAX];
+  uint32_t res_path_count;
+  struct {
+    const char *text;
+    uint32_t len;
+  } res_segs[RES_TABLE_MAX];
+  uint32_t res_seg_count;
+  /* S8 (Q-S8-4 (a)): the bind rows in program order; action is the arm
+     number in Action. */
+#define BIND_TABLE_MAX 64u
+  struct {
+    const char *tool;
+    uint32_t action;
+    const char *pointer;
+  } binds[BIND_TABLE_MAX];
+  uint32_t bind_count;
 } Machine;
 
 /* One Glue that a true key reduced. OUT is the result, a fresh copy of the

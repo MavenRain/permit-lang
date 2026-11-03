@@ -1,0 +1,4 @@
+-- REFUSE_KIT (S8, Q-S8-8 (a)): a guest Nat literal is admitted in def start
+-- only, not in a law about start.
+def start : Authority := authority (fmUnit (Prod Resource Action)) sz0 5 (fmUnit Digest)
+def lawLeft : Path Authority (second (judgeMalformed start)) (authority (fmUnit (Prod Resource Action)) sz0 5 (fmUnit Digest)) := refl

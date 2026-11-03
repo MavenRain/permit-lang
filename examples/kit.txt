@@ -21,3 +21,4 @@ history-bind.lang
 scope.lang
 capability.lang
 decide.lang
+resources.lang

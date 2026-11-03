@@ -1,0 +1,2 @@
+-- REFUSE_BIND (S8, Q-S8-4 (a)): a ~ at the end is not an escape.
+bind "x" execute "/a~"

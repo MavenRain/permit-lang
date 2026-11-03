@@ -154,6 +154,10 @@ echo "ir: $irs lowered"
 # tree.lang folds a tree that exists only at run time (REFUSE_RUNTIME_TREE).
 # spine.lang walks lists that exist only at run time, so its heap use has no
 # static bound (S3).
+# hop.lang has a recursive fold over a block of families. The S8 files:
+# reschain.lang has a Resource with no path literal, bindnostart.lang has a
+# bind line and no def start, and bindmemory.lang has an entry with the name
+# of a bind export (decide, malformed and memory are the bind exports).
 irrefusals=0
 ir_refused() {
   status=0
@@ -172,14 +176,18 @@ ir_refused kmap.lang "REFUSE_LOWER: got: the Wasm host does not lower an elim, K
 ir_refused tree.lang "REFUSE_RUNTIME_TREE: tips: "
 ir_refused spine.lang "REFUSE_LOWER: trapHead: heap use has no static bound"
 ir_refused hop.lang "REFUSE_LOWER: hopDepth: a recursive fold over a block of families"
-ir_refused payload.lang "REFUSE_LOWER: got: the Wasm host does not lower a Payload at run time (S8)"
+ir_refused reschain.lang "REFUSE_LOWER: far: the Wasm host does not lower a Resource with no path literal (S8)"
+ir_refused bindnostart.lang "REFUSE_LOWER: read_doc: a bind line needs a def start (S8, Q-S8-5 (a))"
+ir_refused bindmemory.lang "REFUSE_LOWER: memory: the entry memory has the name of a bind export (S8)"
 echo "ir refusals: $irrefusals checked"
 
 # The IR lowerings (S3): `langc
 # --kit check` must accept each file and `langc --kit ir` must exit 0. The
-# IR text of natops.lang and of block.lang (S3) must be
-# test/ir/natops.ir and test/ir/block.ir (golden files: a change of the
-# lowering changes the text).
+# IR text of natops.lang and of block.lang (S3) and of payload.lang (S8: a
+# Payload is a host handle, Q-S8-2 (a)) and of resource.lang (S8: host
+# calls, res handles and the res lines) must be test/ir/natops.ir,
+# test/ir/block.ir, test/ir/payload.ir and test/ir/resource.ir (golden
+# files: a change of the lowering changes the text).
 irlowered=0
 ir_lowered() {
   status=0
@@ -194,6 +202,25 @@ ir_lowered natops.lang
 cmp -s "$tmp/natops.lang.ir" test/ir/natops.ir || { echo "FAIL natops.lang: the IR text is not test/ir/natops.ir"; fail=$((fail + 1)); }
 ir_lowered block.lang
 cmp -s "$tmp/block.lang.ir" test/ir/block.ir || { echo "FAIL block.lang: the IR text is not test/ir/block.ir"; fail=$((fail + 1)); }
+ir_lowered payload.lang
+cmp -s "$tmp/payload.lang.ir" test/ir/payload.ir || { echo "FAIL payload.lang: the IR text is not test/ir/payload.ir"; fail=$((fail + 1)); }
+ir_lowered resource.lang
+cmp -s "$tmp/resource.lang.ir" test/ir/resource.ir || { echo "FAIL resource.lang: the IR text is not test/ir/resource.ir"; fail=$((fail + 1)); }
+# S8 (Q-S8-9 (a)): Size is a Nat word, an elim over Size is a REPEAT, an
+# elim over a family of plain constructors is a SWITCH on word 0, and len
+# over a closed trace or a stuck flagIf is a count.
+ir_lowered sizestep.lang
+cmp -s "$tmp/sizestep.lang.ir" test/ir/sizestep.ir || { echo "FAIL sizestep.lang: the IR text is not test/ir/sizestep.ir"; fail=$((fail + 1)); }
+ir_lowered judgesteps.lang
+cmp -s "$tmp/judgesteps.lang.ir" test/ir/judgesteps.ir || { echo "FAIL judgesteps.lang: the IR text is not test/ir/judgesteps.ir"; fail=$((fail + 1)); }
+ir_lowered actcase.lang
+cmp -s "$tmp/actcase.lang.ir" test/ir/actcase.ir || { echo "FAIL actcase.lang: the IR text is not test/ir/actcase.ir"; fail=$((fail + 1)); }
+ir_lowered decision.lang
+cmp -s "$tmp/decision.lang.ir" test/ir/decision.ir || { echo "FAIL decision.lang: the IR text is not test/ir/decision.ir"; fail=$((fail + 1)); }
+ir_lowered fmlen.lang
+cmp -s "$tmp/fmlen.lang.ir" test/ir/fmlen.ir || { echo "FAIL fmlen.lang: the IR text is not test/ir/fmlen.ir"; fail=$((fail + 1)); }
+ir_lowered judgeaction.lang
+cmp -s "$tmp/judgeaction.lang.ir" test/ir/judgeaction.ir || { echo "FAIL judgeaction.lang: the IR text is not test/ir/judgeaction.ir"; fail=$((fail + 1)); }
 echo "ir lowerings: $irlowered lowered"
 
 # The writer (S3): `langc --kit build
@@ -201,8 +228,8 @@ echo "ir lowerings: $irlowered lowered"
 # accepts. In `wasm-objdump -x`, memory 0 must have 1 page (minimum =
 # maximum = the pages of the largest heap bound, at least 1). The module of
 # examples/functions.lang (the builds rows) has 0 heap words: its memory 0
-# must also have 1 page. The Wasm runs and the differential lines run node:
-# they come back at S8 (Q-S3-2 (b)).
+# must also have 1 page. The Wasm runs and the differential lines (S8,
+# below) run each module on node and on wasmtime (Q-S8-6 (a)).
 
 status=0
 build/langc --kit build test/ir/natops.lang -o "$tmp/natops.wasm" 2>"$tmp/err" || status=$?
@@ -218,9 +245,44 @@ if [ "$status" -ne 0 ] || ! wasm-validate "$tmp/block.wasm" 2>>"$tmp/err"; then
   echo "FAIL build block: want exit 0 and a valid module, got exit $status: $(head -n 1 "$tmp/err")"
   fail=$((fail + 1))
 fi
+# The module of test/ir/resource.lang (S8, Q-S8-2 (a)): the same build
+# check. Its entries call the host imports of module permit; the notrap row
+# below uses it.
+status=0
+build/langc --kit build test/ir/resource.lang -o "$tmp/resource.wasm" 2>"$tmp/err" || status=$?
+if [ "$status" -ne 0 ] || ! wasm-validate "$tmp/resource.wasm" 2>>"$tmp/err"; then
+  echo "FAIL build resource: want exit 0 and a valid module, got exit $status: $(head -n 1 "$tmp/err")"
+  fail=$((fail + 1))
+fi
+# The custom sections (S8, Q-S8-3 (a), Q-S8-4 (a)). After the code section,
+# permit.res holds the path names in program order and permit.bind the bind
+# rows (tool name, Action arm, pointer); the IR text shows the same tables
+# as res and bind lines. examples/gate.lang must build to a module that
+# wasm-validate and build/notraptool accept. In `wasm-objdump -h`, the
+# custom sections of resource.wasm and gate.wasm (the size and the name)
+# must be the lines of test/ir/NAME.sections, and functions.wasm (no path
+# literal, no bind line) must have none.
+customs=0
+status=0
+build/langc $(kit examples/kit.txt gate.lang) build examples/gate.lang -o "$tmp/gate.wasm" 2>"$tmp/err" || status=$?
+if [ "$status" -ne 0 ] || ! wasm-validate "$tmp/gate.wasm" 2>>"$tmp/err" || ! build/notraptool "$tmp/gate.wasm" >/dev/null 2>>"$tmp/err"; then
+  echo "FAIL build gate: want exit 0, a valid module and notraptool rc 0, got exit $status: $(head -n 1 "$tmp/err")"
+  fail=$((fail + 1))
+fi
+for mod in resource gate; do
+  customs=$((customs + 1))
+  wasm-objdump -h "$tmp/$mod.wasm" 2>/dev/null | rg -o '\(size=0x[0-9a-f]+\) "permit\.[a-z]+"' | cmp -s - "test/ir/$mod.sections" ||
+    { echo "FAIL custom sections $mod: want the lines of test/ir/$mod.sections"; fail=$((fail + 1)); }
+done
+customs=$((customs + 1))
+if wasm-objdump -h "$tmp/functions.wasm" 2>/dev/null | rg -q 'Custom'; then
+  echo "FAIL custom sections functions: want no custom section"
+  fail=$((fail + 1))
+fi
+echo "custom sections: $customs checked"
 # The module of examples/state-no-history.lang (Q-S3-3 (b)): build lowers a
 # state family as a plain family. The same build check; the notrap row
-# below uses it. Its differential row comes at S8 (Q-S3-2 (b)).
+# below uses it, and the differential row (S8) runs it.
 status=0
 build/langc $(kit examples/kit.txt state-no-history.lang) build examples/state-no-history.lang -o "$tmp/state-no-history.wasm" 2>"$tmp/err" || status=$?
 if [ "$status" -ne 0 ] || ! wasm-validate "$tmp/state-no-history.wasm" 2>>"$tmp/err"; then
@@ -232,12 +294,15 @@ for mod in natops functions; do
     { echo "FAIL $mod.wasm: memory 0 is not initial=1 max=1"; fail=$((fail + 1)); }
 done
 # build/notraptool (test/notraptool.c, S3) must accept the
-# modules of natops.lang, block.lang, functions.lang and
-# state-no-history.lang: exit 0 and no output. It fails a module with unreachable, memory.grow, an opcode that
+# modules of natops.lang, block.lang, functions.lang,
+# state-no-history.lang and resource.lang: exit 0 and no output. It fails a module with unreachable, memory.grow, an opcode that
 # is not in src/wasmop.h, an i64.div_u or i64.rem_u with no divisor guard,
 # or a memory with no maximum or a maximum that is not the minimum.
+# It also fails an import that is not a function of module permit with
+# its type (S8): envelope (i64 i64) -> i64, hash (i64) -> i64, within
+# (i64 i64) -> i64.
 notrapmods=0
-for mod in natops block functions state-no-history; do
+for mod in natops block functions state-no-history resource; do
   notrapmods=$((notrapmods + 1))
   status=0
   got=$(build/notraptool "$tmp/$mod.wasm" 2>&1) || status=$?
@@ -289,6 +354,122 @@ reasonCode 0 1
 reasonCode 1 2
 ROWS
 echo "natops evals: $natopsevals checked"
+# The Wasm runs (S8 U3, Q-S8-11 (b)): calls of natops.wasm. Each call must
+# give on node and on wasmtime (test/run-wasm.mjs --wasmtime) the line of
+# `langc --kit eval` (`exit N: MESSAGE` when eval fails). flagPick 2 4 9 (a
+# Flag word that is not 0 or 1) must give 4. A Wasm `trap` is a mismatch.
+wasmruns=0
+cat >"$tmp/calls" <<'CALLS'
+addOr 2 3
+addOr 18446744073709551615 1
+addOr 18446744073709551615 0
+divBy 7 2
+divBy 7 0
+modBy 7 3
+modBy 7 0
+unwrap 0
+unwrap 5
+pickSecond 2 3
+pickSecond 18446744073709551615 1
+reasonCode 0
+reasonCode 1
+flagPick 0 4 9
+flagPick 1 4 9
+CALLS
+while read -r call; do
+  got=$(build/langc --kit eval test/ir/natops.lang $call 2>&1) || got="exit $?: $got"
+  echo "$got"
+done <"$tmp/calls" >"$tmp/eval.out"
+echo "flagPick 2 4 9" >>"$tmp/calls"
+echo 4 >>"$tmp/eval.out"
+for run in node wasmtime; do
+  flag=""
+  [ "$run" = node ] || flag=--wasmtime
+  status=0
+  node test/run-wasm.mjs $flag "$tmp/natops.wasm" - <"$tmp/calls" >"$tmp/$run.out" 2>"$tmp/err" || status=$?
+  [ "$status" -eq 0 ] || { echo "FAIL run natops.wasm: $run exit $status: $(head -n 1 "$tmp/err")"; fail=$((fail + 1)); }
+done
+paste -d '|' "$tmp/calls" "$tmp/eval.out" "$tmp/node.out" "$tmp/wasmtime.out" >"$tmp/runs"
+while IFS='|' read -r call want got gotw; do
+  wasmruns=$((wasmruns + 1))
+  [ "$got" = "$want" ] && [ "$gotw" = "$want" ] ||
+    { echo "FAIL wasm $call: want $want, got $got (node), $gotw (wasmtime)"; fail=$((fail + 1)); }
+done <"$tmp/runs"
+echo "wasm runs: $wasmruns checked"
+# The differential (S8 U3): test/grid.awk makes the cases from the `langc
+# --kit ir` text of each module below (the modules of the build rows, and the
+# S8 lowerings). Each case must give on node and on wasmtime the line of
+# `langc --kit eval` (eval-exit-N when eval fails). eval has no trap, so a
+# Wasm `trap` is a mismatch. The compare is a string compare: awk compares
+# two numbers as doubles, and 2^64 - 1 and 2^64 - 2 give the same double.
+diffcases=0
+mismatches=0
+for f in test/ir/natops.lang test/ir/block.lang examples/functions.lang examples/state-no-history.lang test/ir/sizestep.lang test/ir/judgesteps.lang test/ir/actcase.lang test/ir/decision.lang test/ir/fmlen.lang test/ir/judgeaction.lang; do
+  mod=$(basename "$f" .lang)
+  [ -f "$tmp/$mod.wasm" ] || build/langc --kit build "$f" -o "$tmp/$mod.wasm" 2>"$tmp/err" ||
+    { echo "FAIL differential $mod: build: $(head -n 1 "$tmp/err")"; fail=$((fail + 1)); continue; }
+  build/langc --kit ir "$f" | awk -f test/grid.awk >"$tmp/cases.txt"
+  while read -r call; do
+    status=0
+    want=$(build/langc --kit eval "$f" $call 2>/dev/null) || status=$?
+    [ "$status" -eq 0 ] || want="eval-exit-$status"
+    echo "$want"
+  done <"$tmp/cases.txt" >"$tmp/want.txt"
+  status=0
+  node test/run-wasm.mjs "$tmp/$mod.wasm" - <"$tmp/cases.txt" >"$tmp/got.txt" 2>"$tmp/err" &&
+    node test/run-wasm.mjs --wasmtime "$tmp/$mod.wasm" - <"$tmp/cases.txt" >"$tmp/gotw.txt" 2>>"$tmp/err" || status=$?
+  if [ "$status" -ne 0 ]; then
+    echo "FAIL differential $mod.wasm: run exit $status: $(head -n 1 "$tmp/err")"
+    fail=$((fail + 1))
+    continue
+  fi
+  diffcases=$((diffcases + $(rg -c '.' "$tmp/cases.txt" || echo 0)))
+  paste -d '|' "$tmp/cases.txt" "$tmp/want.txt" "$tmp/got.txt" "$tmp/gotw.txt" |
+    awk -F '|' '($2 "") != ($3 "") || ($2 "") != ($4 "")' >"$tmp/bad.txt"
+  bad=$(rg -c '.' "$tmp/bad.txt" || echo 0)
+  mismatches=$((mismatches + bad))
+  [ "$bad" -eq 0 ] || { echo "FAIL differential $mod.wasm: $bad mismatches, first $(head -n 1 "$tmp/bad.txt")"; fail=$((fail + 1)); }
+done
+echo "differential cases: $diffcases checked, $mismatches mismatches"
+# The decide scripts (S8 U3, Q-S8-10 (a), Q-S8-12 (a)): each line of
+# test/decide/DN.txt is one call on one instance of gate.wasm. node and
+# wasmtime (test/run-wasm.mjs --decide) print the codes, then `steps N` and
+# `left N` (words 0 and 1 of the memory export). The oracle is `langc --kit
+# eval` of the judge chain that test/run-wasm.mjs --lang prints, on a copy of
+# examples/gate.lang: permit is 0, deny R is the place of R in family Reason
+# (domain/domain.lang) plus 1, and steps is the szS count.
+decidescripts=0
+decidecalls=0
+decidebad=0
+reasons=$(rg -o -r '$1' '^family Reason := (.*)$' domain/domain.lang)
+for s in test/decide/D*.txt; do
+  d=$(basename "$s" .txt)
+  decidescripts=$((decidescripts + 1))
+  decidecalls=$((decidecalls + $(rg -c '.' "$s" || echo 0)))
+  cp examples/gate.lang "$tmp/$d.lang"
+  status=0
+  node test/run-wasm.mjs --lang "$s" >>"$tmp/$d.lang" 2>"$tmp/err" &&
+    node test/run-wasm.mjs --decide "$s" "$tmp/gate.wasm" >"$tmp/$d.node" 2>>"$tmp/err" &&
+    node test/run-wasm.mjs --wasmtime --decide "$s" "$tmp/gate.wasm" >"$tmp/$d.wasmtime" 2>>"$tmp/err" || status=$?
+  if [ "$status" -ne 0 ]; then
+    echo "FAIL decide $d: run exit $status: $(head -n 1 "$tmp/err")"
+    fail=$((fail + 1))
+    continue
+  fi
+  for name in $(rg -o -r '$1' '^def (c[0-9]+|steps|left) :' "$tmp/$d.lang"); do
+    got=$(build/langc --kit eval "$tmp/$d.lang" "$name" 2>&1) || got="eval-exit-$?"
+    echo "$name $got"
+  done | awk -v r="$reasons" 'BEGIN { n = split(r, w, / [|] /); for (i = 1; i <= n; i++) code[w[i]] = i }
+    $1 == "steps" { print "steps " gsub(/szS/, ""); next }
+    $1 == "left" { print "left " $2; next }
+    $2 == "permit" && NF == 2 { print 0; next }
+    $2 == "deny" && NF == 3 && ($3 in code) { print code[$3]; next }
+    { print "eval " $0 }' >"$tmp/$d.eval"
+  bad=$(paste -d '|' "$tmp/$d.eval" "$tmp/$d.node" "$tmp/$d.wasmtime" | awk -F '|' '($1 "") != ($2 "") || ($1 "") != ($3 "")' | rg -c '.' || echo 0)
+  decidebad=$((decidebad + bad))
+  [ "$bad" -eq 0 ] || { echo "FAIL decide $d: $bad mismatches: eval $(paste -s -d ' ' "$tmp/$d.eval"), node $(paste -s -d ' ' "$tmp/$d.node"), wasmtime $(paste -s -d ' ' "$tmp/$d.wasmtime")"; fail=$((fail + 1)); }
+done
+echo "decide scripts: $decidescripts checked, $decidecalls calls, $decidebad mismatches"
 
 status=0
 build/langc 2>/dev/null || status=$?

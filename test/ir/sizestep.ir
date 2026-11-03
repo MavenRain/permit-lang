@@ -1,0 +1,27 @@
+func eDk (nat) -> flag, 11 locals, 0 heap words
+  l6 := eq(l0, 0)
+  if l6 {
+    l5 := 0
+  } else {
+    l7 := add(0, 1)
+    l8 := add(l7, 1)
+    l5 := l8
+  }
+  l3 := 0
+  l4 := 0
+  repeat l9 := l5 {
+    l3 := l4
+    l4 := add(l4, 1)
+  }
+  l1 := 0
+  l2 := 0
+  repeat l10 := l3 {
+    l1 := 1
+    l2 := add(l2, 1)
+  }
+  return l1
+res 0 "docs"
+res 1 "docs/report"
+res 2 "mail/out"
+res 3 "mail/in"
+res 4 "mail"

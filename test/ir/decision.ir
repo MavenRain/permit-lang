@@ -1,0 +1,49 @@
+func eF (nat) -> flag, 34 locals, 27 heap words
+  l4 := le(l0, 10)
+  if l4 {
+    l5 := alloc [0]
+    l6 := alloc [0]
+    l7 := alloc [0, 0, l6]
+    l8 := alloc [0, l7]
+    l9 := alloc [2]
+    l10 := alloc [0, 2, l9]
+    l11 := alloc [0, l10]
+    l12 := alloc [2, l8, l11]
+    l13 := add(0, 1)
+    l14 := add(l13, 1)
+    l15 := sub(10, l0)
+    l16 := alloc [1]
+    l17 := alloc [0, l12, l14, l15, l16]
+    l18 := alloc [0, l5, l17]
+    l3 := l18
+  } else {
+    l19 := alloc [2]
+    l20 := alloc [1, l19]
+    l21 := alloc [0]
+    l22 := alloc [0, 0, l21]
+    l23 := alloc [0, l22]
+    l24 := alloc [2]
+    l25 := alloc [0, 2, l24]
+    l26 := alloc [0, l25]
+    l27 := alloc [2, l23, l26]
+    l28 := add(0, 1)
+    l29 := add(l28, 1)
+    l30 := alloc [1]
+    l31 := alloc [0, l27, l29, 10, l30]
+    l32 := alloc [0, l20, l31]
+    l3 := l32
+  }
+  l2 := load(l3, 1)
+  switch load(l2, 0) {
+  arm 0:
+    l1 := 1
+  arm 1:
+    l33 := load(l2, 1)
+    l1 := 0
+  }
+  return l1
+res 0 "docs"
+res 1 "docs/report"
+res 2 "mail/out"
+res 3 "mail/in"
+res 4 "mail"

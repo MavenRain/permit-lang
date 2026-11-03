@@ -1,0 +1,3 @@
+-- REFUSE_BIND (S8, Q-S8-4 (a)): a tool has one bind line.
+bind "x" inspect "/a"
+bind "x" propose "/b"

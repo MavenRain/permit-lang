@@ -1,0 +1,23 @@
+func eAct (nat) -> flag, 6 locals, 1 heap words
+  l3 := eq(l0, 0)
+  if l3 {
+    l4 := alloc [0]
+    l2 := l4
+  } else {
+    l5 := alloc [2]
+    l2 := l5
+  }
+  switch load(l2, 0) {
+  arm 0:
+    l1 := 1
+  arm 1:
+    l1 := 0
+  arm 2:
+    l1 := 0
+  }
+  return l1
+res 0 "docs"
+res 1 "docs/report"
+res 2 "mail/out"
+res 3 "mail/in"
+res 4 "mail"

@@ -1,6 +1,6 @@
 bad-char.lang LEX_CHAR
 nat-range.lang LEX_NAT_RANGE
-string.lang LEX_CHAR
+string.lang PARSE_EXPECT
 unclosed.lang PARSE_EXPECT
 no-body.lang PARSE_EXPECT
 no-keyword.lang PARSE_EXPECT
@@ -19,3 +19,4 @@ mark-range.lang PARSE_EXPECT
 affine-param-mark.lang PARSE_EXPECT
 affine-field-mark.lang PARSE_EXPECT
 affine-no-cofamily.lang PARSE_EXPECT
+unclosed-string.lang LEX_STRING
