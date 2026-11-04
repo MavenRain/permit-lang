@@ -27,9 +27,11 @@ enum { TEXT_CAP = 8192, ARG_MAX_COUNT = 32, WAIT_MS = 10000 };
 
 /* A script line: `> L` sends L, `< L` wants L as the next answer line,
  * `+ L` appends L to {T}/appr, `= L` wants L as the next line of the
- * fakedeploy log (no `=` line: the log is empty or absent), `! L` closes
- * the input of permitd, wants exit 0 and no extra answer, and starts
- * permitd again with the same flags (L is a note). */
+ * fakedeploy log (no `=` line: the log is empty or absent), `# L` wants
+ * L as the next line of the report file {T}/rep (no `#` line: the file
+ * is empty or absent), `! L` closes the input of permitd, wants exit 0
+ * and no extra answer, and starts permitd again with the same flags (L
+ * is a note). */
 typedef struct {
   const char *name;
   const char *const *flags; /* permitd flags before MODULE */
@@ -58,6 +60,31 @@ typedef struct {
 #define SYNC_JCS(TOOL) "{\"arguments\":{\"left\":\"prod\",\"right\":\"dev\"},\"name\":\"" TOOL "\"}"
 #define PROD(TOOL) "{\"name\":\"" TOOL "\",\"arguments\":{\"target\":\"prod\"},\"_meta\":{\"permit/approval\":\"" D_RESTART "\"}}"
 #define PROD_JCS(TOOL) "{\"arguments\":{\"target\":\"prod\"},\"name\":\"" TOOL "\"}"
+/* The digests of the sync_right call of R1, the inspect prod and staging
+ * calls and the propose prod/web call (Q-S10-3 (a) report rows). */
+#define D_RIGHT "37653f0d84e4235179188086d35cdd2fb632c369aafb07c41fbaf10ee52f118f"
+#define D_PROD "39367f1f1db7f4c920f5323faa0ef0b4c07b78ce4f7a50175ad6396828b5a24e"
+#define D_STAGING "19d95ad0d23c13cc1fed08da123a0c9931300307441900c037bc58ec7fcfe6e7"
+#define D_PROPOSE "6e41b5abd60604cbc90b55845a5a874520c32642154ea8e959ff89e492b8bb55"
+#define Q(TEXT) "\"" TEXT "\""
+/* A call line and a malformed line of {T}/rep, keys in JCS order. ACTION,
+ * APPROVAL, APPROVER, ID and REASON are JSON text (null or a string); the
+ * other values are the text of a string. */
+#define REP(ACTION, APPROVAL, APPROVER, BUDGET, COST, DECISION, DIGEST, ID, REASON, STEPS, TARGET, TOOL)           \
+  "# {\"action\":" ACTION ",\"approval\":" APPROVAL ",\"approver\":" APPROVER ",\"budget\":\"" BUDGET               \
+  "\",\"cost\":\"" COST "\",\"decision\":\"" DECISION "\",\"digest\":\"" DIGEST "\",\"id\":" ID                     \
+  ",\"kind\":\"call\",\"permit\":1,\"reason\":" REASON ",\"steps\":\"" STEPS "\",\"target\":\"" TARGET             \
+  "\",\"tool\":\"" TOOL "\"}"
+#define MAL(BUDGET, ID, STEPS)                                                                                      \
+  "# {\"budget\":\"" BUDGET "\",\"decision\":\"deny\",\"id\":" ID                                                  \
+  ",\"kind\":\"malformed\",\"permit\":1,\"reason\":\"malformed\",\"steps\":\"" STEPS "\"}"
+#define PROPOSE "{\"name\":\"propose\",\"arguments\":{\"target\":\"prod/web\"}}"
+#define PROPOSE_JCS "{\"arguments\":{\"target\":\"prod/web\"},\"name\":\"propose\"}"
+#define PROPOSE_STEP(ID, BUDGET, STEPS)                                                                             \
+  CALL(ID, PROPOSE), OK(ID, "propose"), LOG(ID, PROPOSE_JCS),                                                      \
+      REP(Q("propose"), "null", "null", BUDGET, "1", "permit", D_PROPOSE, ID, "null", STEPS, "prod/web", "propose")
+#define INSPECT_REP(BUDGET, COST, DECISION, ID, REASON, STEPS)                                                      \
+  REP(Q("inspect"), "null", "null", BUDGET, COST, DECISION, D_PROD, ID, REASON, STEPS, "prod", "inspect")
 
 static const Row rows[] = {
     {"not JSON", NONE, NONE,
@@ -155,6 +182,45 @@ static const Row rows[] = {
      L("+ " D_RESTART, CALL("1", PROD("delete")), DENY("1", "deny digestDiffers"), CALL("2", PROD("restart")),
        OK("2", "restart"), LOG("2", PROD_JCS("restart"))),
      0},
+    /* The report rows of S10 U2 (Q-S10-3 (a)): each `#` line is the next
+     * line of --report {T}/rep. */
+    {"R1 report permit and denies", L("--approvals", "{T}/appr", "--report", "{T}/rep"), NONE,
+     L("+ " D1, CALL("1", EXEC_D1), OK("1", "execute"),
+       REP(Q("execute"), Q(D1), Q("{T}/appr:1"), "9", "1", "permit", D1, "1", "null", "5", "prod/web", "execute"),
+       CALL("2", EXEC_D1), DENY("2", "deny approvalUsed"),
+       REP(Q("execute"), Q(D1), Q("{T}/appr:1"), "9", "1", "deny", D1, "2", Q("approvalUsed"), "4", "prod/web",
+           "execute"),
+       CALL("3", "{\"name\":\"inspect\",\"arguments\":{\"target\":\"staging\"}}"), DENY("3", "deny scopeMiss"),
+       REP(Q("inspect"), "null", "null", "9", "1", "deny", D_STAGING, "3", Q("scopeMiss"), "3", "staging", "inspect"),
+       "+ " D_LEFT, CALL("4", SYNC("sync_right")), DENY("4", "deny digestDiffers"),
+       REP(Q("execute"), Q(D_LEFT), Q("{T}/appr:2"), "9", "1", "deny", D_RIGHT, "4", Q("digestDiffers"), "2", "dev",
+           "sync_right"),
+       CALL("5", "{\"name\":\"execute\",\"arguments\":{\"target\":\"prod/web\"}}"), DENY("5", "deny noApproval"),
+       REP(Q("execute"), "null", "null", "9", "1", "deny", D1, "5", Q("noApproval"), "1", "prod/web", "execute"),
+       LOG("1", EXEC_D1_JCS)),
+     0},
+    {"R2 report malformed", L("--report", "{T}/rep"), NONE,
+     L("> not json",
+       "< {\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32700,\"message\":\"permit-lang deny malformed\"}}",
+       MAL("10", "null", "5"), CALL("\"a\"", "{\"name\":\"inspect\",\"arguments\":{\"other\":\"prod\"}}"),
+       DENY("\"a\"", "deny malformed"), MAL("10", Q("a"), "4")),
+     0},
+    {"R3 report budgetShort and boundSpent", L("--cost", "inspect=11", "--report", "{T}/rep"), NONE,
+     L(CALL("1", INSPECT_PROD), DENY("1", "deny budgetShort"), INSPECT_REP("10", "11", "deny", "1", Q("budgetShort"), "5"),
+       PROPOSE_STEP("2", "9", "4"), PROPOSE_STEP("3", "8", "3"), PROPOSE_STEP("4", "7", "2"),
+       PROPOSE_STEP("5", "6", "1"), PROPOSE_STEP("6", "5", "0"), CALL("7", PROPOSE), DENY("7", "deny boundSpent"),
+       REP(Q("propose"), "null", "null", "5", "1", "deny", D_PROPOSE, "7", Q("boundSpent"), "0", "prod/web",
+           "propose")),
+     0},
+    {"R4 report restart appends", L("--state", "{T}/st", "--report", "{T}/rep"), NONE,
+     L(STEP("1"), INSPECT_REP("9", "1", "permit", "1", "null", "5"), "! restart", STEP("2"),
+       INSPECT_REP("8", "1", "permit", "2", "null", "4")),
+     0},
+    {"R5 report stays in the gate", L("--report", "{T}/rep"), L("--closed-file", "{T}/rep"),
+     L(STEP("1"), INSPECT_REP("9", "1", "permit", "1", "null", "5")), 0},
+    {"R6 report cannot be the state file", L("--state", "{T}/st", "--report", "{T}/st"), NONE, NONE, 2},
+    {"R7 report cannot alias the state file", L("--state", "{T}/st", "--report", "{T}/./st"), NONE, NONE, 2},
+    {"R8 report open failure", L("--report", "{T}/missing/rep"), NONE, NONE, 2},
 };
 
 static int fails = 0;
@@ -276,11 +342,40 @@ static int stop_gate(const Row *row, int to, Reader *reader, pid_t pid) {
   return WEXITSTATUS(status);
 }
 
+/* Appends TEXT and '\n' to the LEN bytes in BUF when they fit. */
+static void add_line(char *buf, size_t cap, size_t *len, const char *text) {
+  size_t n = strlen(text);
+  if (*len + n + 1 < cap) {
+    memcpy(buf + *len, text, n);
+    buf[*len + n] = '\n';
+    *len = *len + n + 1;
+    buf[*len] = '\0';
+  }
+}
+
+/* Fails ROW with WHAT and the bytes of DIR NAME (none when it is absent)
+ * when they are not WANT. */
+static void check_file(const Row *row, const char *dir, const char *name, const char *want, const char *what) {
+  char path[1200];
+  char got[TEXT_CAP * 2];
+  size_t n = 0;
+  FILE *f = fopen(strcat(strcpy(path, dir), name), "r");
+  if (f != NULL) {
+    n = fread(got, 1, sizeof got - 1, f);
+    fclose(f);
+  }
+  got[n] = '\0';
+  if (strcmp(got, want) != 0) {
+    fail(row, what, got);
+  }
+}
+
 static void run_row(const Row *row, const char *const *tools, const char *base, unsigned index) {
   char dir[1024];
   char path[1200];
   char text[TEXT_CAP];
   char want_log[TEXT_CAP * 2];
+  char want_rep[TEXT_CAP * 2];
   char args[ARG_MAX_COUNT][1200];
   char *argv[ARG_MAX_COUNT + 1];
   unsigned argc = 0;
@@ -289,6 +384,7 @@ static void run_row(const Row *row, const char *const *tools, const char *base, 
   pid_t pid;
   static Reader reader;
   size_t want_len = 0;
+  size_t rep_len = 0;
   snprintf(dir, sizeof dir, "%s/row%u", base, index);
   if (mkdir(dir, 0755) != 0 || !write_file(strcat(strcpy(path, dir), "/appr"), "", "w") ||
       !write_file(strcat(strcpy(path, dir), "/bad"), "garbage\n", "w") ||
@@ -319,6 +415,7 @@ static void run_row(const Row *row, const char *const *tools, const char *base, 
     return;
   }
   want_log[0] = '\0';
+  want_rep[0] = '\0';
   for (i = 0; row->script[i] != NULL; i++) {
     const char *line = row->script[i];
     char got[TEXT_CAP];
@@ -349,32 +446,17 @@ static void run_row(const Row *row, const char *const *tools, const char *base, 
         fail(row, "cannot restart", argv[0]);
         return;
       }
+    } else if (line[0] == '#') {
+      add_line(want_rep, sizeof want_rep, &rep_len, text);
     } else {
-      size_t n = strlen(text);
-      if (want_len + n + 1 < sizeof want_log) {
-        memcpy(want_log + want_len, text, n);
-        want_log[want_len + n] = '\n';
-        want_len = want_len + n + 1;
-        want_log[want_len] = '\0';
-      }
+      add_line(want_log, sizeof want_log, &want_len, text);
     }
   }
   if (stop_gate(row, to_gate, &reader, pid) != row->rc) {
     fail(row, "the exit code differs", NULL);
   }
-  {
-    char got_log[TEXT_CAP * 2];
-    size_t n = 0;
-    FILE *f = fopen(strcat(strcpy(path, dir), "/log"), "r");
-    if (f != NULL) {
-      n = fread(got_log, 1, sizeof got_log - 1, f);
-      fclose(f);
-    }
-    got_log[n] = '\0';
-    if (strcmp(got_log, want_log) != 0) {
-      fail(row, "the fakedeploy log differs", got_log);
-    }
-  }
+  check_file(row, dir, "/log", want_log, "the fakedeploy log differs");
+  check_file(row, dir, "/rep", want_rep, "the report differs");
 }
 
 int main(int argc, char **argv) {

@@ -1,0 +1,13 @@
+-- S10 U1 report row (Q-S10-3 (a)): the laws are the program defs whose
+-- type ends in a Path, closed or after a Pi chain, in def order. docs, sc,
+-- start and readOf (a Pi to a Decision) are not laws.
+def docs : Resource := res "docs"
+def report : Resource := res "docs/report"
+def sc : Scope := fmEta (Prod Resource Action) (pair docs inspect)
+def start : Authority := authority sc (szS (szS sz0)) 10 (fmUnit Digest)
+def lawMalformed : Path Decision (first (judgeMalformed start)) (deny malformed) := refl
+def readOf : Payload -> Decision := fun (p : Payload) => first (judge start (ticket (mutation report inspect p) (auLeft start) none))
+def lawRead : (p : Payload) -> Path Decision (readOf p) permit := fun (p : Payload) => refl
+def lawAnyPayload : Payload -> Path Decision (first (judgeMalformed start)) (deny malformed) := fun (p : Payload) => refl
+def lawTwice : (p : Payload) -> (q : Payload) -> Path Decision (readOf q) permit := fun (p : Payload) => fun (q : Payload) => refl
+bind "read" inspect "/path"

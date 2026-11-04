@@ -551,6 +551,27 @@ if [ "$status" -ne 0 ]; then
 else
   cat "$tmp/jcs.txt"
 fi
+# The authority report (S10 U1, Q-S10-3 (a)): test/report/NAME.json is the
+# `langc report` line of test/report/NAME.lang (guest mode, no --kit). Each
+# run exits 0 with no stderr, and the line equals NAME.json byte for byte.
+reports=0
+for want in $(printf '%s\n' test/report/*.json | LC_ALL=C sort); do
+  reports=$((reports + 1))
+  name=$(basename "$want" .json)
+  status=0
+  build/langc report "test/report/$name.lang" >"$tmp/r.out" 2>"$tmp/r.err" || status=$?
+  if [ "$status" -ne 0 ] || [ -s "$tmp/r.err" ]; then
+    echo "FAIL report $name: exit $status $(head -n 1 "$tmp/r.err" | cut -c1-120)"
+    fail=$((fail + 1))
+  elif ! cmp -s "$want" "$tmp/r.out"; then
+    echo "FAIL report $name: the line is not $want: $(cmp "$want" "$tmp/r.out" 2>&1 | cut -c1-120)"
+    fail=$((fail + 1))
+  fi
+done
+echo "report rows: $reports checked"
+if ! build/reporttool build/langc test/report/unit.lang; then
+  fail=$((fail + 1))
+fi
 
 # The MCP gate (S9 U3, N6, docs/MCP.md): build/hosttool runs build/permitd
 # on test/host/deploy.lang with build/fakedeploy as the child, one line at

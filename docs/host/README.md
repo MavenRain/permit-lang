@@ -19,11 +19,14 @@ These files make the language and its Wasm target:
   `host/sha256.h`, `host/jsonin.c`, `host/jsonin.h`, `host/jcs.c` and
   `host/jcs.h`
 - the MCP gate (S9 U3): `host/permitd.c`
+- the JSON authority report (S10): `src/report.c`, `src/report.h`,
+  `host/report.c` and `host/report.h` (`docs/REPORT-JSON.md`)
 - the tests: `test/parse/`, `test/check/`, `test/eval/`, `test/ir/`,
-  `test/notrap/`, `test/engine/`, `test/host/deploy.lang`,
+  `test/notrap/`, `test/engine/`, `test/host/deploy.lang`, `test/report/`,
   `test/review.sh`, `test/fronttool.c`, `test/pathtool.c`,
   `test/notraptool.c`, `test/enginetool.c`, `test/shatool.c`,
-  `test/jcstool.c`, `test/fakedeploy.c` and `test/hosttool.c`
+  `test/jcstool.c`, `test/fakedeploy.c`, `test/hosttool.c` and
+  `test/reporttool.c`
 - the differential files: `test/grid.awk` and `test/run-wasm.mjs`. They
   are out of the gate until S8 (see "Gate").
 - the build and gate files: `Makefile`, `test/gate.sh` and `PIN`
@@ -119,6 +122,7 @@ build/langc eval PROG NAME [ARGS...]
 build/langc ir PROG
 build/langc abi PROG
 build/langc build PROG -o OUT [--runtime]
+build/langc report PROG
 ```
 
 - `check` prints `ok`, or refuses the program.
@@ -128,6 +132,8 @@ build/langc build PROG -o OUT [--runtime]
 - `abi` prints the name of each entry, one for each line.
 - `build` writes the Wasm module to `OUT`. On this target, `--runtime`
   gives the same bytes.
+- `report` prints the `program` line of the JSON authority report
+  (S10, `docs/REPORT-JSON.md`).
 
 The exit status is 0 for success, 1 for a refused program and 2 for a
 usage or IO error. A diagnostic on stderr has the form
@@ -317,7 +323,7 @@ rows, 1 envelope digest row (the SHA-256 of the first envelope row, from
 `build/permitd` is the MCP gate (S9 U3, Q-S9-4, 5, 6 and 9 (a)):
 
 ```sh
-permitd [--state FILE] [--approvals FILE | --approver tty]
+permitd [--state FILE] [--report FILE] [--approvals FILE | --approver tty]
         [--cost TOOL=N]... [--cred-file PATH | --cred-env NAME]
         [--cred-var NAME] MODULE -- CMD ARGS
 ```
@@ -329,11 +335,16 @@ through the `decide` export of MODULE in the steps of "The call steps" in
 gives the upstream failures, the approvals, the state file and the
 credential.
 
+With `--report FILE`, `permitd` opens FILE to append and writes one line
+of the JSON authority report for each decided call, after the state
+write and before the answer or the forward (S10 U2,
+`docs/REPORT-JSON.md`).
+
 The exit codes of `permitd`:
 
 - 0: the end of the input
 - 1: MODULE does not load
-- 2: a usage error or a bad state file
+- 2: a usage error, a bad state file or a report file that does not open
 
 For each permitted call, `permitd` writes one line to stderr:
 `permitd: permit TOOL approver WHO`. WHO is `FILE:LINE` (the approvals
@@ -370,7 +381,9 @@ has no approval.
 | `sha256 vectors: 7 checked` | `build/shatool` checks `host/sha256.c` on the 4 FIPS 180-4 vectors and 3 pad rows (55, 56 and 64 bytes of `a`) (S9, Q-S9-2 (a)) |
 | `engine hash rows: 2 checked` | `build/enginetool` script line `hash N` gives the O5 hash stub of N. The 2 rows (N 0 and 9223372036854775809) compare it with the number of the `test/run-wasm.mjs` formula `(N * 1000003 + 7) mod 2^64` (S9 U2, mutant O1) |
 | `jcs rows: 32 checked` | `build/jcstool` checks `host/jsonin.c` and `host/jcs.c`: 17 JCS rows, 3 envelope rows, 1 envelope digest row and 11 pointer rows (S9 U2, Q-S9-3 (a)) |
-| `host rows: 28 checked` | `build/hosttool` runs `build/permitd` on the module of `test/host/deploy.lang` with `build/fakedeploy` as the upstream server, one line at a time. The 12 rows of S9 U3: a line that is not JSON, a tool with no bind row, a target that is not a string, a bad approval hex, `--error` and `--exit` of the upstream server, a bad state file (exit 2), the forwarded bytes (no `permit/approval` key and no empty `_meta`), the `isError` of a deny, `--cost`, an approvals line added between two calls, and `--state` in a missing directory (N6). Six review rows check refusal of batches and scalars before forwarding, the retained metadata key with an embedded NUL, the maximum 64-bit cost, cost overflow, and a large state budget across a restart. The 10 demo rows of S9 U4 (PLAN section 8.3): D1 to D8, D10 and D11, each with the want of its PLAN row; D9 is the static row `test/check/delegate-widen.lang` in `check refusals`. The script line `! L` closes the input of permitd, wants exit 0 and no extra answer, and starts permitd again with the same flags (row D6: the approval stays used after a restart) |
+| `report rows: 5 checked` | `langc report` writes the `program` line of each `test/report/*.lang` file: exit 0, no stderr and the bytes of its `.json` file (S10 U1, `docs/REPORT-JSON.md`) |
+| `report write errors: 2 checked` | `build/reporttool` checks the same valid report with writable and read-only stdout: exit 0 and exit 1 |
+| `host rows: 36 checked` | `build/hosttool` runs `build/permitd` on the module of `test/host/deploy.lang` with `build/fakedeploy` as the upstream server, one line at a time. The 12 rows of S9 U3: a line that is not JSON, a tool with no bind row, a target that is not a string, a bad approval hex, `--error` and `--exit` of the upstream server, a bad state file (exit 2), the forwarded bytes (no `permit/approval` key and no empty `_meta`), the `isError` of a deny, `--cost`, an approvals line added between two calls, and `--state` in a missing directory (N6). Six review rows check refusal of batches and scalars before forwarding, the retained metadata key with an embedded NUL, the maximum 64-bit cost, cost overflow, and a large state budget across a restart. The 10 demo rows of S9 U4 (PLAN section 8.3): D1 to D8, D10 and D11, each with the want of its PLAN row; D9 is the static row `test/check/delegate-widen.lang` in `check refusals`. The script line `! L` closes the input of permitd, wants exit 0 and no extra answer, and starts permitd again with the same flags (row D6: the approval stays used after a restart). The 8 report rows, R1 to R8: the script line `# L` wants L as the next line of the `--report` file (`docs/REPORT-JSON.md`) |
 | `gate: 0 failures` | the sum of all failures of `test/gate.sh` |
 | `review regressions: passed` | `test/review.sh` passes |
 | `domain regressions: passed` | `build/fronttool` (the domain declaration rows, the 54 affine rows of S4 and the 4 time rows and 3 affine cofamily rows of S5 and the 2 guest `spend` and `split` rows of S6) passes |

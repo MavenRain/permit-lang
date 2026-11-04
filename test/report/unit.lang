@@ -1,0 +1,3 @@
+-- S10 U1 report row (Q-S10-3 (a)): the empty scope fmUnit gives an empty
+-- scope array, and sz0 and 0 give the words "0".
+def start : Authority := authority (fmUnit (Prod Resource Action)) sz0 0 (fmUnit Digest)

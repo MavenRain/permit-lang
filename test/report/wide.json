@@ -1,0 +1,1 @@
+{"binds":[{"action":"inspect","pointer":"/path","tool":"read"}],"budget":"18446744073709551615","kind":"program","laws":[],"permit":1,"scope":[{"action":"inspect","resource":"docs"}],"steps":"1"}

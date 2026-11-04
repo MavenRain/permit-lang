@@ -7,6 +7,7 @@
 #include "front/check.h"
 #include "front/front.h"
 #include "front/lower.h"
+#include "report.h"
 #include "target.h"
 
 #define ARENA_LIMIT_BYTES ((size_t)1 << 30)
@@ -17,6 +18,7 @@ typedef enum {
   CMD_IR,
   CMD_ABI,
   CMD_BUILD,
+  CMD_REPORT,
 } Command;
 
 typedef struct {
@@ -40,6 +42,7 @@ static const struct {
   {"ir", CMD_IR},
   {"abi", CMD_ABI},
   {"build", CMD_BUILD},
+  {"report", CMD_REPORT},
 };
 
 static int usage(FILE *err) {
@@ -48,6 +51,7 @@ static int usage(FILE *err) {
         "       langc [--kit] ir PROG\n"
         "       langc [--kit] abi PROG [--text]\n"
         "       langc [--kit] build PROG -o OUT [--runtime]\n"
+        "       langc [--kit] report PROG\n"
         "--kit: the kit mode, the trusted test scope of the kit gate\n", err);
   return 2;
 }
@@ -83,6 +87,7 @@ static int parse_options(int argc, char **argv, Options *opt, Diag *diag) {
   switch (opt->command) {
     case CMD_CHECK:
     case CMD_IR:
+    case CMD_REPORT:
       return argc == 3 ? 1 : diag_fail(diag, "USAGE", NULL, "too many arguments");
     case CMD_ABI:
       /* The JSON ABI is the default; --text gives the C-K4-16 lines (C-c7-1). */
@@ -130,6 +135,8 @@ static int run_target(const Options *opt, Machine *machine, Diag *diag) {
     case CMD_ABI:
       for (i = 0; i < prog.func_count && ok; i++) ok = target_abi_line(&prog.funcs[i], stdout, stderr);
       return ok ? 0 : 1;
+    case CMD_REPORT:
+      return report_program(machine, &prog, stdout) ? 0 : 1;
     case CMD_CHECK:
     case CMD_EVAL:
     case CMD_BUILD:
@@ -158,6 +165,7 @@ static int run(const Options *opt, Arena *arena, Diag *diag) {
     case CMD_IR:
     case CMD_ABI:
     case CMD_BUILD:
+    case CMD_REPORT:
       break;
   }
   return run_target(opt, &machine, diag);

@@ -7,29 +7,32 @@ CFLAGS = -std=c99 -Wall -Werror -Isrc
 CLANG_FLAGS = -std=c99 -Wall -Wextra -Wswitch-enum -Werror -fsyntax-only -Isrc
 FRONT = src/front/base.c src/front/lexer.c src/front/parser.c src/front/front.c src/front/eval.c src/front/check.c src/front/lower.c
 TARGET = src/wasm.c
-SRC = src/main.c $(FRONT) $(TARGET)
+# S10 U1: langc report builds the JCS line with the host JSON reader.
+REPORT = src/report.c host/jsonin.c host/jcs.c
+SRC = src/main.c $(FRONT) $(TARGET) $(REPORT)
 FRONT_TOOL = test/fronttool.c $(filter-out src/front/front.c src/front/lower.c,$(FRONT))
 PATH_TOOL = test/pathtool.c $(filter-out src/front/front.c src/front/lower.c,$(FRONT))
 NOTRAP_TOOL = test/notraptool.c
 SHA_TOOL = test/shatool.c host/sha256.c
 ENGINE_TOOL = test/enginetool.c host/engine.c host/wasmread.c
 JCS_TOOL = test/jcstool.c host/jsonin.c host/jcs.c host/sha256.c src/front/base.c
-PERMITD = host/permitd.c host/engine.c host/wasmread.c host/jsonin.c host/jcs.c host/sha256.c src/front/base.c
+PERMITD = host/permitd.c host/report.c host/engine.c host/wasmread.c host/jsonin.c host/jcs.c host/sha256.c src/front/base.c
 FAKEDEPLOY = test/fakedeploy.c host/jsonin.c host/jcs.c src/front/base.c
 HOST_TOOL = test/hosttool.c
+REPORT_TOOL = test/reporttool.c
 HEADERS = $(wildcard src/*.h src/front/*.h)
 HOST_HEADERS = $(wildcard host/*.h)
 
 .PHONY: build check check-clang clean
 
-build: build/langc build/fronttool build/pathtool build/notraptool build/shatool build/enginetool build/jcstool build/permitd build/fakedeploy build/hosttool
+build: build/langc build/fronttool build/pathtool build/notraptool build/shatool build/enginetool build/jcstool build/permitd build/fakedeploy build/hosttool build/reporttool
 
 build/domain.c: domain/domain.lang gen/embed.c
 	mkdir -p build
 	$(TCC) -run gen/embed.c domain/domain.lang build/domain.c
 
-build/langc: $(SRC) $(HEADERS) build/domain.c
-	$(TCC) $(CFLAGS) -o build/langc $(SRC) build/domain.c
+build/langc: $(SRC) $(HEADERS) $(HOST_HEADERS) build/domain.c
+	$(TCC) $(CFLAGS) -Ihost -o build/langc $(SRC) build/domain.c
 
 build/fronttool: $(FRONT_TOOL) $(HEADERS)
 	mkdir -p build
@@ -67,8 +70,12 @@ build/hosttool: $(HOST_TOOL)
 	mkdir -p build
 	$(TCC) $(CFLAGS) -o build/hosttool $(HOST_TOOL)
 
+build/reporttool: $(REPORT_TOOL)
+	mkdir -p build
+	$(TCC) $(CFLAGS) -o build/reporttool $(REPORT_TOOL)
+
 check-clang: build/domain.c
-	$(CC) $(CLANG_FLAGS) $(SRC) build/domain.c
+	$(CC) $(CLANG_FLAGS) -Ihost $(SRC) build/domain.c
 	$(CC) $(CLANG_FLAGS) $(FRONT_TOOL)
 	$(CC) $(CLANG_FLAGS) $(PATH_TOOL)
 	$(CC) $(CLANG_FLAGS) $(NOTRAP_TOOL)
@@ -78,8 +85,9 @@ check-clang: build/domain.c
 	$(CC) $(CLANG_FLAGS) -Ihost $(PERMITD)
 	$(CC) $(CLANG_FLAGS) -Ihost $(FAKEDEPLOY)
 	$(CC) $(CLANG_FLAGS) $(HOST_TOOL)
+	$(CC) $(CLANG_FLAGS) $(REPORT_TOOL)
 
-check: build/langc build/fronttool build/pathtool build/notraptool build/shatool build/enginetool build/jcstool build/permitd build/fakedeploy build/hosttool check-clang
+check: build/langc build/fronttool build/pathtool build/notraptool build/shatool build/enginetool build/jcstool build/permitd build/fakedeploy build/hosttool build/reporttool check-clang
 	sh test/gate.sh
 	sh test/review.sh
 	build/fronttool

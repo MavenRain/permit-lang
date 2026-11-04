@@ -1,0 +1,1 @@
+{"binds":[{"action":"inspect","pointer":"/path","tool":"read"}],"budget":"10","kind":"program","laws":["lawMalformed","lawRead","lawAnyPayload","lawTwice"],"permit":1,"scope":[{"action":"inspect","resource":"docs"}],"steps":"2"}

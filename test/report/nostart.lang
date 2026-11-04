@@ -1,0 +1,4 @@
+-- S10 U1 report row (Q-S10-3 (a)): a program with no def start. The line
+-- has null budget, scope and steps, and no binds.
+def docs : Resource := res "docs"
+def report : Resource := res "docs/report"

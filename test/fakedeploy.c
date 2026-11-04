@@ -1,7 +1,7 @@
 /* fakedeploy, the upstream MCP server of the permitd rows (S9 U3, the shape
  * of relay-lang 4781ca7 src/mcp.c).
  *
- *   fakedeploy LOG [--error TOOL] [--exit TOOL]
+ *   fakedeploy LOG [--error TOOL] [--exit TOOL] [--closed-file FILE]
  *
  * Reads one JSON-RPC line at a time on stdin and answers on stdout:
  * initialize, ping, tools/list and tools/call for the 7 deploy tools (the
@@ -12,6 +12,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "jcs.h"
 #include "jsonin.h"
@@ -205,6 +207,19 @@ static int message(const char *log_path, const char *error_tool, const char *exi
   return keep;
 }
 
+/* The report file must not be open in the upstream child. */
+static int file_is_closed(const char *path) {
+  struct stat want, got;
+  long limit = sysconf(_SC_OPEN_MAX);
+  int fd;
+  if (limit < 0 || stat(path, &want) != 0)
+    return 0;
+  for (fd = 3; fd < limit; fd++)
+    if (fstat(fd, &got) == 0 && want.st_dev == got.st_dev && want.st_ino == got.st_ino)
+      return 0;
+  return 1;
+}
+
 int main(int argc, char **argv) {
   const char *error_tool = NULL;
   const char *exit_tool = NULL;
@@ -212,7 +227,7 @@ int main(int argc, char **argv) {
   size_t len = 0;
   int got;
   if (argc < 2) {
-    fputs("usage: fakedeploy LOG [--error TOOL] [--exit TOOL]\n", stderr);
+    fputs("usage: fakedeploy LOG [--error TOOL] [--exit TOOL] [--closed-file FILE]\n", stderr);
     return 2;
   }
   for (i = 2; i < argc; i++) {
@@ -222,8 +237,13 @@ int main(int argc, char **argv) {
     } else if (strcmp(argv[i], "--exit") == 0 && i + 1 < argc) {
       exit_tool = argv[i + 1];
       i++;
+    } else if (strcmp(argv[i], "--closed-file") == 0 && i + 1 < argc) {
+      if (!file_is_closed(argv[++i])) {
+        fputs("fakedeploy: the gate file is open in the child\n", stderr);
+        return 1;
+      }
     } else {
-      fputs("usage: fakedeploy LOG [--error TOOL] [--exit TOOL]\n", stderr);
+      fputs("usage: fakedeploy LOG [--error TOOL] [--exit TOOL] [--closed-file FILE]\n", stderr);
       return 2;
     }
   }

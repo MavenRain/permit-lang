@@ -1,7 +1,7 @@
 /* permitd, the MCP gate of permit-lang (S9 U3, docs/MCP.md, Q-S9-4, 5, 6,
  * 9 (a)).
  *
- *   permitd [--state FILE] [--approvals FILE | --approver tty]
+ *   permitd [--state FILE] [--report FILE] [--approvals FILE | --approver tty]
  *           [--cost TOOL=N]... [--cred-file PATH | --cred-env NAME]
  *           [--cred-var NAME] MODULE -- CMD ARGS
  *
@@ -10,9 +10,10 @@
  * through the `decide` export of MODULE (the call steps of docs/MCP.md);
  * each other line goes through unchanged. Only main stops the process
  * (N6): each other function gives a result. Exit 0 at the end of the
- * input, 1 when MODULE does not load, 2 for a usage error or a bad state
- * file. */
+ * input, 1 when MODULE does not load, 2 for a usage error, a bad state
+ * file or a report file that does not open. */
 #include <errno.h>
+#include <fcntl.h>
 #include <poll.h>
 #include <signal.h>
 #include <spawn.h>
@@ -20,6 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -27,6 +29,7 @@
 #include "engine.h"
 #include "jcs.h"
 #include "jsonin.h"
+#include "report.h"
 #include "sha256.h"
 #include "wasmread.h"
 
@@ -53,6 +56,9 @@ enum {
 static const char *const reason_name[8] = {
     "scopeMiss", "boundSpent", "budgetShort", "noApproval",
     "digestDiffers", "approvalUsed", "widen", "malformed"};
+
+/* The names of the Action arms (domain/domain.lang): arm A. */
+static const char *const action_name[3] = {"inspect", "propose", "execute"};
 
 /* The arm of the Action family that needs an approval. */
 #define ACTION_EXECUTE 2
@@ -113,6 +119,8 @@ typedef struct {
   unsigned digest_count;
   /* The flags. */
   const char *state_path;
+  const char *report_path;
+  FILE *report; /* the --report FILE, open to append, or NULL */
   const char *approvals_path;
   int approver_tty;
   CostRow costs[COST_MAX];
@@ -665,6 +673,20 @@ static uint64_t cost_of(const Gate *g, const char *tool) {
   return 1;
 }
 
+/* Steps and budget: words 0 and 1 of the state after decide or malformed. */
+static int state_words(Gate *g, uint64_t *steps, uint64_t *budget) {
+  return engine_word(&g->engine, 0, steps) && engine_word(&g->engine, 8, budget);
+}
+
+/* Appends the malformed line of the call with id ID (NULL for a parse
+ * error) to the report file (Q-S10-1 (a)). Gives 1 when there is no
+ * --report FILE. */
+static int report_bad(Gate *g, const PendingId *id) {
+  uint64_t steps = 0, budget = 0;
+  return !g->report || (state_words(g, &steps, &budget) &&
+                        report_malformed(g->report, id ? id->bytes : NULL, id ? id->len : 0, steps, budget));
+}
+
 /* Runs `malformed ()`, writes the state and answers: the deny with the id,
  * or -32700 with id null. */
 static void call_malformed(Gate *g, const PendingId *id) {
@@ -683,12 +705,45 @@ static void call_malformed(Gate *g, const PendingId *id) {
     reply_error(id, -32603, "permit-lang state error");
     return;
   }
+  if (!report_bad(g, id)) {
+    fprintf(stderr, "permitd: cannot write the report file %s\n", g->report_path);
+    reply_error(id, -32603, "permit-lang report error");
+    return;
+  }
   if (!id)
     reply_error(NULL, -32700, "permit-lang deny malformed");
   else if (code >= 1 && code <= 8)
     reply_deny(id, code);
   else
     reply_error(id, -32603, "permit-lang host error");
+}
+
+/* Appends the call line of a decided call (CODE 0 to 8) to the report file
+ * (Q-S10-1 (a)): after the state write, before the answer or the forward.
+ * NAMED is the named digest or NULL; WHO is the approver or "". Gives 1
+ * when there is no --report FILE. */
+static int report_decided(Gate *g, const char *name, const BindRow *row, const char *path, size_t path_len,
+                          const PendingId *id, const unsigned char digest[32], const unsigned char *named,
+                          const char *who, uint64_t cost, uint64_t code) {
+  char digest_hex[DIGEST_HEX + 1], named_hex[DIGEST_HEX + 1];
+  ReportCall call;
+  if (!g->report)
+    return 1;
+  hex_of(digest, digest_hex);
+  if (named)
+    hex_of(named, named_hex);
+  call.tool = name;
+  call.action = row->arm < 3 ? action_name[row->arm] : NULL;
+  call.target = path;
+  call.target_len = path_len;
+  call.id = id->bytes;
+  call.id_len = id->len;
+  call.digest = digest_hex;
+  call.approval = named ? named_hex : NULL;
+  call.approver = who[0] != '\0' ? who : NULL;
+  call.reason = code >= 1 ? reason_name[code - 1] : NULL;
+  call.cost = cost;
+  return state_words(g, &call.steps, &call.budget) && report_call(g->report, &call);
 }
 
 /* The call steps 2 to 9 for a parsed tools/call MESSAGE with id ID. */
@@ -800,6 +855,12 @@ static void tools_call(Gate *g, Arena *arena, const JsonValue *message, const Pe
     reply_error(id, -32603, "permit-lang state error");
     return;
   }
+  if (code <= 8 && !report_decided(g, name, row, path, target->len, id, digest, named_hex ? named : NULL, who,
+                                   args[3], code)) {
+    fprintf(stderr, "permitd: cannot write the report file %s\n", g->report_path);
+    reply_error(id, -32603, "permit-lang report error");
+    return;
+  }
   if (code >= 1 && code <= 8) {
     reply_deny(id, code);
     return;
@@ -907,8 +968,9 @@ static int pump(Gate *g, LineIn *in, void (*take)(Gate *, const char *, size_t, 
 /* ---- the start ---- */
 
 static int usage(void) {
-  fprintf(stderr, "usage: permitd [--state FILE] [--approvals FILE | --approver tty] [--cost TOOL=N]...\n"
-                  "               [--cred-file PATH | --cred-env NAME] [--cred-var NAME] MODULE -- CMD ARGS\n");
+  fprintf(stderr, "usage: permitd [--state FILE] [--report FILE] [--approvals FILE | --approver tty]\n"
+                  "               [--cost TOOL=N]... [--cred-file PATH | --cred-env NAME] [--cred-var NAME]\n"
+                  "               MODULE -- CMD ARGS\n");
   return 2;
 }
 
@@ -981,6 +1043,26 @@ static int spawn_child(Gate *g, char **argv, char **env) {
   return 1;
 }
 
+/* Keeps the report in the gate and apart from the state file. A state
+ * rename must not replace the report while its old inode is open. */
+static int open_report(Gate *g) {
+  struct stat report, state;
+  int ok;
+  if (!g->report_path)
+    return 1;
+  g->report = fopen(g->report_path, "a");
+  if (!g->report)
+    return 0;
+  ok = fcntl(fileno(g->report), F_SETFD, FD_CLOEXEC) == 0 && fstat(fileno(g->report), &report) == 0;
+  if (ok && g->state_path && stat(g->state_path, &state) == 0)
+    ok = report.st_dev != state.st_dev || report.st_ino != state.st_ino;
+  if (!ok) {
+    fclose(g->report);
+    g->report = NULL;
+  }
+  return ok;
+}
+
 int main(int argc, char **argv) {
   static Gate g;
   static char *env[ENV_COUNT_MAX];
@@ -995,6 +1077,8 @@ int main(int argc, char **argv) {
       cmd = i + 1;
     } else if (strcmp(a, "--state") == 0 && more && strlen(argv[i + 1]) < STATE_PATH_CAP) {
       g.state_path = argv[++i];
+    } else if (strcmp(a, "--report") == 0 && more) {
+      g.report_path = argv[++i];
     } else if (strcmp(a, "--approvals") == 0 && more && !g.approver_tty) {
       g.approvals_path = argv[++i];
     } else if (strcmp(a, "--approver") == 0 && more && strcmp(argv[i + 1], "tty") == 0 && !g.approvals_path) {
@@ -1044,6 +1128,11 @@ int main(int argc, char **argv) {
     engine_free(&g.engine);
     return 2;
   }
+  if (!open_report(&g)) {
+    fprintf(stderr, "permitd: cannot open the report file %s\n", g.report_path);
+    engine_free(&g.engine);
+    return 2;
+  }
   if (!child_env(env, cred_var, cred)) {
     fprintf(stderr, "permitd: the child environment is too large\n");
     engine_free(&g.engine);
@@ -1082,6 +1171,8 @@ int main(int argc, char **argv) {
     }
   }
   waitpid(g.child, NULL, 0);
+  if (g.report)
+    fclose(g.report);
   engine_free(&g.engine);
   return 0;
 }

@@ -36,8 +36,10 @@ program with `bind` lines: `res` literals, `bind` lines, `def start`, the
 1, 4 and 8.2; the S8 row of section 12). S9 DONE: `permitd`, the Wasm
 engine of the host, SHA-256, the canonical bytes, the approver, the state
 file, the stdio MCP proxy, `fakedeploy` and the demo rows D1 to D11
-(sections 8.3 and 10; the S9 row of section 12). Next: S10 (T2, section
-12).
+(sections 8.3 and 10; the S9 row of section 12). S10 DONE: the JSON
+authority report: `langc report`, `permitd --report FILE` and
+`docs/REPORT-JSON.md` (sections 8.2 and 10; the S10 row of section 12).
+Next: S11 (T3, section 12).
 
 ## 1. Rulings
 
@@ -129,6 +131,10 @@ file, the stdio MCP proxy, `fakedeploy` and the demo rows D1 to D11
 | 2026-11-03 | Q-S9-9 The cost of a call: (a). Each call costs 1 unit (the budget counts calls); `--cost TOOL=N` changes it for one tool. No kit change. One host row gives `budgetShort` with `--cost`. Edit: S9 U3. | USER, S9 |
 | 2026-11-03 | Q-S9-10 The demo tools and program: (a). `fakedeploy` has `inspect`, `propose`, `execute`, `sync_left` and `sync_right` (D10), `restart` and `delete` (D11). One demo program `test/host/deploy.lang` has the 7 bind lines and a `start` whose scope holds `prod` and `dev`. `fakedeploy` keeps its state in one file. Edit: section 8.3 at S9 U4. | USER, S9 |
 | 2026-11-03 | Q-S9-U4-1 The D10 mutant: (a). The payload holds the tool name (section 4, D11), so the D10 deny holds also when the envelope has no target. The D10 mutant drops both the target of the envelope and the name of the payload. A row where only the target changes is O23. Edit: section 13, O23. | USER, S9 |
+| 2026-11-03 | Q-S10-1 The entry points and the writers: (a). `langc report PROG` (`src/report.c`) writes the static part. `permitd --report FILE` (`host/report.c`) appends one line for each decided call, with `fflush` and `fsync`, after the state write and before the answer or the forward. Edit: section 8.2, the T2 row. | USER, S10 |
+| 2026-11-03 | Q-S10-2 The format: (a). JSON Lines: each line is one object in its JCS form, then `\n`, with `"permit":1` and `"kind"` (`program`, `call` or `malformed`). Both writers make the bytes with `json_parse` and `jcs_write`. No time field. Edit: none. | USER, S10 |
+| 2026-11-03 | Q-S10-3 The fields: (a). Each 64-bit word is a JSON string of decimal digits. The keys of each line are in `docs/REPORT-JSON.md`. The line does not hold the upstream outcome. Edit: section 13, O24. | USER, S10 |
+| 2026-11-03 | Q-S10-4 The unit split: (a). U1: `langc report` and the `test/report/` rows. U2: `permitd --report` and the hosttool rows R1 to R4. U3: `docs/REPORT-JSON.md`, `docs/host/README.md`, this plan and the close. Edit: none. | USER, S10 |
 
 The seed is `bin/new-lang.sh permit-lang tcc-wasm` from lang-template
 5265a2a. The kit gives the parser, the checker, the evaluator, the lowering
@@ -583,7 +589,7 @@ refusal, the path regressions. The counts are those of relay 05dd63b.
 | Target | Code | Output | Check |
 |---|---|---|---|
 | T1 MCP gate | `src/wasm.c` (kit) writes one `.wasm` for each program, with the exports `decide (target, action, payload, cost, has_digest, digest : i64) -> i64`, `malformed () -> i64` and `memory` (S8, `docs/host/README.md`): the code is 0 for `permit` and 1 to 8 for the `Reason` arms. New `host/` in C99 that TinyCC builds: the gate `build/permitd`. It sits between the agent and the upstream MCP server (a child process on stdio), holds the credential, makes the canonical bytes of each call, hashes them (SHA-256), reads approvals from the approver channel, runs `decide` in its Wasm engine (Q-S0-1), and forwards only a permitted call. | one `.wasm` for each program, and `build/permitd` | node and wasmtime run each module as differential oracles (L8); the demo rows in `test/host/` |
-| T2 JSON authority report | `src/report.c`: the static summary from `langc` (scope, steps, budgets, laws), and one line for each call from the gate (the call, the decision, the reason code, the steps and the budget left, the digest that the gate checked). Schema in `docs/REPORT-JSON.md`. | JSON text | byte-equal rows in `test/report/` |
+| T2 JSON authority report | `src/report.c`: the static summary from `langc report` (scope, steps, budgets, laws). `host/report.c`: one line for each call from the gate, `permitd --report FILE` (the call, the decision, the reason code, the steps and the budget left, the digest that the gate checked). Schema in `docs/REPORT-JSON.md`. | JSON text | byte-equal rows in `test/report/` and the report rows R1 to R8 of `test/hosttool.c` |
 | T3 Cedar export | `src/cedar.c`: the static scope as Cedar `permit` policies. Steps, budgets, the sequence guard and the approval binding have no Cedar form. The export writes one comment for each part that it leaves out. | `.cedar` text | golden files in `test/cedar/` (O3) |
 
 `langc mcp` (A4) is a different program from `permitd`. `langc mcp` is the
@@ -668,6 +674,11 @@ D10 and D11), 31 killed in the first run. The survivor O1 (the hash of
 C1 (the cost of a call) was a compile kill only; C1b keeps the function
 in use, and the `--cost` row killed it. Each U4 mutant is killed by its
 own D row (Q-S9-U4-1 (a) for D10). S9 total: 32 mutants, 32 killed.
+S10: 14 mutants (U1: 7 of `src/report.c`, the JCS pass, a word as a
+number, the scope order, the program-origin test, the Path-type test,
+the no-start scope and the action name; U2: 7, R1 to R7, of
+`host/report.c` and the report sites of `host/permitd.c`), 14 killed in
+the first run, each by a report row. S10 total: 14 mutants, 14 killed.
 
 ## 11. Port sources
 
@@ -709,7 +720,7 @@ One session for each slice: scope, gate, mutants, docs, close.
 | S7 | `Payload`, `Mutation`, `canon`, `Digest`, `hash`, `Approval`, `Call`, `Plan` (CM), `Trace` (CC), `decide`; `REFUSE_EXECUTE_UNAPPROVED`; L3, L5, L7. Takes the host cost in `Call` (Q-S6-3 (a)) and the `Plan` path sum of `REFUSE_BUDGET_OVERSPEND` (Q-S6-6 (a)). Built: the kernel sorts `Payload`, `Bytes` and `Digest` with kit-only `payloadOf` and `approval`; `Mutation`, `canon`, the copyable `Ticket`, the affine `Call`, `Authority`, `judge`, `decide`, `Reply`, the first-order `Plan`, `Entry` and `Trace = Stream Entry`; `REFUSE_EXECUTE_UNAPPROVED` on a closed `Plan` def; `langc ir` refuses a `Payload` at run time (S8). Rulings Q-S7-1 to Q-S7-12 (section 1); the path sum is O20. Gate EXIT 0: 33 examples, 21 parse refusals, 224 check refusals, 12 kit-only refusals, 1 time hint, 92 evals, 1 build, 1 ir lowered, 6 ir refusals, 2 ir lowerings, 4 notrap modules, 7 notrap bad rows, 10 spine evals, 2 natops evals, review, domain and path regressions passed. 21 mutants, 21 killed (section 10). | DONE |
 | S8 | T1 part 1: the Wasm module of `decide`, the binding (Q-S0-5), the notrap rows; the differential and wasm runs lines (Q-S3-2 (b)). Takes a `Payload` at run time (the S7 `REFUSE_LOWER` row `test/ir/payload.lang`). Built: guest `res` literals (`REFUSE_RES`), `bind` lines (`REFUSE_BIND`), `def start` with its guest Nat literals, domain `judgeMalformed`; the host handles and the `permit` imports `envelope`, `hash` and `within`; the S8 lowerings (the `Size` word, the `REPEAT` elim, the nullary switch, `len`, `usedHas`, `IR_STMT_STORE`); the state region and its data section; the exports `decide`, `malformed` and `memory`; the custom sections `permit.res` and `permit.bind`; the notraptool import rows; `test/run-wasm.mjs` on node and wasmtime (`--wasmtime`, `--decide`, `--lang`) and the call scripts `test/decide/`. Rulings Q-S8-1 to Q-S8-12 (section 1); `needsApproval` is O21. Gate EXIT 0: 35 examples, 22 parse refusals, 236 check refusals, 13 kit-only refusals, 1 time hint, 92 evals, 1 build, 1 ir lowered, 8 ir refusals, 10 ir lowerings, 3 custom sections, 5 notrap modules, 11 notrap bad rows, 10 spine evals, 2 natops evals, 16 wasm runs, 694 differential cases with 0 mismatches, 8 decide scripts (12 calls, 0 mismatches), review, domain and path regressions passed. 26 mutants, 26 killed (section 10). | DONE |
 | S9 | T1 part 2: `permitd`: the Wasm engine, SHA-256, the canonical bytes, the approver channel, the state, the stdio MCP proxy, `fakedeploy`, N6; the demo D1 to D11; L8. Built: `host/engine.c` and `host/wasmread.c` (the import and data sections, the (module, name) binding), `host/sha256.c`, `host/jsonin.c` and `host/jcs.c` (JCS, the envelope, the RFC 6901 pointer), `host/permitd.c` (the stdio MCP gate, the approver, the state file, the cost), `test/fakedeploy.c` (7 tools), `test/host/deploy.lang` (7 bind lines), the tools `test/shatool.c`, `test/enginetool.c`, `test/jcstool.c` and `test/hosttool.c`, `docs/MCP.md` (MCP 2025-11-25). Rulings Q-S9-1 to Q-S9-10 and Q-S9-U4-1 (section 1); the run-time `deny widen` is O22, a D10 row with the target only is O23. Gate EXIT 0: 35 examples, 22 parse refusals, 236 check refusals, 13 kit-only refusals, 1 time hint, 92 evals, 1 build, 1 ir lowered, 8 ir refusals, 10 ir lowerings, 3 custom sections, 5 notrap modules, 11 notrap bad rows, 10 spine evals, 2 natops evals, 16 wasm runs, 694 differential cases with 0 mismatches, 8 decide scripts (12 calls, 0 mismatches), 8 engine decide scripts (12 calls, 0 mismatches), 2 engine refusals, 2 engine hash rows, 7 sha256 vectors, 32 jcs rows, 28 host rows, review, domain and path regressions passed. 32 mutants, 32 killed (section 10). | DONE |
-| S10 | T2: the JSON authority report, `docs/REPORT-JSON.md`. | |
+| S10 | T2: the JSON authority report, `docs/REPORT-JSON.md`. Built: `langc report` (`src/report.c`: the `program` line, the scope walker, the Path-type law walk), `permitd --report FILE` (`host/report.c`: the `call` and `malformed` lines, appended with `fflush` and `fsync` after the state write), 5 `test/report/` rows and the hosttool rows R1 to R8. Gate EXIT 0: the S9 counts, plus 5 report rows and 36 host rows and 2 report output checks. 14 mutants, 14 killed (section 10). | DONE |
 | S11 | T3: the Cedar export, the golden files. | |
 | S12 | A1: canonical forms and `langc fmt`. | |
 | S13 | A2: `langc check --json`. | |
@@ -801,6 +812,11 @@ One session for each slice: scope, gate, mutants, docs, close.
   the target and the name. A row where only the target changes needs one
   tool name with two bind pointers, so two modules (a rebind with the
   same approvals file).
+- O24 OPEN (Q-S10-3 (a)). The `call` line comes before the forward, so
+  the report does not hold the upstream outcome (the result, an
+  `isError` answer or a closed upstream). A line for the outcome needs a
+  new line kind with the id, written after the answer of the upstream
+  server.
 
 ## 14. Questions for the USER (S0)
 
