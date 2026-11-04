@@ -21,8 +21,10 @@ These files make the language and its Wasm target:
 - the MCP gate (S9 U3): `host/permitd.c`
 - the JSON authority report (S10): `src/report.c`, `src/report.h`,
   `host/report.c` and `host/report.h` (`docs/REPORT-JSON.md`)
+- the Cedar export (S11): `src/cedar.c` and `src/cedar.h`
+  (`docs/CEDAR.md`)
 - the tests: `test/parse/`, `test/check/`, `test/eval/`, `test/ir/`,
-  `test/notrap/`, `test/engine/`, `test/host/deploy.lang`, `test/report/`,
+  `test/notrap/`, `test/engine/`, `test/host/deploy.lang`, `test/report/`, `test/cedar/`,
   `test/review.sh`, `test/fronttool.c`, `test/pathtool.c`,
   `test/notraptool.c`, `test/enginetool.c`, `test/shatool.c`,
   `test/jcstool.c`, `test/fakedeploy.c`, `test/hosttool.c` and
@@ -123,6 +125,7 @@ build/langc ir PROG
 build/langc abi PROG
 build/langc build PROG -o OUT [--runtime]
 build/langc report PROG
+build/langc cedar PROG
 ```
 
 - `check` prints `ok`, or refuses the program.
@@ -134,6 +137,8 @@ build/langc report PROG
   gives the same bytes.
 - `report` prints the `program` line of the JSON authority report
   (S10, `docs/REPORT-JSON.md`).
+- `cedar` prints the start scope as Cedar `permit` policies (S11,
+  `docs/CEDAR.md`).
 
 The exit status is 0 for success, 1 for a refused program and 2 for a
 usage or IO error. A diagnostic on stderr has the form
@@ -381,8 +386,10 @@ has no approval.
 | `sha256 vectors: 7 checked` | `build/shatool` checks `host/sha256.c` on the 4 FIPS 180-4 vectors and 3 pad rows (55, 56 and 64 bytes of `a`) (S9, Q-S9-2 (a)) |
 | `engine hash rows: 2 checked` | `build/enginetool` script line `hash N` gives the O5 hash stub of N. The 2 rows (N 0 and 9223372036854775809) compare it with the number of the `test/run-wasm.mjs` formula `(N * 1000003 + 7) mod 2^64` (S9 U2, mutant O1) |
 | `jcs rows: 32 checked` | `build/jcstool` checks `host/jsonin.c` and `host/jcs.c`: 17 JCS rows, 3 envelope rows, 1 envelope digest row and 11 pointer rows (S9 U2, Q-S9-3 (a)) |
-| `report rows: 5 checked` | `langc report` writes the `program` line of each `test/report/*.lang` file: exit 0, no stderr and the bytes of its `.json` file (S10 U1, `docs/REPORT-JSON.md`) |
+| `report rows: 7 checked` | `langc report` writes the `program` line of each `test/report/*.lang` file: exit 0, no stderr and the bytes of its `.json` file (S10 U1; `empty` S11 U2, `big` S11 U3; `docs/REPORT-JSON.md`) |
+| `cedar rows: 7 checked` | `langc cedar` writes the Cedar text of each `test/report/*.lang` file: exit 0, no stderr and the bytes of `test/cedar/NAME.cedar`; the count must be the report row count (S11, `docs/CEDAR.md`) |
 | `report write errors: 2 checked` | `build/reporttool` checks the same valid report with writable and read-only stdout: exit 0 and exit 1 |
+| `cedar write errors: 2 checked` | `build/reporttool` checks `langc cedar` on the same program the same way: exit 0 and exit 1 (S11 U2) |
 | `host rows: 36 checked` | `build/hosttool` runs `build/permitd` on the module of `test/host/deploy.lang` with `build/fakedeploy` as the upstream server, one line at a time. The 12 rows of S9 U3: a line that is not JSON, a tool with no bind row, a target that is not a string, a bad approval hex, `--error` and `--exit` of the upstream server, a bad state file (exit 2), the forwarded bytes (no `permit/approval` key and no empty `_meta`), the `isError` of a deny, `--cost`, an approvals line added between two calls, and `--state` in a missing directory (N6). Six review rows check refusal of batches and scalars before forwarding, the retained metadata key with an embedded NUL, the maximum 64-bit cost, cost overflow, and a large state budget across a restart. The 10 demo rows of S9 U4 (PLAN section 8.3): D1 to D8, D10 and D11, each with the want of its PLAN row; D9 is the static row `test/check/delegate-widen.lang` in `check refusals`. The script line `! L` closes the input of permitd, wants exit 0 and no extra answer, and starts permitd again with the same flags (row D6: the approval stays used after a restart). The 8 report rows, R1 to R8: the script line `# L` wants L as the next line of the `--report` file (`docs/REPORT-JSON.md`) |
 | `gate: 0 failures` | the sum of all failures of `test/gate.sh` |
 | `review regressions: passed` | `test/review.sh` passes |

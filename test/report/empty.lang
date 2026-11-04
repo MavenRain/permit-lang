@@ -1,0 +1,6 @@
+-- S11 U2 report and cedar row (Q-S11-3 (a)): an empty start scope (fmUnit)
+-- with 2 steps, 5 units and one bind. unit.lang has the empty scope with 0
+-- steps, 0 units and no binds. The tool name has a tab byte: the report
+-- line and the cedar bind comment have its JSON escape.
+def start : Authority := authority (fmUnit (Prod Resource Action)) (szS (szS sz0)) 5 (fmUnit Digest)
+bind "re	ad" inspect "/path"

@@ -1,0 +1,13 @@
+// permit-lang T3: the static scope of def start as Cedar permit policies.
+// Cedar denies each request that no policy permits; principal is open.
+// Each Resource::"a/b" must have the parent Resource::"a" in the request entities.
+permit (principal, action == Action::"inspect", resource in Resource::"docs");
+permit (principal, action == Action::"propose", resource in Resource::"docs/report");
+permit (principal, action == Action::"execute", resource in Resource::"docs/report");
+permit (principal, action == Action::"execute", resource in Resource::"mail/out");
+// Not exported: steps. def start allows 3 calls.
+// Not exported: budget. def start has 7 units; the gate takes the cost of each call.
+// Not exported: approval binding. Each execute call needs an approval with the digest of its canonical target and payload, used one time.
+// Not exported: sequence guard (L5). On each Plan path, an execute comes after an approved propose of the same mutation.
+// Not exported: laws. none
+// Not exported: bind lines. "read" inspect "/path"; "draft" propose "/doc"; "send" execute "/to"; "file" execute "/dest/0"

@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "cedar.h"
 #include "front/check.h"
 #include "front/front.h"
 #include "front/lower.h"
@@ -19,6 +20,7 @@ typedef enum {
   CMD_ABI,
   CMD_BUILD,
   CMD_REPORT,
+  CMD_CEDAR,
 } Command;
 
 typedef struct {
@@ -43,6 +45,7 @@ static const struct {
   {"abi", CMD_ABI},
   {"build", CMD_BUILD},
   {"report", CMD_REPORT},
+  {"cedar", CMD_CEDAR},
 };
 
 static int usage(FILE *err) {
@@ -52,6 +55,7 @@ static int usage(FILE *err) {
         "       langc [--kit] abi PROG [--text]\n"
         "       langc [--kit] build PROG -o OUT [--runtime]\n"
         "       langc [--kit] report PROG\n"
+        "       langc [--kit] cedar PROG\n"
         "--kit: the kit mode, the trusted test scope of the kit gate\n", err);
   return 2;
 }
@@ -88,6 +92,7 @@ static int parse_options(int argc, char **argv, Options *opt, Diag *diag) {
     case CMD_CHECK:
     case CMD_IR:
     case CMD_REPORT:
+    case CMD_CEDAR:
       return argc == 3 ? 1 : diag_fail(diag, "USAGE", NULL, "too many arguments");
     case CMD_ABI:
       /* The JSON ABI is the default; --text gives the C-K4-16 lines (C-c7-1). */
@@ -137,6 +142,8 @@ static int run_target(const Options *opt, Machine *machine, Diag *diag) {
       return ok ? 0 : 1;
     case CMD_REPORT:
       return report_program(machine, &prog, stdout) ? 0 : 1;
+    case CMD_CEDAR:
+      return cedar_program(machine, &prog, stdout) ? 0 : 1;
     case CMD_CHECK:
     case CMD_EVAL:
     case CMD_BUILD:
@@ -166,6 +173,7 @@ static int run(const Options *opt, Arena *arena, Diag *diag) {
     case CMD_ABI:
     case CMD_BUILD:
     case CMD_REPORT:
+    case CMD_CEDAR:
       break;
   }
   return run_target(opt, &machine, diag);

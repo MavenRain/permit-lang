@@ -194,19 +194,31 @@ static int out_start(Machine *m, JsonOut *out) {
          out_text(out, "]");
 }
 
-int report_program(Machine *m, const IrProgram *prog, FILE *out) {
+int report_value(Machine *m, const IrProgram *prog, JsonValue *value) {
   JsonOut text = {m->arena, m->diag, NULL, 0, 0};
-  JsonValue value;
-  JcsBuf buf = {NULL, 0, 0};
   int ok = out_text(&text, "{\"kind\":\"program\",\"permit\":1") && out_binds(m, &text, prog) &&
            out_laws(m, &text) && out_start(m, &text) && out_text(&text, "}");
-  if (!ok || !json_parse(m->arena, text.data, text.len, &value, m->diag))
+  return ok && json_parse(m->arena, text.data, text.len, value, m->diag);
+}
+
+int report_program(Machine *m, const IrProgram *prog, FILE *out) {
+  JsonValue value;
+  JcsBuf buf = {NULL, 0, 0};
+  JcsResult res = JCS_FULL;
+  size_t cap;
+  if (!report_value(m, prog, &value))
     return 0;
-  buf.cap = 2u * text.len + 16u;
-  buf.bytes = arena_alloc(m->arena, buf.cap);
-  if (buf.bytes == NULL)
-    return diag_fail(m->diag, "OOM", "report", "out of memory");
-  if (jcs_write(&value, &buf) != JCS_OK)
+  /* The buffer starts at 4096 bytes and doubles while the JCS form does not
+     fit. */
+  for (cap = 4096u; res == JCS_FULL; cap *= 2u) {
+    buf.bytes = arena_alloc(m->arena, cap);
+    if (buf.bytes == NULL)
+      return diag_fail(m->diag, "OOM", "report", "out of memory");
+    buf.cap = cap;
+    buf.len = 0;
+    res = jcs_write(&value, &buf);
+  }
+  if (res != JCS_OK)
     return diag_fail(m->diag, "INTERNAL", "report", "the report line has no JCS form");
   return fwrite(buf.bytes, 1u, buf.len, out) == buf.len && fputc('\n', out) != EOF && fflush(out) == 0
            ? 1

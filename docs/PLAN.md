@@ -39,7 +39,9 @@ file, the stdio MCP proxy, `fakedeploy` and the demo rows D1 to D11
 (sections 8.3 and 10; the S9 row of section 12). S10 DONE: the JSON
 authority report: `langc report`, `permitd --report FILE` and
 `docs/REPORT-JSON.md` (sections 8.2 and 10; the S10 row of section 12).
-Next: S11 (T3, section 12).
+S11 DONE: the Cedar export: `langc cedar` and `docs/CEDAR.md` (sections
+1, 8.2, 10 and 13; the S11 row of section 12). Next: S12 (A1, section
+12).
 
 ## 1. Rulings
 
@@ -135,6 +137,12 @@ Next: S11 (T3, section 12).
 | 2026-11-03 | Q-S10-2 The format: (a). JSON Lines: each line is one object in its JCS form, then `\n`, with `"permit":1` and `"kind"` (`program`, `call` or `malformed`). Both writers make the bytes with `json_parse` and `jcs_write`. No time field. Edit: none. | USER, S10 |
 | 2026-11-03 | Q-S10-3 The fields: (a). Each 64-bit word is a JSON string of decimal digits. The keys of each line are in `docs/REPORT-JSON.md`. The line does not hold the upstream outcome. Edit: section 13, O24. | USER, S10 |
 | 2026-11-03 | Q-S10-4 The unit split: (a). U1: `langc report` and the `test/report/` rows. U2: `permitd --report` and the hosttool rows R1 to R4. U3: `docs/REPORT-JSON.md`, `docs/host/README.md`, this plan and the close. Edit: none. | USER, S10 |
+| 2026-11-03 | Q-S11-1 The entry point and the walker: (a). `langc [--kit] cedar PROG` writes to stdout, exit 0, 1 or 2. `report_value` in `src/report.c` makes the JSON object of the `program` line; `report_program` writes its JCS form (the bytes do not change) and `src/cedar.c` walks the same object (one walker). Edit: `docs/CEDAR.md`. | USER, S11 |
+| 2026-11-03 | Q-S11-2 The policy form: (a). One `permit` for each grant, in the scope walk order, duplicates kept; `action == Action::"ARM"`, `resource in Resource::"TEXT"`, principal open, no annotation. Edit: `docs/CEDAR.md`. | USER, S11 |
+| 2026-11-03 | Q-S11-3 The text layout: (a). The 3-line header, then the policies, then the 6 "Not exported" comments in a fixed order (steps, budget, approval binding, sequence guard, laws, bind lines); a fixed text for no `def start` and for a scope with no grant. Edit: `docs/CEDAR.md`. | USER, S11 |
+| 2026-11-03 | Q-S11-4 The unit split: (a). U1: the code and the probe. U2: the golden rows, `test/report/empty.lang`, the gate line, the write error check and the mutants. U3: the docs, Q-S11-5, Q-S11-6 and the close. Edit: none. | USER, S11 |
+| 2026-11-03 | Q-S11-5 The doc-check debt of S9: (a). `docs/MCP.md` writes each of the two JSON answers in a `json` block, with one key or one closing brace on each line, so no line has two closing braces together. The bytes of `permitd` do not change. Edit: `docs/MCP.md`. | USER, S11 |
+| 2026-11-03 | Q-S11-6 The C8c survivor: (a). `test/report/big.lang` (60 binds, a report line of 9959 bytes, 2 doublings of the 4096-byte JCS buffer), `big.json` and `test/cedar/big.cedar`: 7 report rows and 7 cedar rows. The rerun killed C8c. Edit: section 10. | USER, S11 |
 
 The seed is `bin/new-lang.sh permit-lang tcc-wasm` from lang-template
 5265a2a. The kit gives the parser, the checker, the evaluator, the lowering
@@ -590,7 +598,7 @@ refusal, the path regressions. The counts are those of relay 05dd63b.
 |---|---|---|---|
 | T1 MCP gate | `src/wasm.c` (kit) writes one `.wasm` for each program, with the exports `decide (target, action, payload, cost, has_digest, digest : i64) -> i64`, `malformed () -> i64` and `memory` (S8, `docs/host/README.md`): the code is 0 for `permit` and 1 to 8 for the `Reason` arms. New `host/` in C99 that TinyCC builds: the gate `build/permitd`. It sits between the agent and the upstream MCP server (a child process on stdio), holds the credential, makes the canonical bytes of each call, hashes them (SHA-256), reads approvals from the approver channel, runs `decide` in its Wasm engine (Q-S0-1), and forwards only a permitted call. | one `.wasm` for each program, and `build/permitd` | node and wasmtime run each module as differential oracles (L8); the demo rows in `test/host/` |
 | T2 JSON authority report | `src/report.c`: the static summary from `langc report` (scope, steps, budgets, laws). `host/report.c`: one line for each call from the gate, `permitd --report FILE` (the call, the decision, the reason code, the steps and the budget left, the digest that the gate checked). Schema in `docs/REPORT-JSON.md`. | JSON text | byte-equal rows in `test/report/` and the report rows R1 to R8 of `test/hosttool.c` |
-| T3 Cedar export | `src/cedar.c`: the static scope as Cedar `permit` policies. Steps, budgets, the sequence guard and the approval binding have no Cedar form. The export writes one comment for each part that it leaves out. | `.cedar` text | golden files in `test/cedar/` (O3) |
+| T3 Cedar export | `src/cedar.c`: `langc cedar` writes the static scope as Cedar `permit` policies (S11). It walks the `program` object of `report_value`. Steps, budgets, the sequence guard and the approval binding have no Cedar form. The export writes one comment for each part that it leaves out (6 comments, with the laws and the bind lines). Text in `docs/CEDAR.md`. | `.cedar` text | golden files in `test/cedar/`, one for each `test/report/` row (O3) |
 
 `langc mcp` (A4) is a different program from `permitd`. `langc mcp` is the
 authoring server for agents that write permit-lang (check, fmt, explain).
@@ -679,6 +687,17 @@ number, the scope order, the program-origin test, the Path-type test,
 the no-start scope and the action name; U2: 7, R1 to R7, of
 `host/report.c` and the report sites of `host/permitd.c`), 14 killed in
 the first run, each by a report row. S10 total: 14 mutants, 14 killed.
+S11: 13 mutants (U2: C1 to C8c) of `src/cedar.c` and the JCS buffer of
+`src/report.c`: `in` to `==`, a fixed action, the first grant only, the
+scope reversed, the no-start text with the full header, the comments
+before the policies, the bind lines before the laws, a tool name with no
+quotes, a tool name with no escape, the dropped `fflush` status, and 3
+sites of the JCS buffer. 11 killed in the first run. C8a (the buffer
+starts at 16) is EQUIVALENT: each row then goes through the doubling,
+and the doubling gives the same bytes (C8b, 16 and no doubling, is
+killed). C8c (4096 and no doubling) survived, because no row had a
+report line over 4096 bytes. Q-S11-6 (a) added the `big` row, and the
+rerun killed C8c. S11 total: 13 mutants, 12 killed, 1 equivalent.
 
 ## 11. Port sources
 
@@ -721,7 +740,7 @@ One session for each slice: scope, gate, mutants, docs, close.
 | S8 | T1 part 1: the Wasm module of `decide`, the binding (Q-S0-5), the notrap rows; the differential and wasm runs lines (Q-S3-2 (b)). Takes a `Payload` at run time (the S7 `REFUSE_LOWER` row `test/ir/payload.lang`). Built: guest `res` literals (`REFUSE_RES`), `bind` lines (`REFUSE_BIND`), `def start` with its guest Nat literals, domain `judgeMalformed`; the host handles and the `permit` imports `envelope`, `hash` and `within`; the S8 lowerings (the `Size` word, the `REPEAT` elim, the nullary switch, `len`, `usedHas`, `IR_STMT_STORE`); the state region and its data section; the exports `decide`, `malformed` and `memory`; the custom sections `permit.res` and `permit.bind`; the notraptool import rows; `test/run-wasm.mjs` on node and wasmtime (`--wasmtime`, `--decide`, `--lang`) and the call scripts `test/decide/`. Rulings Q-S8-1 to Q-S8-12 (section 1); `needsApproval` is O21. Gate EXIT 0: 35 examples, 22 parse refusals, 236 check refusals, 13 kit-only refusals, 1 time hint, 92 evals, 1 build, 1 ir lowered, 8 ir refusals, 10 ir lowerings, 3 custom sections, 5 notrap modules, 11 notrap bad rows, 10 spine evals, 2 natops evals, 16 wasm runs, 694 differential cases with 0 mismatches, 8 decide scripts (12 calls, 0 mismatches), review, domain and path regressions passed. 26 mutants, 26 killed (section 10). | DONE |
 | S9 | T1 part 2: `permitd`: the Wasm engine, SHA-256, the canonical bytes, the approver channel, the state, the stdio MCP proxy, `fakedeploy`, N6; the demo D1 to D11; L8. Built: `host/engine.c` and `host/wasmread.c` (the import and data sections, the (module, name) binding), `host/sha256.c`, `host/jsonin.c` and `host/jcs.c` (JCS, the envelope, the RFC 6901 pointer), `host/permitd.c` (the stdio MCP gate, the approver, the state file, the cost), `test/fakedeploy.c` (7 tools), `test/host/deploy.lang` (7 bind lines), the tools `test/shatool.c`, `test/enginetool.c`, `test/jcstool.c` and `test/hosttool.c`, `docs/MCP.md` (MCP 2025-11-25). Rulings Q-S9-1 to Q-S9-10 and Q-S9-U4-1 (section 1); the run-time `deny widen` is O22, a D10 row with the target only is O23. Gate EXIT 0: 35 examples, 22 parse refusals, 236 check refusals, 13 kit-only refusals, 1 time hint, 92 evals, 1 build, 1 ir lowered, 8 ir refusals, 10 ir lowerings, 3 custom sections, 5 notrap modules, 11 notrap bad rows, 10 spine evals, 2 natops evals, 16 wasm runs, 694 differential cases with 0 mismatches, 8 decide scripts (12 calls, 0 mismatches), 8 engine decide scripts (12 calls, 0 mismatches), 2 engine refusals, 2 engine hash rows, 7 sha256 vectors, 32 jcs rows, 28 host rows, review, domain and path regressions passed. 32 mutants, 32 killed (section 10). | DONE |
 | S10 | T2: the JSON authority report, `docs/REPORT-JSON.md`. Built: `langc report` (`src/report.c`: the `program` line, the scope walker, the Path-type law walk), `permitd --report FILE` (`host/report.c`: the `call` and `malformed` lines, appended with `fflush` and `fsync` after the state write), 5 `test/report/` rows and the hosttool rows R1 to R8. Gate EXIT 0: the S9 counts, plus 5 report rows and 36 host rows and 2 report output checks. 14 mutants, 14 killed (section 10). | DONE |
-| S11 | T3: the Cedar export, the golden files. | |
+| S11 | T3: the Cedar export, `docs/CEDAR.md`. Built: `langc cedar` (`src/cedar.c`: the header, one `permit` for each grant, the 6 "Not exported" comments; `report_value` in `src/report.c` is the one walker), 7 `test/cedar/` rows for the 7 `test/report/` rows (new: `empty` and `big`), the cedar write error check of `build/reporttool`, and the JSON blocks of `docs/MCP.md` (Q-S11-5). Gate EXIT 0: the S10 counts with 7 report rows, plus 7 cedar rows and 2 cedar write errors. 13 mutants, 12 killed, 1 equivalent (section 10). | DONE |
 | S12 | A1: canonical forms and `langc fmt`. | |
 | S13 | A2: `langc check --json`. | |
 | S14 | A4: `langc mcp`. | |
@@ -736,8 +755,9 @@ One session for each slice: scope, gate, mutants, docs, close.
 - O2 CLOSED at S3. The kit "Lazy traps" section and the gate row "a trap
   is equal to a trap" are gone. `docs/host/README.md` has "No traps"
   (the relay-lang 5c386bb text in permit words) and the S3 gate rows.
-- O3 The cedar CLI is not on PATH. T3 is checked by golden files only. A
-  `cedar validate` row needs a USER install.
+- O3 OPEN. The cedar CLI is not on PATH. T3 (S11) is checked by the 7
+  golden files of `test/cedar/` only. A `cedar validate` row needs a USER
+  install.
 - O4 The link to the thread in pasted 1 did not survive the paste. The
   README states the problem without the link until the USER gives it.
 - O5 L3 rests on the collision resistance of `hash`. That is an

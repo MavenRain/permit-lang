@@ -70,13 +70,37 @@ A deny (code 1 to 8) never reaches the child. The gate answers the agent
 with a result (not a JSON-RPC error: the model must see it):
 
 ```json
-{"jsonrpc":"2.0","id":ID,"result":{"content":[{"type":"text","text":"permit-lang deny scopeMiss"}],"isError":true}}
+{
+  "jsonrpc": "2.0",
+  "id": ID,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "permit-lang deny scopeMiss"
+      }
+    ],
+    "isError": true
+  }
+}
 ```
 
+The gate writes the object on one line with no white space. The block
+shows one key on each line.
+
 The text is `permit-lang deny ` and the name of the `Reason` arm. When the
-gate cannot read the id of a malformed line, it answers
-`{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"permit-lang
-deny malformed"}}`.
+gate cannot read the id of a malformed line, it answers:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": null,
+  "error": {
+    "code": -32700,
+    "message": "permit-lang deny malformed"
+  }
+}
+```
 
 ## Upstream failure
 

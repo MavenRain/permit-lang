@@ -130,11 +130,13 @@ the state counts the call.
 
 - `test/report/*.lang` and `test/report/*.json` (S10 U1): `test/gate.sh`
   runs `langc report` on each `.lang` file, wants exit 0 and no stderr,
-  and compares the bytes with the `.json` file. The 5 rows are `laws`
+  and compares the bytes with the `.json` file. The 7 rows are `big`
+  (60 binds, a line of 9959 bytes, S11 U3), `empty` (a scope with no
+  grant and a tab in a tool name, S11 U2), `laws`
   (4 laws), `nostart` (no `def start`), `scope` (a left-nested and a
   right-nested `fmMul`, the 3 `Action` arms), `unit` (`fmUnit`, steps
   and budget 0) and `wide` (budget 18446744073709551615). Gate line:
-  `report rows: 5 checked`.
+  `report rows: 7 checked`.
 - `build/hosttool` (`test/hosttool.c`, S10 U2): the script line `# L`
   wants L as the next line of the report file. R1 has an `execute`
   permit with an approvals file, then the `approvalUsed`, `scopeMiss`,

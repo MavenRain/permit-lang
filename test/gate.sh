@@ -569,6 +569,29 @@ for want in $(printf '%s\n' test/report/*.json | LC_ALL=C sort); do
   fi
 done
 echo "report rows: $reports checked"
+# The Cedar export (S11 U2, Q-S11-2 and Q-S11-3 (a)): test/cedar/NAME.cedar
+# is the `langc cedar` text of test/report/NAME.lang (one program, two
+# targets). Each run exits 0 with no stderr, and the text equals NAME.cedar
+# byte for byte. Each report row has a cedar row.
+cedars=0
+for want in $(printf '%s\n' test/cedar/*.cedar | LC_ALL=C sort); do
+  cedars=$((cedars + 1))
+  name=$(basename "$want" .cedar)
+  status=0
+  build/langc cedar "test/report/$name.lang" >"$tmp/c.out" 2>"$tmp/c.err" || status=$?
+  if [ "$status" -ne 0 ] || [ -s "$tmp/c.err" ]; then
+    echo "FAIL cedar $name: exit $status $(head -n 1 "$tmp/c.err" | cut -c1-120)"
+    fail=$((fail + 1))
+  elif ! cmp -s "$want" "$tmp/c.out"; then
+    echo "FAIL cedar $name: the text is not $want: $(cmp "$want" "$tmp/c.out" 2>&1 | cut -c1-120)"
+    fail=$((fail + 1))
+  fi
+done
+echo "cedar rows: $cedars checked"
+if [ "$cedars" -ne "$reports" ]; then
+  echo "FAIL cedar: $cedars cedar rows for $reports report rows"
+  fail=$((fail + 1))
+fi
 if ! build/reporttool build/langc test/report/unit.lang; then
   fail=$((fail + 1))
 fi
