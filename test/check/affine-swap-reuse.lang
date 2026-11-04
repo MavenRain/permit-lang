@@ -1,1 +1,2 @@
-def swap : Sigma (x : Budget) Budget -o Sigma (y : Budget) Budget := fun p => unpack p (fun a b => pack a a)
+def swap : Sigma (x : Budget) Budget -o Sigma (y : Budget) Budget :=
+  fun p => unpack p (fun a b => pack a a)

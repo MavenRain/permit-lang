@@ -2,8 +2,11 @@
 -- decide, malformed or memory (S8, R6, Q-S8-10 (a)). This program has a
 -- bind line, a def start and an entry with the name memory.
 def docs : Resource := res "docs"
+
 def sc : Scope := fmEta (Prod Resource Action) (pair docs inspect)
+
 def start : Authority := authority sc (szS sz0) 1 (fmUnit Digest)
+
 bind "read_doc" inspect "/path"
-def memory : (n : Nat) -> Nat :=
-  fun (n : Nat) => n
+
+def memory : (n : Nat) -> Nat := fun (n : Nat) => n

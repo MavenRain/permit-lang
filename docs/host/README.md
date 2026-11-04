@@ -126,6 +126,7 @@ build/langc abi PROG
 build/langc build PROG -o OUT [--runtime]
 build/langc report PROG
 build/langc cedar PROG
+build/langc fmt PROG [--check]
 ```
 
 - `check` prints `ok`, or refuses the program.
@@ -139,10 +140,34 @@ build/langc cedar PROG
   (S10, `docs/REPORT-JSON.md`).
 - `cedar` prints the start scope as Cedar `permit` policies (S11,
   `docs/CEDAR.md`).
+- `fmt` prints the canonical text of the program on stdout (S12, A1). It
+  does not change `PROG`. It parses `PROG` and does not check it, and
+  `--kit` has no effect. The line width is 100. A longer decl breaks only
+  after `:=`, and the body is at a 2-space indent. Each constructor after
+  the first is on its own line, as `| c` at a 2-space indent. An axiom
+  never breaks. A blank line comes before each decl, but not before an
+  `and` sort and not between two `bind` lines that follow each other.
+  The spellings are `Sigma (x : A) B`, one `fun` for a lambda chain, a
+  bare name for a binder with no type, the minimum parentheses and one
+  name in each binder group. The marks print as `(@0 x : A)`,
+  `(@1 x : A)` and `A -o B`. Each string prints as it is in the source.
+  A group `(x y : T)` stays one group when `T` names an earlier name of
+  the group (H1, Q-S12-7). Each comment stays as it is, on its own line
+  at column 0. A comment inside a decl, or after code on its line, moves
+  above the decl. With `--check`, `fmt` prints nothing and exits 0 when
+  `PROG` is canonical. Else it prints `PROG:LINE: not canonical` on
+  stderr, where `LINE` is the first line that is different, and it exits
+  with 1. On a lex or parse error, `fmt` writes the diagnostic on stderr,
+  writes nothing on stdout and exits with 1. Before it writes the text,
+  `fmt` lexes and parses the canonical text again. If that text is too
+  large or does not parse, `fmt` exits with 1. A usage error, an IO
+  error or a full arena gives exit 2.
 
 The exit status is 0 for success, 1 for a refused program and 2 for a
 usage or IO error. A diagnostic on stderr has the form
-`langc: CODE: DEF: message`.
+`langc: CODE: DEF: message`. `fmt --check` also exits 1 when the
+program is not canonical, and then it writes only the line
+`PROG:LINE: not canonical` on stderr.
 
 ## Entries
 
@@ -364,7 +389,7 @@ has no approval.
 | Line | What the gate does |
 |---|---|
 | `examples: 35 checked, 0 failed` | `langc check` accepts each `examples/*.lang` file; the files in `examples/kit.txt` run with `--kit` (`scope.lang`, the S5 demo, `capability.lang`, the S6 demo, and `decide.lang`, the S7 demo, are three of them; S8 adds `resources.lang`). `examples/gate.lang` (S8) is the bind demo: `bind` lines and a `def start` |
-| `parse refusals: 22 checked` | each `test/parse` file fails with the code in `test/parse/expect.txt`; one file has 1100 nested parentheses. 4 files (S4) have a bad mark (`@2`, a marked parameter, a marked field) or `-ops`. 1 file (S5, `affine-no-cofamily.lang`) has `affine` with no `cofamily` after it. 1 file (S8, `unclosed-string.lang`) has a string with no end (`LEX_STRING`); `string.lang` gives `PARSE_EXPECT` at S8, because a string lexes for `res` and `bind` |
+| `parse refusals: 23 checked` | each `test/parse` file fails with the code in `test/parse/expect.txt`; one file has 1100 nested parentheses. 4 files (S4) have a bad mark (`@2`, a marked parameter, a marked field) or `-ops`. 1 file (S5, `affine-no-cofamily.lang`) has `affine` with no `cofamily` after it. 1 file (S8, `unclosed-string.lang`) has a string with no end (`LEX_STRING`); `string.lang` gives `PARSE_EXPECT` at S8, because a string lexes for `res` and `bind`. 1 file (S12, `string-nul.lang`) has a NUL byte in a string (`LEX_STRING`, Q-S12-8) |
 | `check refusals: 236 checked` | each `test/check` file fails with the code in `test/check/expect.txt`; the `TYPE_REFL` message shows both normal forms. The 45 `affine-*.lang` files (S4) give `REFUSE_AFFINE_REUSE` (11), `REFUSE_AFFINE_OMEGA` (24), `REFUSE_AFFINE_FIX` (3), `REFUSE_AFFINE_PATH` (4) or `TYPE_MISMATCH` (3). 16 of them are in `test/check/kit.txt`, so they run with `--kit`. The 13 S5 files: `time-{date,ttl,deadline,expires}.lang` (`REFUSE_TIME`), `kit-res-root.lang` (`REFUSE_KIT`), `allowance-{reuse,open-twice,open-parts,unpack-twice}.lang` (`REFUSE_AFFINE_REUSE`: a second use of an `Allowance`, of its opened pair, or of its parts) and `allowance-{omega,capture-budget,capture-allowance,capture-polymorphic}.lang` (`REFUSE_AFFINE_OMEGA`: an omega binder or a position closure that captures a resource or an unknown payload). The 6 S6 files: `budget-overspend-{spend,split}.lang` and `delegate-overspend.lang` (`REFUSE_BUDGET_OVERSPEND`), `delegate-widen.lang` (`REFUSE_DELEGATE_WIDEN`), `capability-reuse.lang` (`REFUSE_AFFINE_REUSE`) and `capability-omega.lang` (`REFUSE_AFFINE_OMEGA`); the first 4 are in `test/check/kit.txt`. The 5 S7 files: `execute-unapproved-{none,other,refused}.lang` (`REFUSE_EXECUTE_UNAPPROVED`: an execute with no propose, in the branch of a propose of another mutation, or in the `ppRefused` branch), `digest-payload-changed.lang` (`PATH_END`: a changed payload changes the digest) and `kit-payload-of.lang` (`REFUSE_KIT`); the first 4 are in `test/check/kit.txt`. The 12 S8 files: `res-{upper,empty-segment,star,empty,trailing,leading}.lang` (`REFUSE_RES`: an upper-case letter, an empty segment, a wildcard, an empty path, a trailing or a leading slash), `bind-{twice,action,pointer,escape,tilde-end}.lang` (`REFUSE_BIND`: a second `bind` of one tool, an unknown action, a pointer with no leading slash, a bad `~` escape, a `~` at the end) and `start-literal-other.lang` (`REFUSE_KIT`: a guest Nat literal outside `def start`, Q-S8-8 (a)) |
 | `kit-only refusals: 13 checked` | each `REFUSE_KIT` row refuses a kit item in guest mode only: `langc --kit check` accepts the file (`kit-res-root.lang`, S5, is a guest `resRoot`; `kit-payload-of.lang`, S7, is a guest `payloadOf`; `start-literal-other.lang`, S8, is a guest Nat literal outside `def start`) |
 | `time hint: 1 checked` | a `REFUSE_TIME` refusal says to count operations: a deadline is a `StepBound` (a count of later operations) |
@@ -391,6 +416,11 @@ has no approval.
 | `report write errors: 2 checked` | `build/reporttool` checks the same valid report with writable and read-only stdout: exit 0 and exit 1 |
 | `cedar write errors: 2 checked` | `build/reporttool` checks `langc cedar` on the same program the same way: exit 0 and exit 1 (S11 U2) |
 | `host rows: 36 checked` | `build/hosttool` runs `build/permitd` on the module of `test/host/deploy.lang` with `build/fakedeploy` as the upstream server, one line at a time. The 12 rows of S9 U3: a line that is not JSON, a tool with no bind row, a target that is not a string, a bad approval hex, `--error` and `--exit` of the upstream server, a bad state file (exit 2), the forwarded bytes (no `permit/approval` key and no empty `_meta`), the `isError` of a deny, `--cost`, an approvals line added between two calls, and `--state` in a missing directory (N6). Six review rows check refusal of batches and scalars before forwarding, the retained metadata key with an embedded NUL, the maximum 64-bit cost, cost overflow, and a large state budget across a restart. The 10 demo rows of S9 U4 (PLAN section 8.3): D1 to D8, D10 and D11, each with the want of its PLAN row; D9 is the static row `test/check/delegate-widen.lang` in `check refusals`. The script line `! L` closes the input of permitd, wants exit 0 and no extra answer, and starts permitd again with the same flags (row D6: the approval stays used after a restart). The 8 report rows, R1 to R8: the script line `# L` wants L as the next line of the `--report` file (`docs/REPORT-JSON.md`) |
+| `fmt canonical: 300 passed` | `langc fmt` gives the same bytes for each accepted `.lang` file of `domain/`, `examples/`, `examples/*/` and `test/*/` outside `test/fmt/` (S12, A1) |
+| `fmt round trip: 312 passed` | each accepted file (the 300 files and the 12 `test/fmt/*.lang` files) and its canonical text give the same `build/fronttool dump`. The dump has no line numbers and no comments. It is scoped (`test/fronttool.c`): each variable prints the distance to its binder or `global`, and each binder prints its mark |
+| `fmt refused: 22 checked` | each file that `langc fmt` refuses is in `test/fmt/refused.txt` (the 22 `test/parse` files), and no accepted file is |
+| `fmt rows: 13 passed` | `langc fmt test/fmt/X.lang` gives the bytes of `test/fmt/X.canon` for each of the 10 golden rows (`aliases`, `binds`, `capture`, `check`, `comment`, `decls`, `lambda`, `layout`, `marks`, `strings`). The 3 witness rows: the dump of `piname.lang` is not the dump of `lambda.canon` (a Pi name), the dump of `mark.lang` is not the dump of `marks.canon` (a mark), and `capture.canon` keeps the group `(x y : x)` (H1, Q-S12-7) |
+| `fmt check: 11 passed` | `langc fmt X.canon --check` exits 0 with no output for each of the 10 golden rows, and `langc fmt test/fmt/check.lang --check` exits 1 with `test/fmt/check.lang:3: not canonical` |
 | `gate: 0 failures` | the sum of all failures of `test/gate.sh` |
 | `review regressions: passed` | `test/review.sh` passes |
 | `domain regressions: passed` | `build/fronttool` (the domain declaration rows, the 54 affine rows of S4 and the 4 time rows and 3 affine cofamily rows of S5 and the 2 guest `spend` and `split` rows of S6) passes |

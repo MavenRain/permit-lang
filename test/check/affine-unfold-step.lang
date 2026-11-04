@@ -1,1 +1,2 @@
-def u : (@1 b : Budget) -> (Budget -o Nat) -> List Nat := fun b k => unfold (fun (n : Nat) => some (pair (k b) n)) 3 0
+def u : (@1 b : Budget) -> (Budget -o Nat) -> List Nat :=
+  fun b k => unfold (fun (n : Nat) => some (pair (k b) n)) 3 0

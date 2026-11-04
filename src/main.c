@@ -6,8 +6,11 @@
 
 #include "cedar.h"
 #include "front/check.h"
+#include "front/fmt.h"
 #include "front/front.h"
+#include "front/lexer.h"
 #include "front/lower.h"
+#include "front/parser.h"
 #include "report.h"
 #include "target.h"
 
@@ -21,6 +24,7 @@ typedef enum {
   CMD_BUILD,
   CMD_REPORT,
   CMD_CEDAR,
+  CMD_FMT,
 } Command;
 
 typedef struct {
@@ -32,6 +36,7 @@ typedef struct {
   const char *out_path;
   int runtime;
   int json;
+  int fmt_check; /* fmt --check (S12 A1): compare PROG with its canonical text */
   CheckMode mode; /* orbit-lang S3: --kit selects the kit mode */
 } Options;
 
@@ -46,6 +51,7 @@ static const struct {
   {"build", CMD_BUILD},
   {"report", CMD_REPORT},
   {"cedar", CMD_CEDAR},
+  {"fmt", CMD_FMT},
 };
 
 static int usage(FILE *err) {
@@ -56,6 +62,7 @@ static int usage(FILE *err) {
         "       langc [--kit] build PROG -o OUT [--runtime]\n"
         "       langc [--kit] report PROG\n"
         "       langc [--kit] cedar PROG\n"
+        "       langc [--kit] fmt PROG [--check]\n"
         "--kit: the kit mode, the trusted test scope of the kit gate\n", err);
   return 2;
 }
@@ -107,6 +114,10 @@ static int parse_options(int argc, char **argv, Options *opt, Diag *diag) {
       return 1;
     case CMD_BUILD:
       return parse_build_options(argc, argv, opt, diag);
+    case CMD_FMT:
+      opt->fmt_check = argc == 4;
+      return argc == 3 || (argc == 4 && strcmp(argv[3], "--check") == 0) ? 1
+        : diag_fail(diag, "USAGE", NULL, "fmt takes only --check after the program");
   }
   return 0;
 }
@@ -147,6 +158,7 @@ static int run_target(const Options *opt, Machine *machine, Diag *diag) {
     case CMD_CHECK:
     case CMD_EVAL:
     case CMD_BUILD:
+    case CMD_FMT:
       break;
   }
   out = fopen(opt->out_path, "wb");
@@ -174,9 +186,47 @@ static int run(const Options *opt, Arena *arena, Diag *diag) {
     case CMD_BUILD:
     case CMD_REPORT:
     case CMD_CEDAR:
+    case CMD_FMT: /* main runs run_fmt */
       break;
   }
   return run_target(opt, &machine, diag);
+}
+
+/* The line of the first byte where TEXT and the canonical text CANON
+   differ (1 + the newlines in the common prefix), or 0 when they are equal. */
+static size_t first_diff_line(const char *text, size_t len, const FmtText *canon) {
+  size_t same = 0;
+  size_t line = 1;
+  for (; same < len && same < canon->len && text[same] == canon->data[same]; same++) line += text[same] == '\n' ? 1u : 0u;
+  return same == len && same == canon->len ? 0 : line;
+}
+
+/* langc fmt (S12 A1, ported from accrue-lang S11): lexes and parses the
+   program only (no domain, no check), then prints the canonical text. With
+   --check it prints nothing when the file is canonical, else
+   `PROG:LINE: not canonical` at the first line that differs (exit 1). */
+static int run_fmt(const Options *opt, Arena *arena, Diag *diag) {
+  char *text = NULL;
+  size_t len = 0;
+  if (!read_source(arena, opt->prog_path, &text, &len, diag)) return 2;
+  TokenList toks;
+  DeclList decls = {NULL, 0, 0};
+  if (!lex_source(arena, opt->prog_path, text, len, &toks, diag)) return 1;
+  if (!parse_source(arena, opt->prog_path, ORIGIN_PROGRAM, &toks, &decls, diag)) return 1;
+  FmtText out;
+  fmt_text_init(&out, arena);
+  if (!fmt_program(&out, decls.items, decls.count, &toks)) {
+    return diag_fail(diag, "OOM", NULL, "no memory for the canonical text of %s", opt->prog_path) + 2;
+  }
+  if (!fmt_validate(&out, opt->prog_path, diag)) return strcmp(diag->code, "OOM") == 0 ? 2 : 1;
+  if (opt->fmt_check) {
+    size_t line = first_diff_line(text, len, &out);
+    if (line != 0) fprintf(stderr, "%s:%zu: not canonical\n", opt->prog_path, line);
+    return line != 0;
+  }
+  size_t written = out.len == 0 ? 0 : fwrite(out.data, 1, out.len, stdout);
+  if (written != out.len || fflush(stdout) != 0) return diag_fail(diag, "IO", NULL, "cannot write the canonical text") + 2;
+  return 0;
 }
 
 int main(int argc, char **argv) {
@@ -191,8 +241,9 @@ int main(int argc, char **argv) {
   opt.mode = kit ? CHECK_KIT : CHECK_GUEST;
   Arena arena;
   arena_init(&arena, ARENA_LIMIT_BYTES);
-  int status = run(&opt, &arena, &diag);
+  int status = opt.command == CMD_FMT ? run_fmt(&opt, &arena, &diag) : run(&opt, &arena, &diag);
   arena_release(&arena);
-  if (status != 0) diag_print(&diag, stderr);
+  /* fmt --check prints its own `PROG:LINE: not canonical` line, with no diag. */
+  if (status != 0 && (opt.command != CMD_FMT || diag.set)) diag_print(&diag, stderr);
   return status;
 }

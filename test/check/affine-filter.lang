@@ -1,1 +1,2 @@
-def fl : (@1 b : Budget) -> (Budget -o Flag) -> List Nat -> List Nat := fun b k xs => filter (fun (n : Nat) => k b) xs
+def fl : (@1 b : Budget) -> (Budget -o Flag) -> List Nat -> List Nat :=
+  fun b k xs => filter (fun (n : Nat) => k b) xs

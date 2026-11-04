@@ -1,8 +1,12 @@
-/* Domain declaration regressions use the same parser and checker as langc. */
+/* Domain declaration regressions use the same parser and checker as langc.
+   `fronttool dump FILE` prints the syntax tree of FILE, one node a line and
+   no positions, so a file and its fmt text can be compared. */
 #include <stdio.h>
 #include <string.h>
 
 #include "front/check.h"
+#include "front/fmt.h"
+#include "front/front.h"
 #include "front/lexer.h"
 #include "front/parser.h"
 
@@ -132,8 +136,176 @@ static int internal_print_refused(const char *type, const char *body) {
   return ok;
 }
 
-int main(void) {
+static const char *const TERM_KINDS[] = {"var",  "nat",   "app",   "lam",    "pi",     "sigma",  "univ",
+                                         "papp", "ineg",  "imeet", "ijoin",  "system", "branch", "res"};
+static const char *const DECL_KINDS[] = {"def", "axiom", "family", "cofamily", "bind"};
+static const char *const MARKS[] = {"@w", "@0", "@1"};
+
+/* A binder name in scope. UP is the next binder out. */
+typedef struct Scope Scope;
+struct Scope {
+  const char *name;
+  const Scope *up;
+};
+
+/* A variable prints the distance to its binder (`#0` is the nearest) or
+   `global` when no binder in SCOPE has its name. */
+static void dump_var(const char *name, const Scope *scope) {
+  size_t k = 0;
+  for (; scope != NULL && strcmp(scope->name, name) != 0; scope = scope->up) k++;
+  if (scope == NULL) printf(" global");
+  else printf(" #%zu", k);
+}
+
+/* A lam, pi or sigma prints its mark and its name. Its left is under SCOPE
+   and its right under SCOPE with the name pushed. An unnamed pi pushes
+   nothing. Thus the left of node y in `(x y : T)` is under x (Q-S12-7). */
+static void dump_term(const char *role, const Term *t, int depth, const Scope *scope) {
+  if (t == NULL) return;
+  int binds = t->kind == TERM_LAM || t->kind == TERM_PI || t->kind == TERM_SIGMA;
+  printf("%*s%s %s", depth * 2, "", role, TERM_KINDS[t->kind]);
+  if (binds) printf(" %s", MARKS[t->mult]);
+  if (t->name != NULL) printf(" %s", t->name);
+  if (t->kind == TERM_VAR && t->name != NULL) dump_var(t->name, scope);
+  if (t->kind == TERM_NAT || t->kind == TERM_UNIV) printf(" %llu", (unsigned long long)t->nat);
+  putchar('\n');
+  Scope inner = {t->name, scope};
+  dump_term("left", t->left, depth + 1, scope);
+  dump_term("right", t->right, depth + 1, binds && t->name != NULL ? &inner : scope);
+}
+
+/* Each field type is under SCOPE and the earlier fields. NODES has one
+   node for each field. Returns SCOPE with all the fields pushed. */
+static const Scope *dump_fields(const char *role, const Field *fields, size_t count, int depth, const Scope *scope,
+                                Scope *nodes) {
+  size_t i;
+  for (i = 0; i < count; i++) {
+    const char *name = fields[i].name == NULL ? "_" : fields[i].name;
+    printf("%*s%s %s%s\n", depth * 2, "", role, name, fields[i].history ? " history" : "");
+    dump_term("type", fields[i].type, depth + 1, scope);
+    nodes[i].name = name;
+    nodes[i].up = scope;
+    scope = &nodes[i];
+  }
+  return scope;
+}
+
+/* dump parses FILE as a program (as langc fmt does) and prints each decl:
+   its kind, name, flags and block (a bind also prints its arm and its
+   pointer), then its params, index, type, body and ctors. The params are
+   in scope over the index, the type, the body and the ctors; the fields of
+   a ctor over its result and its boundary. No positions. Exit 1 on a lex
+   or parse error, 2 on a read error. */
+static int dump(const char *file) {
+  static char text[SOURCE_MAX_BYTES + 1u];
+  FILE *in = fopen(file, "rb");
+  if (in == NULL) {
+    fprintf(stderr, "fronttool: cannot read %s\n", file);
+    return 2;
+  }
+  size_t len = fread(text, 1, sizeof text, in);
+  fclose(in);
+  if (len > SOURCE_MAX_BYTES) {
+    fprintf(stderr, "fronttool: %s is too large\n", file);
+    return 2;
+  }
+  Arena arena;
+  Diag diag;
+  TokenList tokens = {0};
+  DeclList decls = {0};
+  arena_init(&arena, (size_t)1 << 24);
+  diag_init(&diag);
+  int ok = lex_source(&arena, file, text, len, &tokens, &diag)
+    && parse_source(&arena, file, ORIGIN_PROGRAM, &tokens, &decls, &diag);
+  if (!ok) diag_print(&diag, stderr);
+  size_t i, j;
+  for (i = 0; ok && i < decls.count; i++) {
+    const Decl *d = &decls.items[i];
+    size_t total = d->param_count;
+    for (j = 0; j < d->ctor_count; j++) total += d->ctors[j].field_count;
+    Scope *nodes = total == 0 ? NULL : arena_alloc(&arena, total * sizeof *nodes);
+    if (total != 0 && nodes == NULL) {
+      fputs("fronttool: no memory for the scope\n", stderr);
+      arena_release(&arena);
+      return 2;
+    }
+    printf("%s %s%s%s%s%s%s block %zu %zu", DECL_KINDS[d->kind], d->name, d->is_rec ? " rec" : "",
+           d->is_state ? " state" : "", d->is_sealed ? " sealed" : "", d->is_affine ? " affine" : "",
+           d->is_law ? " law" : "", d->block_first, d->block_count);
+    if (d->kind == DECL_BIND)
+      printf(" %s %s", d->bind_action == NULL ? "-" : d->bind_action, d->bind_pointer == NULL ? "-" : d->bind_pointer);
+    putchar('\n');
+    const Scope *top = dump_fields("param", d->params, d->param_count, 1, NULL, nodes);
+    size_t used = d->param_count;
+    dump_term("index", d->index, 1, top);
+    dump_term("type", d->type, 1, top);
+    dump_term("body", d->body, 1, top);
+    for (j = 0; j < d->ctor_count; j++) {
+      const Ctor *c = &d->ctors[j];
+      printf("  ctor %s\n", c->name);
+      const Scope *in_ctor = dump_fields("field", c->fields, c->field_count, 2, top, nodes + used);
+      used += c->field_count;
+      dump_term("result", c->result, 2, in_ctor);
+      dump_term("boundary", c->boundary, 2, in_ctor);
+    }
+  }
+  arena_release(&arena);
+  return ok ? 0 : 1;
+}
+
+/* The original text parses, but a canonical spelling can cross a compiler
+   limit. The command must refuse that text before it reaches stdout. */
+static int fmt_limit(const char *kind, size_t count, const char *want) {
+  static char source[SOURCE_MAX_BYTES + 1u];
+  size_t at = 0;
+  if (strcmp(kind, "size") == 0) {
+    const char *tail = "\ndef n:Nat:=0\n";
+    at = SOURCE_MAX_BYTES - strlen(tail);
+    memset(source, 'a', at);
+    source[0] = '-';
+    source[1] = '-';
+    memcpy(source + at, tail, strlen(tail) + 1u);
+  } else {
+    int sigma = strcmp(kind, "sigma") == 0;
+    int lambda = strcmp(kind, "lambda") == 0;
+    at += (size_t)snprintf(source + at, sizeof source - at, "def deep : Type 0 := %s", lambda ? "fun (" : sigma ? "" : "(");
+    for (size_t i = 0; i < count; i++)
+      at += (size_t)snprintf(source + at, sizeof source - at, sigma ? "Sigma (x%zu : Nat) " : "x%zu ", i);
+    snprintf(source + at, sizeof source - at, "%s", sigma ? "Nat\n" : lambda ? ": Nat) => x0\n" : ": Nat) -> Nat\n");
+  }
+  Arena arena;
+  Diag diag;
+  TokenList toks = {0};
+  DeclList decls = {0};
+  FmtText out;
+  arena_init(&arena, (size_t)1 << 29);
+  diag_init(&diag);
+  fmt_text_init(&out, &arena);
+  int ok = lex_source(&arena, "fmt-limit", source, strlen(source), &toks, &diag)
+    && parse_source(&arena, "fmt-limit", ORIGIN_PROGRAM, &toks, &decls, &diag)
+    && fmt_program(&out, decls.items, decls.count, &toks);
+  if (ok) {
+    int valid = fmt_validate(&out, "fmt-limit", &diag);
+    ok = want == NULL ? valid && !diag.set : !valid && diag.set && strcmp(diag.code, want) == 0;
+  }
+  if (!ok) fprintf(stderr, "FAIL fmt %s limit: want %s, got %s\n", kind,
+                   want == NULL ? "accepted" : want, diag.code == NULL ? "accepted" : diag.code);
+  arena_release(&arena);
+  return ok;
+}
+
+int main(int argc, char **argv) {
+  if (argc == 3 && strcmp(argv[1], "dump") == 0) return dump(argv[2]);
+  if (argc != 1) {
+    fputs("usage: fronttool [dump FILE]\n", stderr);
+    return 2;
+  }
   int ok = 1;
+  ok &= fmt_limit("sigma", 400u, NULL);
+  ok &= fmt_limit("sigma", 510u, "PARSE_DEPTH");
+  ok &= fmt_limit("pi", 1001u, "PARSE_DEPTH");
+  ok &= fmt_limit("lambda", 1001u, "PARSE_DEPTH");
+  ok &= fmt_limit("size", 0u, "FMT_SIZE");
   /* Diagnostics can print binders while constructor slots are still unnamed. */
   ok &= domain("state State := makeState (value : fun (x : Nat) => x)", "TYPE_MISMATCH");
   /* Time words are forbidden in local scopes as well as declarations. */

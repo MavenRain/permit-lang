@@ -40,8 +40,9 @@ file, the stdio MCP proxy, `fakedeploy` and the demo rows D1 to D11
 authority report: `langc report`, `permitd --report FILE` and
 `docs/REPORT-JSON.md` (sections 8.2 and 10; the S10 row of section 12).
 S11 DONE: the Cedar export: `langc cedar` and `docs/CEDAR.md` (sections
-1, 8.2, 10 and 13; the S11 row of section 12). Next: S12 (A1, section
-12).
+1, 8.2, 10 and 13; the S11 row of section 12). S12 DONE: A1, the
+canonical forms and `langc fmt` (sections 1, 9 and 10; the S12 row of
+section 12). Next: S13 (A2, section 12).
 
 ## 1. Rulings
 
@@ -143,6 +144,15 @@ S11 DONE: the Cedar export: `langc cedar` and `docs/CEDAR.md` (sections
 | 2026-11-03 | Q-S11-4 The unit split: (a). U1: the code and the probe. U2: the golden rows, `test/report/empty.lang`, the gate line, the write error check and the mutants. U3: the docs, Q-S11-5, Q-S11-6 and the close. Edit: none. | USER, S11 |
 | 2026-11-03 | Q-S11-5 The doc-check debt of S9: (a). `docs/MCP.md` writes each of the two JSON answers in a `json` block, with one key or one closing brace on each line, so no line has two closing braces together. The bytes of `permitd` do not change. Edit: `docs/MCP.md`. | USER, S11 |
 | 2026-11-03 | Q-S11-6 The C8c survivor: (a). `test/report/big.lang` (60 binds, a report line of 9959 bytes, 2 doublings of the 4096-byte JCS buffer), `big.json` and `test/cedar/big.cedar`: 7 report rows and 7 cedar rows. The rerun killed C8c. Edit: section 10. | USER, S11 |
+| 2026-11-03 | Q-S12-1 The CLI: (a). `langc [--kit] fmt PROG [--check]`, as accrue-lang Q-S11-4. `fmt` writes to stdout only, never in place. Exit 0: the text is written, or `PROG` is canonical under `--check` (no output). Exit 1: a lex or parse error, a failed reparse, or a `--check` mismatch (`PROG:LINE: not canonical` on stderr at the first line that is different). Exit 2: a usage or IO error. `--kit` has no effect. Edit: `docs/host/README.md`. | USER, S12 |
+| 2026-11-03 | Q-S12-2 The layout: (a). The accrue-lang layout: the line width is 100; a longer decl breaks only after `:=`, with the body at a 2-space indent; each constructor after the first is on its own line `| c`; an axiom never breaks; a blank line comes before each decl, but not before an `and` sort. One permit rule: no blank line between two `bind` lines that follow each other (a bind run). Edit: `docs/host/README.md`. | USER, S12 |
+| 2026-11-03 | Q-S12-3 The spellings: (a). The accrue-lang spellings (`Sigma (x : A) B`, one `fun` for a lambda chain, a bare name for a binder with no type, the minimum parentheses, one name in each group), the marks (`(@0 x : A)`, `(@1 x : A)`, `A -o B`) and each string as it is (`res "TEXT"`, `bind "TOOL" ARM "POINTER"`). H1: a group whose type names an earlier name of the group stays one group `(x y : T)` (Q-S12-7 gives the reason). The parser keeps the second forms. Edit: `src/front/fmt.c`. | USER, S12 |
+| 2026-11-03 | Q-S12-4 The comments: (a). As accrue-lang Q-S11-3: each comment stays as it is, on its own line at column 0. A comment inside a decl, or after code on its line, moves above the decl. The comments after the last decl come after one blank line. Edit: `src/front/fmt.c`. | USER, S12 |
+| 2026-11-03 | Q-S12-5 The gate block: (a). Port the accrue-lang fmt block of `test/gate.sh` and make the repository canonical. `test/fmt/refused.txt` lists the files that `fmt` refuses. `build/fronttool dump` is scoped: each variable prints the distance to its binder or `global`, and each binder prints its mark. 10 golden rows and 3 witness rows (`piname`, `mark`, `capture`). Each old gate count stays the same. Edit: `test/gate.sh`, `test/fmt/`, `test/fronttool.c`. | USER, S12 |
+| 2026-11-03 | Q-S12-6 The unit split: (a). U1: the comment table of the lexer, the end line of a decl, `src/front/fmt.c`, `langc fmt`, the scoped dump and a probe of all files. U2: the rewrite of the repository, the `test/fmt` rows and the gate block. U3: the mutants, the docs and the close. Edit: none. | USER, S12 |
+| 2026-11-03 | Q-S12-7 The H1 reason: (a). The parser gives `(x y : T)` with one T for the two binders, and the checker checks the T of y with x in scope. Thus the split `(x : T) -> (y : T) -> B` has the same meaning and the same dump. The H1 guard stays: it keeps the source group, and it makes no claim of capture. Edit: `src/front/fmt.c`, `test/gate.sh`. | USER, S12 |
+| 2026-11-04 | Q-S12-8 A NUL byte in a string: (a). Before S12, a `res` string with a NUL byte passed `langc check`, and `langc fmt` dropped the text after the NUL, because the name is a C string. Now `lex_string` refuses a NUL byte in a string with `LEX_STRING`. A NUL byte in a comment stays (`fmt` writes a comment with its length). New row `test/parse/string-nul.lang`: parse refusals go from 22 to 23. Edit: `src/front/lexer.c`, `docs/host/CAPABILITY.md`. | USER, S12 |
+| 2026-11-04 | Q-S12-9 The M9 survivor: (a). Mutant M9 (`test/fronttool.c`: each bound variable prints `#0`) survives the gate. Each gate use of the dump compares 2 dumps, and the distance follows from the kinds, names and nesting that the dump prints, so M9 cannot change a compare. M9 is EQUIVALENT under the gate oracle. No new row. Edit: section 10. | USER, S12 |
 
 The seed is `bin/new-lang.sh permit-lang tcc-wasm` from lang-template
 5265a2a. The kit gives the parser, the checker, the evaluator, the lowering
@@ -640,7 +650,7 @@ fits. Each item has one deliverable, one slice and one gate.
 
 | Item | Pasted line | Deliverable | Slice | Gate |
 |---|---|---|---|---|
-| A1 | "one canonical form per operation and a langc fmt canonical printer" | No aliases, no second syntax. `langc fmt FILE` prints the canonical form. `langc fmt --check` exits 1 when a file is not canonical. | S12 | `fmt` is idempotent; `parse (fmt x)` has the same core term as `x`; each example and test file is canonical. |
+| A1 | "one canonical form per operation and a langc fmt canonical printer" | No aliases, no second syntax. `langc fmt PROG` prints the canonical form. `langc fmt PROG --check` exits 1 when a file is not canonical (Q-S12-1). | S12 | `fmt` is idempotent; `parse (fmt x)` has the same core term as `x`; each example and test file is canonical. |
 | A2 | "langc check --json, giving fix hints and progress counts (parsed, typed, laws discharged)" | One JSON object: `diagnostics` (code, span, expected, found, `fix`: a concrete edit) and `progress` (`parsed`, `typed`, `affine_checked`, `laws_discharged`, `laws_total`). Schema in `docs/CHECK-JSON.md`. | S13 | Rows in `test/json/`, byte equal. Each refusal code of section 7 has a `fix` row. |
 | A3 | "a SKILL.md with 3 to 5 graded examples" | `skills/permit-lang/SKILL.md` with five graded examples in `examples/skill/`: G1 a read-only scope with a step bound, G2 a budget with costs and a split, G3 an attenuated delegation to a sub-agent, G4 propose and execute of one approved mutation, G5 the demo. SKILL.md quotes each file. | S15 | The gate checks each example and checks that each SKILL.md block and its file are byte equal. |
 | A4 | "an MCP server written in TinyCC (langc mcp)" | An MCP server over stdio (JSON-RPC 2.0, one message on each line), in C, in the same `langc`. Tools: `check`, `fmt`, `eval`, `build` (with a target), `explain` (a refusal code), `list-base` (section 4), `show-law` (section 7). The MCP spec version is pinned in `docs/MCP.md`. | S14 | A C tool `test/mcptool.c` sends `test/mcp/*.in` and compares the replies with `*.out`. |
@@ -698,6 +708,16 @@ and the doubling gives the same bytes (C8b, 16 and no doubling, is
 killed). C8c (4096 and no doubling) survived, because no row had a
 report line over 4096 bytes. Q-S11-6 (a) added the `big` row, and the
 rerun killed C8c. S11 total: 13 mutants, 12 killed, 1 equivalent.
+S12: 11 mutants (U3: M1 to M11) of `src/front/fmt.c`, `src/front/lexer.c`,
+`src/main.c`, `test/fronttool.c` and `test/fmt/refused.txt`: a dropped
+refused row, exit 0 on a `--check` mismatch, parentheses at the same
+level, a comment region that stops one line early, no bind run, `@1`
+printed as `@0`, `-o` printed as `->`, no H1 group, a dump with no binder
+distance, a string with no closing quote, and a NUL byte that lexes. 10
+killed in the first run. M9 (each bound variable prints `#0`) is
+EQUIVALENT under the gate oracle (Q-S12-9): each gate use of the dump
+compares 2 dumps, and the distance follows from what the dump prints. S12
+total: 11 mutants, 10 killed, 1 equivalent.
 
 ## 11. Port sources
 
@@ -741,7 +761,7 @@ One session for each slice: scope, gate, mutants, docs, close.
 | S9 | T1 part 2: `permitd`: the Wasm engine, SHA-256, the canonical bytes, the approver channel, the state, the stdio MCP proxy, `fakedeploy`, N6; the demo D1 to D11; L8. Built: `host/engine.c` and `host/wasmread.c` (the import and data sections, the (module, name) binding), `host/sha256.c`, `host/jsonin.c` and `host/jcs.c` (JCS, the envelope, the RFC 6901 pointer), `host/permitd.c` (the stdio MCP gate, the approver, the state file, the cost), `test/fakedeploy.c` (7 tools), `test/host/deploy.lang` (7 bind lines), the tools `test/shatool.c`, `test/enginetool.c`, `test/jcstool.c` and `test/hosttool.c`, `docs/MCP.md` (MCP 2025-11-25). Rulings Q-S9-1 to Q-S9-10 and Q-S9-U4-1 (section 1); the run-time `deny widen` is O22, a D10 row with the target only is O23. Gate EXIT 0: 35 examples, 22 parse refusals, 236 check refusals, 13 kit-only refusals, 1 time hint, 92 evals, 1 build, 1 ir lowered, 8 ir refusals, 10 ir lowerings, 3 custom sections, 5 notrap modules, 11 notrap bad rows, 10 spine evals, 2 natops evals, 16 wasm runs, 694 differential cases with 0 mismatches, 8 decide scripts (12 calls, 0 mismatches), 8 engine decide scripts (12 calls, 0 mismatches), 2 engine refusals, 2 engine hash rows, 7 sha256 vectors, 32 jcs rows, 28 host rows, review, domain and path regressions passed. 32 mutants, 32 killed (section 10). | DONE |
 | S10 | T2: the JSON authority report, `docs/REPORT-JSON.md`. Built: `langc report` (`src/report.c`: the `program` line, the scope walker, the Path-type law walk), `permitd --report FILE` (`host/report.c`: the `call` and `malformed` lines, appended with `fflush` and `fsync` after the state write), 5 `test/report/` rows and the hosttool rows R1 to R8. Gate EXIT 0: the S9 counts, plus 5 report rows and 36 host rows and 2 report output checks. 14 mutants, 14 killed (section 10). | DONE |
 | S11 | T3: the Cedar export, `docs/CEDAR.md`. Built: `langc cedar` (`src/cedar.c`: the header, one `permit` for each grant, the 6 "Not exported" comments; `report_value` in `src/report.c` is the one walker), 7 `test/cedar/` rows for the 7 `test/report/` rows (new: `empty` and `big`), the cedar write error check of `build/reporttool`, and the JSON blocks of `docs/MCP.md` (Q-S11-5). Gate EXIT 0: the S10 counts with 7 report rows, plus 7 cedar rows and 2 cedar write errors. 13 mutants, 12 killed, 1 equivalent (section 10). | DONE |
-| S12 | A1: canonical forms and `langc fmt`. | |
+| S12 | A1: canonical forms and `langc fmt`. Built: `langc fmt PROG [--check]` (`src/front/fmt.c`, a port of accrue-lang S11 with the bind run, the marks, the strings and the H1 group; the comment table of the lexer and the end line of a decl), the scoped dump of `build/fronttool`, `LEX_STRING` for a NUL byte in a string (Q-S12-8), 178 files made canonical, `test/fmt/` (10 golden rows, 3 witness rows, `refused.txt`) and the fmt block of `test/gate.sh`, which also reads `examples/*/*.lang`. Rulings Q-S12-1 to Q-S12-9 (section 1). Gate EXIT 0: the S11 counts with 23 parse refusals, plus 300 fmt canonical, 312 fmt round trip, 22 fmt refused, 13 fmt rows and 11 fmt check. 11 mutants, 10 killed, 1 equivalent (section 10). | DONE |
 | S13 | A2: `langc check --json`. | |
 | S14 | A4: `langc mcp`. | |
 | S15 | A3 and A5: SKILL.md, G1 to G5, AGENTS.md and the README table final. | |

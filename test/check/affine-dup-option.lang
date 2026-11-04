@@ -1,1 +1,2 @@
-def dup : Option Budget -o Option (Prod Budget Budget) := fun o => option none (fun l => some (pair l l)) o
+def dup : Option Budget -o Option (Prod Budget Budget) :=
+  fun o => option none (fun l => some (pair l l)) o

@@ -2,13 +2,22 @@
 -- resEq are kit items. res "a/b" is resChild (resRoot i) j, with i and j
 -- the numbers of the segments a and b in the program (program order).
 def ab : Resource := res "a/b"
-def lawChain : Path Flag (resEq (res "a/b") (resChild (resRoot 0) 1)) flagYes := refl
-def lawRefl : Path Resource (res "a/b") (res "a/b") := refl
+
+def lawChain : Path Flag (resEq res "a/b" (resChild (resRoot 0) 1)) flagYes := refl
+
+def lawRefl : Path Resource res "a/b" res "a/b" := refl
+
 -- within r g is flagYes when g is r or an ancestor of r.
-def lawWithin : Path Flag (within (res "a/b") (res "a")) flagYes := refl
-def lawSelf : Path Flag (within (res "a/b") (res "a/b")) flagYes := refl
-def lawNotWithin : Path Flag (within (res "a") (res "a/b")) flagNo := refl
-def lawSibling : Path Flag (within (res "a/c") (res "a/b")) flagNo := refl
-def lawNe : Path Flag (resEq (res "a/b") (res "a/c")) flagNo := refl
-def lawNeRoot : Path Flag (resEq (res "a") (res "b")) flagNo := refl
-def lawChars : Path Flag (resEq (res "x-1/y_2") (res "x-1/y_2")) flagYes := refl
+def lawWithin : Path Flag (within res "a/b" res "a") flagYes := refl
+
+def lawSelf : Path Flag (within res "a/b" res "a/b") flagYes := refl
+
+def lawNotWithin : Path Flag (within res "a" res "a/b") flagNo := refl
+
+def lawSibling : Path Flag (within res "a/c" res "a/b") flagNo := refl
+
+def lawNe : Path Flag (resEq res "a/b" res "a/c") flagNo := refl
+
+def lawNeRoot : Path Flag (resEq res "a" res "b") flagNo := refl
+
+def lawChars : Path Flag (resEq res "x-1/y_2" res "x-1/y_2") flagYes := refl

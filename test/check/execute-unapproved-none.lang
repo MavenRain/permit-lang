@@ -1,6 +1,9 @@
 -- REFUSE_EXECUTE_UNAPPROVED (Q-S7-8 (a), L5): a closed plan executes a
 -- mutation with no propose before it.
 def m1 : Mutation := mutation (resRoot 1) execute (payloadOf 7)
+
 def m2 : Mutation := mutation (resRoot 2) execute (payloadOf 7)
+
 def stop : Plan Unit := planDone Unit unit
+
 def bad : Plan Unit := planExecute Unit m1 stop stop stop

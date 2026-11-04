@@ -3,4 +3,5 @@
 -- steps, 0 units and no binds. The tool name has a tab byte: the report
 -- line and the cedar bind comment have its JSON escape.
 def start : Authority := authority (fmUnit (Prod Resource Action)) (szS (szS sz0)) 5 (fmUnit Digest)
+
 bind "re	ad" inspect "/path"

@@ -1,0 +1,3 @@
+axiom h1 : (x : Type 0) -> (x  y : x) -> Type 0
+axiom h2 : (a b : Nat) -> Nat
+def h3 : Nat := fun (x : Type 0) (x y : x) => y

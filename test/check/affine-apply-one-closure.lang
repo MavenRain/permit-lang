@@ -1,2 +1,3 @@
 def twice : (@1 f : Unit -> Budget) -> Prod Budget Budget := fun f => pair (f unit) (f unit)
+
 def dup : Budget -o Prod Budget Budget := fun b => twice (fun u => b)

@@ -1,5 +1,4 @@
 -- An Allowance position closure must not capture a Budget. alOpen would
 -- otherwise return that Budget now and again after a call.
 def duplicate : Ticket -> Budget -o Prod Budget Budget :=
-  fun c b => unpack (alOpen Budget (fun p => b))
-    (fun a k => pair a (eps Budget (k c)))
+  fun c b => unpack (alOpen Budget (fun p => b)) (fun a k => pair a (eps Budget (k c)))

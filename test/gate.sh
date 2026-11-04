@@ -441,7 +441,9 @@ echo "differential cases: $diffcases checked, $mismatches mismatches"
 decidescripts=0
 decidecalls=0
 decidebad=0
-reasons=$(rg -o -r '$1' '^family Reason := (.*)$' domain/domain.lang)
+# The canonical layout puts each constructor after the first on its own line
+# `  | c` (S12): join the lines of family Reason with ` | `.
+reasons=$(awk '/^family Reason := /{p=1; r=substr($0, 18); next} p && /^  [|] /{r=r " | " substr($0, 5); next} {p=0} END {print r}' domain/domain.lang)
 for s in test/decide/D*.txt; do
   d=$(basename "$s" .txt)
   decidescripts=$((decidescripts + 1))
@@ -615,6 +617,116 @@ else
     cat "$tmp/host.txt"
   fi
 fi
+
+# fmt (S12, ported from accrue-lang S11). Each repo program that `langc fmt`
+# accepts is canonical (fmt F equals F byte for byte) and keeps its AST (the
+# scoped fronttool dump of F equals the dump of fmt F). fmt refuses exactly
+# the files in test/fmt/refused.txt. Each test/fmt/X.lang (not the witness
+# files piname.lang and mark.lang) is not canonical by design: the canonical
+# line skips it, it formats to X.canon, and `langc fmt --check` accepts each
+# X.canon and refuses test/fmt/check.lang at line 3. The witness rows:
+# test/fmt/piname.lang is test/fmt/lambda.canon with one Pi binder name
+# changed, test/fmt/mark.lang is test/fmt/marks.canon with one mark changed,
+# and each dump must not equal the dump of its canon file. The capture row
+# shows that the H1 group `(x y : x)` stays one group in
+# test/fmt/capture.canon. It does not claim a capture: the split text has
+# the same meaning and the same dump (Q-S12-7).
+same_dump() {
+  build/fronttool dump "$1" >"$tmp/d1.txt" 2>&1 && build/fronttool dump "$2" >"$tmp/d2.txt" 2>&1 &&
+    cmp -s "$tmp/d1.txt" "$tmp/d2.txt"
+}
+differ_dump() {
+  build/fronttool dump "$1" >"$tmp/d1.txt" 2>&1 && build/fronttool dump "$2" >"$tmp/d2.txt" 2>&1 &&
+    ! cmp -s "$tmp/d1.txt" "$tmp/d2.txt"
+}
+canon=0
+trips=0
+refused=0
+for f in domain/domain.lang examples/*.lang examples/*/*.lang test/*/*.lang; do
+  status=0
+  build/langc fmt "$f" >"$tmp/fmt.out" 2>"$tmp/fmt.err" || status=$?
+  listed=0
+  rg -qxF -- "$f" test/fmt/refused.txt && listed=1
+  if [ "$status" -ne 0 ]; then
+    refused=$((refused + 1))
+    [ "$listed" -eq 1 ] || { echo "FAIL fmt $f: refused, exit $status: $(head -n 1 "$tmp/fmt.err")"; fail=$((fail + 1)); }
+    continue
+  fi
+  [ "$listed" -eq 0 ] || { echo "FAIL fmt $f: accepted, but test/fmt/refused.txt lists it"; fail=$((fail + 1)); }
+  case $f in
+    test/fmt/*) ;;
+    *)
+      if cmp -s "$f" "$tmp/fmt.out"; then
+        canon=$((canon + 1))
+      else
+        echo "FAIL fmt $f: not canonical"
+        fail=$((fail + 1))
+      fi
+      ;;
+  esac
+  if same_dump "$f" "$tmp/fmt.out"; then
+    trips=$((trips + 1))
+  else
+    echo "FAIL fmt round trip $f: the AST dump changes after fmt"
+    fail=$((fail + 1))
+  fi
+done
+want=$(($(wc -l <test/fmt/refused.txt)))
+[ "$refused" -eq "$want" ] || { echo "FAIL fmt: $refused files refused, test/fmt/refused.txt lists $want"; fail=$((fail + 1)); }
+echo "fmt canonical: $canon passed"
+echo "fmt round trip: $trips passed"
+echo "fmt refused: $refused checked"
+rows=0
+checks=0
+for f in test/fmt/*.lang; do
+  case $f in test/fmt/piname.lang | test/fmt/mark.lang) continue ;; esac
+  c=${f%.lang}.canon
+  status=0
+  build/langc fmt "$f" >"$tmp/fmt.out" 2>"$tmp/fmt.err" || status=$?
+  if [ "$status" -eq 0 ] && cmp -s "$c" "$tmp/fmt.out"; then
+    rows=$((rows + 1))
+  else
+    echo "FAIL fmt row $f: the output is not $c, exit $status"
+    fail=$((fail + 1))
+  fi
+  status=0
+  build/langc fmt "$c" --check >"$tmp/fmt.out" 2>"$tmp/fmt.err" || status=$?
+  if [ "$status" -eq 0 ] && [ ! -s "$tmp/fmt.out" ] && [ ! -s "$tmp/fmt.err" ]; then
+    checks=$((checks + 1))
+  else
+    echo "FAIL fmt --check $c: want exit 0 and no output, got exit $status"
+    fail=$((fail + 1))
+  fi
+done
+printf 'test/fmt/check.lang:3: not canonical\n' >"$tmp/want.err"
+status=0
+build/langc fmt test/fmt/check.lang --check >"$tmp/fmt.out" 2>"$tmp/fmt.err" || status=$?
+if [ "$status" -eq 1 ] && [ ! -s "$tmp/fmt.out" ] && cmp -s "$tmp/want.err" "$tmp/fmt.err"; then
+  checks=$((checks + 1))
+else
+  echo "FAIL fmt --check test/fmt/check.lang: want exit 1 and line 3, got exit $status: $(head -n 1 "$tmp/fmt.err")"
+  fail=$((fail + 1))
+fi
+if differ_dump test/fmt/lambda.canon test/fmt/piname.lang; then
+  rows=$((rows + 1))
+else
+  echo "FAIL fmt witness: the dump of test/fmt/piname.lang equals the dump of test/fmt/lambda.canon (or a dump fails)"
+  fail=$((fail + 1))
+fi
+if differ_dump test/fmt/marks.canon test/fmt/mark.lang; then
+  rows=$((rows + 1))
+else
+  echo "FAIL fmt witness: the dump of test/fmt/mark.lang equals the dump of test/fmt/marks.canon (or a dump fails)"
+  fail=$((fail + 1))
+fi
+if rg -qF '(x y : x)' test/fmt/capture.canon; then
+  rows=$((rows + 1))
+else
+  echo "FAIL fmt witness: test/fmt/capture.canon does not keep the group (x y : x)"
+  fail=$((fail + 1))
+fi
+echo "fmt rows: $rows passed"
+echo "fmt check: $checks passed"
 
 status=0
 build/langc 2>/dev/null || status=$?

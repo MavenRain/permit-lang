@@ -35,7 +35,8 @@ on 2026-10-08 on AArch64 Darwin. The gate facts below describe permit S3.
 - There is no text type. A string is only the text of a `res` literal or
   a `bind` line (S8). A string at another place gives `PARSE_EXPECT`
   (`test/parse/string.lang`), and a string with no end gives `LEX_STRING`
-  (`test/parse/unclosed-string.lang`).
+  (`test/parse/unclosed-string.lang`). A string that holds a NUL byte
+  also gives `LEX_STRING` (`test/parse/string-nul.lang`, S12).
 - On Wasm, each op is total; a value is one word.
 
 ## Overflow tests on Wasm

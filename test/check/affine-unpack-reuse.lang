@@ -1,1 +1,2 @@
-def u : (@1 p : Sigma (x : Budget) Budget) -> (Budget -o Budget -o Unit) -> Unit := fun p k => unpack p (fun a b => k a a)
+def u : (@1 p : Sigma (x : Budget) Budget) -> (Budget -o Budget -o Unit) -> Unit :=
+  fun p k => unpack p (fun a b => k a a)

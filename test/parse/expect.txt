@@ -20,3 +20,4 @@ affine-param-mark.lang PARSE_EXPECT
 affine-field-mark.lang PARSE_EXPECT
 affine-no-cofamily.lang PARSE_EXPECT
 unclosed-string.lang LEX_STRING
+string-nul.lang LEX_STRING

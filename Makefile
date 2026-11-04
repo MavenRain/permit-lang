@@ -5,7 +5,7 @@ TCC ?= tcc
 CC ?= cc
 CFLAGS = -std=c99 -Wall -Werror -Isrc
 CLANG_FLAGS = -std=c99 -Wall -Wextra -Wswitch-enum -Werror -fsyntax-only -Isrc
-FRONT = src/front/base.c src/front/lexer.c src/front/parser.c src/front/front.c src/front/eval.c src/front/check.c src/front/lower.c
+FRONT = src/front/base.c src/front/lexer.c src/front/parser.c src/front/front.c src/front/eval.c src/front/check.c src/front/fmt.c src/front/lower.c
 TARGET = src/wasm.c
 # S10 U1: langc report builds the JCS line with the host JSON reader. S11
 # U1: langc cedar (src/cedar.c) reads that line.

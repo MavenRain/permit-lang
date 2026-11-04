@@ -2,11 +2,19 @@
 -- binds. The report line has 9959 bytes, so the JCS buffer (start 4096)
 -- doubles 2 times. No other row has a report line over 4096 bytes.
 def docs : Resource := res "docs"
+
 def report : Resource := res "docs/report"
+
 def outbox : Resource := res "mail/out"
-def left : Scope := fmMul (Prod Resource Action) (fmEta (Prod Resource Action) (pair docs inspect)) (fmEta (Prod Resource Action) (pair report propose))
-def sc : Scope := fmMul (Prod Resource Action) left (fmMul (Prod Resource Action) (fmEta (Prod Resource Action) (pair report execute)) (fmEta (Prod Resource Action) (pair outbox execute)))
+
+def left : Scope :=
+  fmMul (Prod Resource Action) (fmEta (Prod Resource Action) (pair docs inspect)) (fmEta (Prod Resource Action) (pair report propose))
+
+def sc : Scope :=
+  fmMul (Prod Resource Action) left (fmMul (Prod Resource Action) (fmEta (Prod Resource Action) (pair report execute)) (fmEta (Prod Resource Action) (pair outbox execute)))
+
 def start : Authority := authority sc (szS (szS (szS sz0))) 7 (fmUnit Digest)
+
 bind "tool-with-a-long-name-for-the-doubling-probe-of-the-jcs-buffer-number-0" inspect "/a/very/long/pointer/for/the/doubling/probe/0"
 bind "tool-with-a-long-name-for-the-doubling-probe-of-the-jcs-buffer-number-1" inspect "/a/very/long/pointer/for/the/doubling/probe/1"
 bind "tool-with-a-long-name-for-the-doubling-probe-of-the-jcs-buffer-number-2" inspect "/a/very/long/pointer/for/the/doubling/probe/2"

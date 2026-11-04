@@ -1,1 +1,2 @@
-def e : (@1 b : Budget) -> (Budget -o Unit) -> Sum Unit Unit -> Unit := fun b k => either (fun (x : Unit) => k b) (fun (y : Unit) => unit)
+def e : (@1 b : Budget) -> (Budget -o Unit) -> Sum Unit Unit -> Unit :=
+  fun b k => either (fun (x : Unit) => k b) (fun (y : Unit) => unit)

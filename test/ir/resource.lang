@@ -5,8 +5,10 @@
 -- permit.within, permit.envelope and permit.hash; resEq is i64.eq. The IR
 -- text is test/ir/resource.ir.
 def under : (n : Nat) -> Nat :=
-  fun (n : Nat) => flagIf (within (flagIf (natEq n 0) (res "a/b") (res "c")) (res "a")) 1 0
+  fun (n : Nat) => flagIf (within (flagIf (natEq n 0) res "a/b" res "c") res "a") 1 0
+
 def same : (n : Nat) -> Nat :=
-  fun (n : Nat) => flagIf (resEq (flagIf (natEq n 0) (res "a/b") (res "c")) (res "c")) 1 0
+  fun (n : Nat) => flagIf (resEq (flagIf (natEq n 0) res "a/b" res "c") res "c") 1 0
+
 def digest : (n : Nat) -> Nat :=
-  fun (n : Nat) => flagIf (digestEq (hash (envelope (res "a/b") (payloadOf n))) (hash (envelope (res "a/b") (payloadOf 3)))) 1 0
+  fun (n : Nat) => flagIf (digestEq (hash (envelope res "a/b" (payloadOf n))) (hash (envelope res "a/b" (payloadOf 3)))) 1 0

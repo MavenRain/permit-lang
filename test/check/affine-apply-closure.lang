@@ -1,2 +1,3 @@
 def apply : (Unit -> Budget) -> Budget := fun f => f unit
+
 def drain : Budget -o Budget := fun l => apply (fun u => l)

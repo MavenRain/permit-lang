@@ -1,6 +1,9 @@
 -- S10 U1 report row (Q-S10-3 (a)): a budget of 2^64 - 1, the largest
 -- literal of the lexer and above 2^53 - 1, is a JSON string of digits.
 def docs : Resource := res "docs"
+
 def sc : Scope := fmEta (Prod Resource Action) (pair docs inspect)
+
 def start : Authority := authority sc (szS sz0) 18446744073709551615 (fmUnit Digest)
+
 bind "read" inspect "/path"

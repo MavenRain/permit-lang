@@ -1,0 +1,5 @@
+def r : Resource := res   "a/b"
+def t : Resource := res "a	b"
+def s : Resource := res "a -- b"
+def e : Resource := res ""
+def w : Resource := res " x  y "

@@ -2,11 +2,19 @@
 -- to right. A left-nested and a right-nested fmMul, a nested resource
 -- "docs/report", and a bind of each of the 3 Action arms.
 def docs : Resource := res "docs"
+
 def report : Resource := res "docs/report"
+
 def outbox : Resource := res "mail/out"
-def left : Scope := fmMul (Prod Resource Action) (fmEta (Prod Resource Action) (pair docs inspect)) (fmEta (Prod Resource Action) (pair report propose))
-def sc : Scope := fmMul (Prod Resource Action) left (fmMul (Prod Resource Action) (fmEta (Prod Resource Action) (pair report execute)) (fmEta (Prod Resource Action) (pair outbox execute)))
+
+def left : Scope :=
+  fmMul (Prod Resource Action) (fmEta (Prod Resource Action) (pair docs inspect)) (fmEta (Prod Resource Action) (pair report propose))
+
+def sc : Scope :=
+  fmMul (Prod Resource Action) left (fmMul (Prod Resource Action) (fmEta (Prod Resource Action) (pair report execute)) (fmEta (Prod Resource Action) (pair outbox execute)))
+
 def start : Authority := authority sc (szS (szS (szS sz0))) 7 (fmUnit Digest)
+
 bind "read" inspect "/path"
 bind "draft" propose "/doc"
 bind "send" execute "/to"

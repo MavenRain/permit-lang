@@ -1,0 +1,5 @@
+axiom m : (@0 A : Type 0) -> (@0 a : A) -> A -o A
+
+def k : (@0 A : Type 0) -> A -o A := fun (@0 A : Type 0) (@1 a : A) => a
+
+axiom g : (@0 A : Type 0) -> (@0 B : Type 0) -> A -o B -o A

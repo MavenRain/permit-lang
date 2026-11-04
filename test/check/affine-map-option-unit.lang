@@ -1,1 +1,2 @@
-def mp : (@1 o : Option Budget) -> (Budget -o Unit) -> Option Unit := fun o k => map (fun (@1 b : Budget) => k b) o
+def mp : (@1 o : Option Budget) -> (Budget -o Unit) -> Option Unit :=
+  fun o k => map (fun (@1 b : Budget) => k b) o

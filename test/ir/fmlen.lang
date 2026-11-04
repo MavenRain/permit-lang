@@ -2,23 +2,43 @@
 -- program of examples/gate.lang and one entry; the gate compares the
 -- `langc --kit ir` text with test/ir/fmlen.ir.
 def docs : Resource := res "docs"
+
 def report : Resource := res "docs/report"
+
 def outbox : Resource := res "mail/out"
-def sc : Scope := fmMul (Prod Resource Action) (fmEta (Prod Resource Action) (pair docs inspect)) (fmEta (Prod Resource Action) (pair outbox execute))
+
+def sc : Scope :=
+  fmMul (Prod Resource Action) (fmEta (Prod Resource Action) (pair docs inspect)) (fmEta (Prod Resource Action) (pair outbox execute))
+
 def start : Authority := authority sc (szS (szS (szS sz0))) 10 (fmUnit Digest)
+
 -- The tools (Q-S8-4 (a)): the action of each tool and the RFC 6901 pointer
 -- to the target in its arguments.
 -- A malformed call is denied. It takes one step and keeps the budget and
 -- the used digests (Q-S0-6 (a)).
 def lawMalformed : Path Decision (first (judgeMalformed start)) (deny malformed) := refl
-def lawMalformedStep : Path Authority (second (judgeMalformed start)) (authority sc (szS (szS sz0)) (auLeft start) (fmUnit Digest)) := refl
+
+def lawMalformedStep : Path Authority (second (judgeMalformed start)) (authority sc (szS (szS sz0)) (auLeft start) (fmUnit Digest)) :=
+  refl
+
 -- A grant allows its action on its resource and below it.
-def lawRead : (p : Payload) -> Path Decision (first (judge start (ticket (mutation report inspect p) (auLeft start) none))) permit := fun (p : Payload) => refl
+def lawRead : (p : Payload) -> Path Decision (first (judge start (ticket (mutation report inspect p) (auLeft start) none))) permit :=
+  fun (p : Payload) => refl
+
 -- L6: a call out of the scope is denied before the payload and the cost:
 -- another target, the parent of a grant, another action.
-def lawOtherTarget : (p : Payload) -> Path Decision (first (judge start (ticket (mutation (res "mail/in") execute p) (auLeft start) none))) (deny scopeMiss) := fun (p : Payload) => refl
-def lawParent : (p : Payload) -> Path Decision (first (judge start (ticket (mutation (res "mail") execute p) (auLeft start) none))) (deny scopeMiss) := fun (p : Payload) => refl
-def lawOtherAction : (p : Payload) -> Path Decision (first (judge start (ticket (mutation report execute p) (auLeft start) none))) (deny scopeMiss) := fun (p : Payload) => refl
+def lawOtherTarget : (p : Payload) -> Path Decision (first (judge start (ticket (mutation res "mail/in" execute p) (auLeft start) none))) (deny scopeMiss) :=
+  fun (p : Payload) => refl
+
+def lawParent : (p : Payload) -> Path Decision (first (judge start (ticket (mutation res "mail" execute p) (auLeft start) none))) (deny scopeMiss) :=
+  fun (p : Payload) => refl
+
+def lawOtherAction : (p : Payload) -> Path Decision (first (judge start (ticket (mutation report execute p) (auLeft start) none))) (deny scopeMiss) :=
+  fun (p : Payload) => refl
+
 -- An execute in the scope with no approval is denied.
-def lawNoApproval : (p : Payload) -> Path Decision (first (judge start (ticket (mutation outbox execute p) (auLeft start) none))) (deny noApproval) := fun (p : Payload) => refl
-def eLen : Nat -> Nat := fun (n : Nat) => len Digest (flagIf (natEq n 1) (fmUnit Digest) (fmEta Digest (hash (envelope outbox (payloadOf n)))))
+def lawNoApproval : (p : Payload) -> Path Decision (first (judge start (ticket (mutation outbox execute p) (auLeft start) none))) (deny noApproval) :=
+  fun (p : Payload) => refl
+
+def eLen : Nat -> Nat :=
+  fun (n : Nat) => len Digest (flagIf (natEq n 1) (fmUnit Digest) (fmEta Digest (hash (envelope outbox (payloadOf n)))))

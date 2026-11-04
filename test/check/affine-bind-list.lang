@@ -1,1 +1,2 @@
-def bl : (@1 b : Budget) -> (Budget -o List Nat) -> List Nat -> List Nat := fun b k xs => bind xs (fun (n : Nat) => k b)
+def bl : (@1 b : Budget) -> (Budget -o List Nat) -> List Nat -> List Nat :=
+  fun b k xs => bind xs (fun (n : Nat) => k b)

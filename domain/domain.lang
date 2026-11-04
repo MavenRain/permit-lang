@@ -2,31 +2,31 @@
 -- orbit-lang S2). The DAO prelude comes in S7.
 -- Each family, constructor, field and def name here becomes a core name
 -- (rule R4). Only this file can declare a family (rule R1).
-
 -- Kan library (ported from sealed-lang, R6 (a)): transport, subst, J and the
 -- J rule as a path (JRefl, sealed-lang O11), all by transp.
 def transport : (X : Type 0) -> (Y : Type 0) -> Path (Type 0) X Y -> X -> Y :=
-  fun (X : Type 0) => fun (Y : Type 0) => fun (p : Path (Type 0) X Y) => fun (a : X) => transp (fun (i : I) => p @ i) i0 a
+  fun (X : Type 0) (Y : Type 0) (p : Path (Type 0) X Y) (a : X) => transp (fun (i : I) => p @ i) i0 a
+
 def subst : (A : Type 0) -> (B : A -> Type 0) -> (x : A) -> (y : A) -> Path A x y -> B x -> B y :=
-  fun (A : Type 0) => fun (B : A -> Type 0) => fun (x : A) => fun (y : A) => fun (p : Path A x y) => fun (b : B x) =>
-    transp (fun (i : I) => B (p @ i)) i0 b
+  fun (A : Type 0) (B : A -> Type 0) (x : A) (y : A) (p : Path A x y) (b : B x) => transp (fun (i : I) => B (p @ i)) i0 b
+
 def J : (A : Type 0) -> (x : A) -> (P : (y : A) -> Path A x y -> Type 0) -> P x refl -> (y : A) -> (p : Path A x y) -> P y p :=
-  fun (A : Type 0) => fun (x : A) => fun (P : (y : A) -> Path A x y -> Type 0) => fun (d : P x refl) => fun (y : A) => fun (p : Path A x y) =>
-    transp (fun (i : I) => P (p @ i) (fun (j : I) => p @ (i /\ j))) i0 d
+  fun (A : Type 0) (x : A) (P : (y : A) -> Path A x y -> Type 0) (d : P x refl) (y : A) (p : Path A x y) => transp (fun (i : I) => P (p @ i) (fun (j : I) => p @ (i /\ j))) i0 d
+
 def JRefl : (A : Type 0) -> (x : A) -> (P : (y : A) -> Path A x y -> Type 0) -> (d : P x refl) -> Path (P x refl) (J A x P d x refl) d :=
-  fun (A : Type 0) => fun (x : A) => fun (P : (y : A) -> Path A x y -> Type 0) => fun (d : P x refl) =>
-    fun (i : I) => transp (fun (_ : I) => P x refl) i d
+  fun (A : Type 0) (x : A) (P : (y : A) -> Path A x y -> Type 0) (d : P x refl) (i : I) => transp (fun (_ : I) => P x refl) i d
+
 -- Path composition (S2b, R2 (a)): trans by hcomp, with the tube x on ~j
 -- and q on j, and the base p.
 def trans : (A : Type 0) -> (x : A) -> (y : A) -> (z : A) -> Path A x y -> Path A y z -> Path A x z :=
-  fun (A : Type 0) => fun (x : A) => fun (y : A) => fun (z : A) => fun (p : Path A x y) => fun (q : Path A y z) =>
-    fun (j : I) => hcomp A (~j \/ j) (fun (i : I) => [ ~j -> x, j -> q @ i ]) (p @ j)
+  fun (A : Type 0) (x : A) (y : A) (z : A) (p : Path A x y) (q : Path A y z) (j : I) => hcomp A (~j \/ j) (fun (i : I) => [ ~j -> x, j -> q @ i ]) (p @ j)
+
 -- Propositions and sets (S4b): the squash1 fold case has the type
 -- isProp RES, the squash0 fold case the type isSet RES.
-def isProp : (A : Type 0) -> Type 0 :=
-  fun (A : Type 0) => (x : A) -> (y : A) -> Path A x y
-def isSet : (A : Type 0) -> Type 0 :=
-  fun (A : Type 0) => (x : A) -> (y : A) -> isProp (Path A x y)
+def isProp : (A : Type 0) -> Type 0 := fun (A : Type 0) => (x : A) -> (y : A) -> Path A x y
+
+def isSet : (A : Type 0) -> Type 0 := fun (A : Type 0) => (x : A) -> (y : A) -> isProp (Path A x y)
+
 -- The linear isSet (Q-S4-7 (a)): the ends and the paths bind at 1, so a
 -- polymorphic fold can give its folded ends to it (fmFold).
 def isSetLin : (A : Type 0) -> Type 0 :=
@@ -35,48 +35,61 @@ def isSetLin : (A : Type 0) -> Type 0 :=
 -- The circle, a higher inductive family (S4a, R1 (a)). The path
 -- constructor loop goes from base to base.
 family S1 := base | loop (i : I) [ ~i -> base, i -> base ]
+
 -- The propositional truncation (S4b, R5 (a)): squash1 is a path between
 -- any two points, so the squash1 fold case has the type isProp RES. A
 -- field name is a core name (rule R4), so the names have a family prefix.
-family Trunc1 (A : Type 0) := trunc1 (truncOf : A) | squash1 (squashFrom : Trunc1 A) (squashTo : Trunc1 A) (i : I) [ ~i -> squashFrom, i -> squashTo ]
+family Trunc1 (A : Type 0) := trunc1 (truncOf : A)
+  | squash1 (squashFrom : Trunc1 A) (squashTo : Trunc1 A) (i : I) [ ~i -> squashFrom, i -> squashTo ]
+
 -- The set truncation (S4c, R5 (a)): squash0 is a square between any two
 -- paths with the same ends, so the squash0 fold case has the type isSet
 -- RES (R8 (a)). The case binds the folded ends and the folded paths.
-family Trunc0 (A : Type 0) := trunc0 (trunc0Of : A) | squash0 (squash0From : Trunc0 A) (squash0To : Trunc0 A) (squash0Left : Path (Trunc0 A) squash0From squash0To) (squash0Right : Path (Trunc0 A) squash0From squash0To) (i : I) (j : I) [ ~i -> squash0Left @ j, i -> squash0Right @ j, ~j -> squash0From, j -> squash0To ]
+family Trunc0 (A : Type 0) := trunc0 (trunc0Of : A)
+  | squash0 (squash0From : Trunc0 A) (squash0To : Trunc0 A) (squash0Left : Path (Trunc0 A) squash0From squash0To) (squash0Right : Path (Trunc0 A) squash0From squash0To) (i : I) (j : I) [ ~i -> squash0Left @ j, i -> squash0Right @ j, ~j -> squash0From, j -> squash0To ]
+
 -- The set quotient Quot went in S3 (rule R1: its relation parameter is a
 -- value parameter, so it is not a cell signature). The quotients of the
 -- DAO are families with no parameter: Orbit, Parity and OrbitN.
 -- The size index (S6, O24, USER ruling S6): a domain family, so Nat
 -- stays internal.
 family Size := sz0 | szS (szPred : Size)
+
 -- The stream comonad (S4, O28): the cofree comonad of the cocell
 -- signature with the observation sHead and the cofield sTail. The checker
 -- elaborates it (choice (ii)) to the positions Stream.pos, Stream A :=
 -- Stream.pos -> A, the destructors sHead and sTail, the walk Stream.walk,
 -- the corecursor sCorec and the bisimulation principle StreamBisim.
 cofamily Stream (A : Type 0) := sCorec (sHead : A) (sTail : Stream A)
+
 -- Extend and duplicate: sExtend A B f is the corecursor at the seed type
 -- Stream A, with the observation f and the step sTail A.
 def sExtend : (A : Type 0) -> (B : Type 0) -> (Stream A -> B) -> Stream A -> Stream B :=
-  fun (A : Type 0) => fun (B : Type 0) => fun (f : Stream A -> B) => sCorec B (Stream A) f (sTail A)
+  fun (A : Type 0) (B : Type 0) (f : Stream A -> B) => sCorec B (Stream A) f (sTail A)
+
 def sDuplicate : (A : Type 0) -> Stream A -> Stream (Stream A) :=
   fun (A : Type 0) => sExtend A (Stream A) (fun (x : Stream A) => x)
+
 -- The parity quotient of Size (S3, design C 2b, USER ruling Q-S3-8 (a)):
 -- sizeEven s is sz0 for an even s and szS sz0 for an odd s, and parityEq
 -- is a path from parityOf a to parityOf b when a and b have the same
 -- parity. The relation is in the field type, so Parity has no parameter.
 -- paritySquash has the squash0 shape, so its fold case has the type isSet
 -- RES.
-def sizeFlip : Size -> Size := fun (s : Size) => elim (fun (t : Size) => Size) (szS sz0) (fun (k : Size) (ih : Size) => sz0) s
+def sizeFlip : Size -> Size :=
+  fun (s : Size) => elim (fun (t : Size) => Size) (szS sz0) (fun (k : Size) (ih : Size) => sz0) s
+
 def sizeEven : Size -> Size := fun (s : Size) => fold sz0 (fun (r : Size) => sizeFlip r) s
+
 family Parity := parityOf (parityAt : Size)
   | parityEq (parityA : Size) (parityB : Size) (parityR : Path Size (sizeEven parityA) (sizeEven parityB)) (i : I) [ ~i -> parityOf parityA, i -> parityOf parityB ]
-  | paritySquash (parityFrom : Parity) (parityTo : Parity) (parityLeft : Path Parity parityFrom parityTo) (parityRight : Path Parity parityFrom parityTo) (i : I) (j : I)
-    [ ~i -> parityLeft @ j, i -> parityRight @ j, ~j -> parityFrom, j -> parityTo ]
+  | paritySquash (parityFrom : Parity) (parityTo : Parity) (parityLeft : Path Parity parityFrom parityTo) (parityRight : Path Parity parityFrom parityTo) (i : I) (j : I) [ ~i -> parityLeft @ j, i -> parityRight @ j, ~j -> parityFrom, j -> parityTo ]
+
 -- The empty family (S10 B1, USER ruling Q-S10-9 (a)): one constructor and
 -- no base case, so no closed value. The parser needs a constructor, so
 -- Empty is not a family with no constructor (the Q-S10-4 (a) probe).
 family Empty := emptyLoop (emptyOf : Empty)
+
 -- The bag (S3, design C section 3, rule R1): the free commutative monoid
 -- on A. bagOf is the generator, bagUnit the unit and bagOp the operation;
 -- bagAssoc, bagComm and bagUnitL are the monoid paths (the right unit
@@ -87,14 +100,11 @@ family Empty := emptyLoop (emptyOf : Empty)
 family Bag (A : Type 0) := bagOf (bagGen : A)
   | bagUnit
   | bagOp (opLeft : Bag A) (opRight : Bag A)
-  | bagAssoc (assocX : Bag A) (assocY : Bag A) (assocZ : Bag A) (i : I)
-    [ ~i -> bagOp A (bagOp A assocX assocY) assocZ, i -> bagOp A assocX (bagOp A assocY assocZ) ]
-  | bagComm (commX : Bag A) (commY : Bag A) (i : I)
-    [ ~i -> bagOp A commX commY, i -> bagOp A commY commX ]
-  | bagUnitL (unitX : Bag A) (i : I)
-    [ ~i -> bagOp A (bagUnit A) unitX, i -> unitX ]
-  | bagSquash (bagFrom : Bag A) (bagTo : Bag A) (bagLeft : Path (Bag A) bagFrom bagTo) (bagRight : Path (Bag A) bagFrom bagTo) (i : I) (j : I)
-    [ ~i -> bagLeft @ j, i -> bagRight @ j, ~j -> bagFrom, j -> bagTo ]
+  | bagAssoc (assocX : Bag A) (assocY : Bag A) (assocZ : Bag A) (i : I) [ ~i -> bagOp A (bagOp A assocX assocY) assocZ, i -> bagOp A assocX (bagOp A assocY assocZ) ]
+  | bagComm (commX : Bag A) (commY : Bag A) (i : I) [ ~i -> bagOp A commX commY, i -> bagOp A commY commX ]
+  | bagUnitL (unitX : Bag A) (i : I) [ ~i -> bagOp A (bagUnit A) unitX, i -> unitX ]
+  | bagSquash (bagFrom : Bag A) (bagTo : Bag A) (bagLeft : Path (Bag A) bagFrom bagTo) (bagRight : Path (Bag A) bagFrom bagTo) (i : I) (j : I) [ ~i -> bagLeft @ j, i -> bagRight @ j, ~j -> bagFrom, j -> bagTo ]
+
 -- The free monoid (S3, USER ruling Q-S3-5 (a), rule R1): the cell monad
 -- of the monoid signature, with the generator fmEta and a set squash. The
 -- cons list List is kit only (the host ABI); a guest List gives REFUSE_CELL,
@@ -102,29 +112,24 @@ family Bag (A : Type 0) := bagOf (bagGen : A)
 family FreeMon (A : Type 0) := fmEta (fmEtaOf : A)
   | fmUnit
   | fmMul (fmLeft : FreeMon A) (fmRight : FreeMon A)
-  | fmAssoc (fmAssocX : FreeMon A) (fmAssocY : FreeMon A) (fmAssocZ : FreeMon A) (i : I)
-    [ ~i -> fmMul A (fmMul A fmAssocX fmAssocY) fmAssocZ, i -> fmMul A fmAssocX (fmMul A fmAssocY fmAssocZ) ]
-  | fmUnitL (fmUnitLOf : FreeMon A) (i : I)
-    [ ~i -> fmMul A (fmUnit A) fmUnitLOf, i -> fmUnitLOf ]
-  | fmUnitR (fmUnitROf : FreeMon A) (i : I)
-    [ ~i -> fmMul A fmUnitROf (fmUnit A), i -> fmUnitROf ]
-  | fmSquash (fmFrom : FreeMon A) (fmTo : FreeMon A) (fmPathL : Path (FreeMon A) fmFrom fmTo) (fmPathR : Path (FreeMon A) fmFrom fmTo) (i : I) (j : I)
-    [ ~i -> fmPathL @ j, i -> fmPathR @ j, ~j -> fmFrom, j -> fmTo ]
+  | fmAssoc (fmAssocX : FreeMon A) (fmAssocY : FreeMon A) (fmAssocZ : FreeMon A) (i : I) [ ~i -> fmMul A (fmMul A fmAssocX fmAssocY) fmAssocZ, i -> fmMul A fmAssocX (fmMul A fmAssocY fmAssocZ) ]
+  | fmUnitL (fmUnitLOf : FreeMon A) (i : I) [ ~i -> fmMul A (fmUnit A) fmUnitLOf, i -> fmUnitLOf ]
+  | fmUnitR (fmUnitROf : FreeMon A) (i : I) [ ~i -> fmMul A fmUnitROf (fmUnit A), i -> fmUnitROf ]
+  | fmSquash (fmFrom : FreeMon A) (fmTo : FreeMon A) (fmPathL : Path (FreeMon A) fmFrom fmTo) (fmPathR : Path (FreeMon A) fmFrom fmTo) (i : I) (j : I) [ ~i -> fmPathL @ j, i -> fmPathR @ j, ~j -> fmFrom, j -> fmTo ]
+
 def fmCons : (A : Type 0) -> A -> FreeMon A -> FreeMon A :=
   fun (A : Type 0) (a : A) (xs : FreeMon A) => fmMul A (fmEta A a) xs
+
 def fmIsSet : (A : Type 0) -> isSet (FreeMon A) :=
-  fun (A : Type 0) (x : FreeMon A) (y : FreeMon A) (p : Path (FreeMon A) x y) (q : Path (FreeMon A) x y) => fun (i : I) => fun (j : I) => fmSquash A x y p q i j
+  fun (A : Type 0) (x : FreeMon A) (y : FreeMon A) (p : Path (FreeMon A) x y) (q : Path (FreeMon A) x y) (i : I) (j : I) => fmSquash A x y p q i j
+
 -- The universal property: a map from A into a monoid M that is a set
 -- extends to FreeMon A. The fold cases are the laws of M. A and M are
 -- type variables, so the field and the folded ends bind at 1 and the
 -- map, the operation and the laws are linear (-o, @1; PLAN 6).
 def fmFold : (A : Type 0) -> (M : Type 0) -> isSetLin M -> (e : M) -> (op : M -o M -o M) -> ((@1 x : M) -> (@1 y : M) -> (@1 z : M) -> Path M (op (op x y) z) (op x (op y z))) -> ((@1 x : M) -> Path M (op e x) x) -> ((@1 x : M) -> Path M (op x e) x) -> (A -o M) -> FreeMon A -> M :=
-  fun (A : Type 0) (M : Type 0) (s : isSetLin M) (e : M) (op : M -o M -o M) (assoc : (@1 x : M) -> (@1 y : M) -> (@1 z : M) -> Path M (op (op x y) z) (op x (op y z))) (unitL : (@1 x : M) -> Path M (op e x) x) (unitR : (@1 x : M) -> Path M (op x e) x) (f : A -o M) (t : FreeMon A) =>
-    fold (fun (a : A) => f a) e (fun (x : M) (y : M) => op x y)
-      (fun (x : M) (y : M) (z : M) => assoc x y z)
-      (fun (x : M) => unitL x)
-      (fun (x : M) => unitR x)
-      (fun (x : M) (y : M) (p : Path M x y) (q : Path M x y) => s x y p q) t
+  fun (A : Type 0) (M : Type 0) (s : isSetLin M) (e : M) (op : M -o M -o M) (assoc : (@1 x : M) -> (@1 y : M) -> (@1 z : M) -> Path M (op (op x y) z) (op x (op y z))) (unitL : (@1 x : M) -> Path M (op e x) x) (unitR : (@1 x : M) -> Path M (op x e) x) (f : A -o M) (t : FreeMon A) => fold (fun (a : A) => f a) e (fun (x : M) (y : M) => op x y) (fun (x : M) (y : M) (z : M) => assoc x y z) (fun (x : M) => unitL x) (fun (x : M) => unitR x) (fun (x : M) (y : M) (p : Path M x y) (q : Path M x y) => s x y p q) t
+
 -- The bind and the map at B = Nat and at B = Size (Q-S4-8 (a)). FreeMon B
 -- is copyable, so the law wrappers can use their 1-variables under
 -- fun i. At a resource B, both path ends hold x: no bind over a type
@@ -132,34 +137,32 @@ def fmFold : (A : Type 0) -> (M : Type 0) -> isSetLin M -> (e : M) -> (op : M -o
 -- (Q-S4-5 (a+)), so the map gives f a to fmEtaNat or fmEtaSize, whose
 -- binder is at 1.
 def fmBindNat : (A : Type 0) -> (A -o FreeMon Nat) -> FreeMon A -> FreeMon Nat :=
-  fun (A : Type 0) (k : A -o FreeMon Nat) => fmFold A (FreeMon Nat)
-    (fun (x : FreeMon Nat) (y : FreeMon Nat) (p : Path (FreeMon Nat) x y) (q : Path (FreeMon Nat) x y) => fun (i : I) => fun (j : I) => fmSquash Nat x y p q i j)
-    (fmUnit Nat) (fun (x : FreeMon Nat) (y : FreeMon Nat) => fmMul Nat x y)
-    (fun (x : FreeMon Nat) (y : FreeMon Nat) (z : FreeMon Nat) => fun (i : I) => fmAssoc Nat x y z i)
-    (fun (x : FreeMon Nat) => fun (i : I) => fmUnitL Nat x i)
-    (fun (x : FreeMon Nat) => fun (i : I) => fmUnitR Nat x i) k
+  fun (A : Type 0) (k : A -o FreeMon Nat) => fmFold A (FreeMon Nat) (fun (x : FreeMon Nat) (y : FreeMon Nat) (p : Path (FreeMon Nat) x y) (q : Path (FreeMon Nat) x y) (i : I) (j : I) => fmSquash Nat x y p q i j) (fmUnit Nat) (fun (x : FreeMon Nat) (y : FreeMon Nat) => fmMul Nat x y) (fun (x : FreeMon Nat) (y : FreeMon Nat) (z : FreeMon Nat) (i : I) => fmAssoc Nat x y z i) (fun (x : FreeMon Nat) (i : I) => fmUnitL Nat x i) (fun (x : FreeMon Nat) (i : I) => fmUnitR Nat x i) k
+
 def fmBindSize : (A : Type 0) -> (A -o FreeMon Size) -> FreeMon A -> FreeMon Size :=
-  fun (A : Type 0) (k : A -o FreeMon Size) => fmFold A (FreeMon Size)
-    (fun (x : FreeMon Size) (y : FreeMon Size) (p : Path (FreeMon Size) x y) (q : Path (FreeMon Size) x y) => fun (i : I) => fun (j : I) => fmSquash Size x y p q i j)
-    (fmUnit Size) (fun (x : FreeMon Size) (y : FreeMon Size) => fmMul Size x y)
-    (fun (x : FreeMon Size) (y : FreeMon Size) (z : FreeMon Size) => fun (i : I) => fmAssoc Size x y z i)
-    (fun (x : FreeMon Size) => fun (i : I) => fmUnitL Size x i)
-    (fun (x : FreeMon Size) => fun (i : I) => fmUnitR Size x i) k
+  fun (A : Type 0) (k : A -o FreeMon Size) => fmFold A (FreeMon Size) (fun (x : FreeMon Size) (y : FreeMon Size) (p : Path (FreeMon Size) x y) (q : Path (FreeMon Size) x y) (i : I) (j : I) => fmSquash Size x y p q i j) (fmUnit Size) (fun (x : FreeMon Size) (y : FreeMon Size) => fmMul Size x y) (fun (x : FreeMon Size) (y : FreeMon Size) (z : FreeMon Size) (i : I) => fmAssoc Size x y z i) (fun (x : FreeMon Size) (i : I) => fmUnitL Size x i) (fun (x : FreeMon Size) (i : I) => fmUnitR Size x i) k
+
 def fmEtaNat : Nat -o FreeMon Nat := fun (n : Nat) => fmEta Nat n
+
 def fmMapNat : (A : Type 0) -> (A -o Nat) -> FreeMon A -> FreeMon Nat :=
   fun (A : Type 0) (f : A -o Nat) => fmBindNat A (fun (a : A) => fmEtaNat (f a))
+
 def fmEtaSize : Size -o FreeMon Size := fun (n : Size) => fmEta Size n
+
 def fmMapSize : (A : Type 0) -> (A -o Size) -> FreeMon A -> FreeMon Size :=
   fun (A : Type 0) (f : A -o Size) => fmBindSize A (fun (a : A) => fmEtaSize (f a))
+
 -- The trace position (S3, USER ruling Q-S3-3 (a)): a position is an op
 -- count. `len A r` is a C builtin (OP_FM_LEN): the domain cannot prove the
 -- Nat monoid laws that fmFold needs (S3 survey section 7).
 def OpPos : Type 0 := Nat
+
 -- The positions of a bag (S7 B3, Q4): Pos n has n values, the first
 -- position at each szS and a lift of each position of the tail. No
 -- constructor gives Pos sz0. A domain family, so Fin stays internal (O23).
 family Pos : Size -> Type 0 := posFirst (firstSize : Size) : Pos (szS firstSize)
   | posNext (nextSize : Size) (nextPos : Pos nextSize) : Pos (szS nextSize)
+
 -- The words of adjacent swaps (S7 B3, Q5): wordSwap applies the rest,
 -- then swaps the first two positions, and wordLift applies the inner
 -- word to the tail, then the rest. The orbits of a word action are the
@@ -167,6 +170,7 @@ family Pos : Size -> Type 0 := posFirst (firstSize : Size) : Pos (szS firstSize)
 family Word : Size -> Type 0 := wordNil (nilSize : Size) : Word nilSize
   | wordSwap (wordAt : Size) (wordRest : Word (szS (szS wordAt))) : Word (szS (szS wordAt))
   | wordLift (liftSize : Size) (liftInner : Word liftSize) (liftRest : Word (szS liftSize)) : Word (szS liftSize)
+
 -- The choice bags and the orbits at each size (S3, design C section 3,
 -- USER ruling Q-S3-6 (a)). ChoiceBag is the old cons Bag at the choice
 -- type Sum Unit Unit, and OrbitN n is the quotient of the configurations
@@ -174,33 +178,27 @@ family Word : Size -> Type 0 := wordNil (nilSize : Size) : Word nilSize
 -- parameter, so they are not type constructors (rule R1). sizePred gives
 -- the index of a tail, consP puts a choice in front of a configuration,
 -- swapFront swaps the first two positions and actW is the word action.
-def sizePred : Size -> Size := fun (s : Size) => elim (fun (t : Size) => Size) sz0 (fun (k : Size) (ih : Size) => k) s
+def sizePred : Size -> Size :=
+  fun (s : Size) => elim (fun (t : Size) => Size) sz0 (fun (k : Size) (ih : Size) => k) s
+
 def consP : (n : Size) -> Sum Unit Unit -> (Pos n -> Sum Unit Unit) -> Pos (szS n) -> Sum Unit Unit :=
-  fun (n : Size) (a : Sum Unit Unit) (t : Pos n -> Sum Unit Unit) (p : Pos (szS n)) =>
-    (elim (fun (k : Size) (q : Pos k) => Sum Unit Unit -> (Pos (sizePred k) -> Sum Unit Unit) -> Sum Unit Unit)
-      (fun (m : Size) => fun (b : Sum Unit Unit) (u : Pos m -> Sum Unit Unit) => b)
-      (fun (m : Size) (q : Pos m) (ih : Sum Unit Unit -> (Pos (sizePred m) -> Sum Unit Unit) -> Sum Unit Unit) => fun (b : Sum Unit Unit) (u : Pos m -> Sum Unit Unit) => u q) p) a t
+  fun (n : Size) (a : Sum Unit Unit) (t : Pos n -> Sum Unit Unit) (p : Pos (szS n)) => elim (fun (k : Size) (q : Pos k) => Sum Unit Unit -> (Pos (sizePred k) -> Sum Unit Unit) -> Sum Unit Unit) (fun (m : Size) (b : Sum Unit Unit) (u : Pos m -> Sum Unit Unit) => b) (fun (m : Size) (q : Pos m) (ih : Sum Unit Unit -> (Pos (sizePred m) -> Sum Unit Unit) -> Sum Unit Unit) (b : Sum Unit Unit) (u : Pos m -> Sum Unit Unit) => u q) p a t
+
 def swapFront : (m : Size) -> (Pos (szS (szS m)) -> Sum Unit Unit) -> Pos (szS (szS m)) -> Sum Unit Unit :=
-  fun (m : Size) (c : Pos (szS (szS m)) -> Sum Unit Unit) =>
-    consP (szS m) (c (posNext (szS m) (posFirst m))) (consP m (c (posFirst (szS m))) (fun (p : Pos m) => c (posNext (szS m) (posNext m p))))
+  fun (m : Size) (c : Pos (szS (szS m)) -> Sum Unit Unit) => consP (szS m) (c (posNext (szS m) (posFirst m))) (consP m (c (posFirst (szS m))) (fun (p : Pos m) => c (posNext (szS m) (posNext m p))))
+
 def actW : (n : Size) -> Word n -> (Pos n -> Sum Unit Unit) -> Pos n -> Sum Unit Unit :=
-  fun (n : Size) (w : Word n) => elim (fun (k : Size) (v : Word k) => (Pos k -> Sum Unit Unit) -> Pos k -> Sum Unit Unit)
-    (fun (k : Size) => fun (d : Pos k -> Sum Unit Unit) => d)
-    (fun (m : Size) (v : Word (szS (szS m))) (ih : (Pos (szS (szS m)) -> Sum Unit Unit) -> Pos (szS (szS m)) -> Sum Unit Unit) =>
-      fun (d : Pos (szS (szS m)) -> Sum Unit Unit) => swapFront m (ih d))
-    (fun (m : Size) (u : Word m) (ihu : (Pos m -> Sum Unit Unit) -> Pos m -> Sum Unit Unit) (v : Word (szS m)) (ihv : (Pos (szS m) -> Sum Unit Unit) -> Pos (szS m) -> Sum Unit Unit) =>
-      fun (d : Pos (szS m) -> Sum Unit Unit) => ihv (consP m (d (posFirst m)) (ihu (fun (p : Pos m) => d (posNext m p))))) w
+  fun (n : Size) (w : Word n) => elim (fun (k : Size) (v : Word k) => (Pos k -> Sum Unit Unit) -> Pos k -> Sum Unit Unit) (fun (k : Size) (d : Pos k -> Sum Unit Unit) => d) (fun (m : Size) (v : Word (szS (szS m))) (ih : (Pos (szS (szS m)) -> Sum Unit Unit) -> Pos (szS (szS m)) -> Sum Unit Unit) (d : Pos (szS (szS m)) -> Sum Unit Unit) => swapFront m (ih d)) (fun (m : Size) (u : Word m) (ihu : (Pos m -> Sum Unit Unit) -> Pos m -> Sum Unit Unit) (v : Word (szS m)) (ihv : (Pos (szS m) -> Sum Unit Unit) -> Pos (szS m) -> Sum Unit Unit) (d : Pos (szS m) -> Sum Unit Unit) => ihv (consP m (d (posFirst m)) (ihu (fun (p : Pos m) => d (posNext m p))))) w
+
 family ChoiceBag : Size -> Type 0 := choiceNil : ChoiceBag sz0
   | choiceCons (cbSize : Size) (cbHead : Sum Unit Unit) (cbTail : ChoiceBag cbSize) : ChoiceBag (szS cbSize)
-  | choiceSwap (cbSwapSize : Size) (cbFirst : Sum Unit Unit) (cbSecond : Sum Unit Unit) (cbSwapTail : ChoiceBag cbSwapSize) (i : I) : ChoiceBag (szS (szS cbSwapSize))
-    [ ~i -> choiceCons (szS cbSwapSize) cbFirst (choiceCons cbSwapSize cbSecond cbSwapTail), i -> choiceCons (szS cbSwapSize) cbSecond (choiceCons cbSwapSize cbFirst cbSwapTail) ]
-  | choiceSquash (cbSquashSize : Size) (cbFrom : ChoiceBag cbSquashSize) (cbTo : ChoiceBag cbSquashSize) (cbLeft : Path (ChoiceBag cbSquashSize) cbFrom cbTo) (cbRight : Path (ChoiceBag cbSquashSize) cbFrom cbTo) (i : I) (j : I) : ChoiceBag cbSquashSize
-    [ ~i -> cbLeft @ j, i -> cbRight @ j, ~j -> cbFrom, j -> cbTo ]
+  | choiceSwap (cbSwapSize : Size) (cbFirst : Sum Unit Unit) (cbSecond : Sum Unit Unit) (cbSwapTail : ChoiceBag cbSwapSize) (i : I) : ChoiceBag (szS (szS cbSwapSize)) [ ~i -> choiceCons (szS cbSwapSize) cbFirst (choiceCons cbSwapSize cbSecond cbSwapTail), i -> choiceCons (szS cbSwapSize) cbSecond (choiceCons cbSwapSize cbFirst cbSwapTail) ]
+  | choiceSquash (cbSquashSize : Size) (cbFrom : ChoiceBag cbSquashSize) (cbTo : ChoiceBag cbSquashSize) (cbLeft : Path (ChoiceBag cbSquashSize) cbFrom cbTo) (cbRight : Path (ChoiceBag cbSquashSize) cbFrom cbTo) (i : I) (j : I) : ChoiceBag cbSquashSize [ ~i -> cbLeft @ j, i -> cbRight @ j, ~j -> cbFrom, j -> cbTo ]
+
 family OrbitN : Size -> Type 0 := orbitNOf (onSize : Size) (onOf : Pos onSize -> Sum Unit Unit) : OrbitN onSize
-  | orbitNEq (onEqSize : Size) (onA : Pos onEqSize -> Sum Unit Unit) (onB : Pos onEqSize -> Sum Unit Unit) (onR : Sigma (w : Word onEqSize) (Path (Pos onEqSize -> Sum Unit Unit) (actW onEqSize w onB) onA)) (i : I) : OrbitN onEqSize
-    [ ~i -> orbitNOf onEqSize onA, i -> orbitNOf onEqSize onB ]
-  | orbitNSquash (onSqSize : Size) (onFrom : OrbitN onSqSize) (onTo : OrbitN onSqSize) (onLeft : Path (OrbitN onSqSize) onFrom onTo) (onRight : Path (OrbitN onSqSize) onFrom onTo) (i : I) (j : I) : OrbitN onSqSize
-    [ ~i -> onLeft @ j, i -> onRight @ j, ~j -> onFrom, j -> onTo ]
+  | orbitNEq (onEqSize : Size) (onA : Pos onEqSize -> Sum Unit Unit) (onB : Pos onEqSize -> Sum Unit Unit) (onR : Sigma (w : Word onEqSize) (Path (Pos onEqSize -> Sum Unit Unit) (actW onEqSize w onB) onA)) (i : I) : OrbitN onEqSize [ ~i -> orbitNOf onEqSize onA, i -> orbitNOf onEqSize onB ]
+  | orbitNSquash (onSqSize : Size) (onFrom : OrbitN onSqSize) (onTo : OrbitN onSqSize) (onLeft : Path (OrbitN onSqSize) onFrom onTo) (onRight : Path (OrbitN onSqSize) onFrom onTo) (i : I) (j : I) : OrbitN onSqSize [ ~i -> onLeft @ j, i -> onRight @ j, ~j -> onFrom, j -> onTo ]
+
 -- The charter and its ratifications (S6, O20): an inductive-inductive
 -- block. Ratified c is a rule ratified at the charter c, adopt adds a
 -- ratified rule to a charter, and adoptTwice is law 4 in the type: a
@@ -211,77 +209,51 @@ family OrbitN : Size -> Type 0 := orbitNOf (onSize : Size) (onOf : Pos onSize ->
 -- parameter, so it is not a type constructor (rule R1).
 family Charter := genesis
   | adopt (adoptBase : Charter) (adoptRule : Ratified adoptBase)
-  | adoptTwice (twiceBase : Charter) (twiceRule : Size) (i : I)
-    [ ~i -> adopt twiceBase (ratify twiceBase twiceRule), i -> adopt (adopt twiceBase (ratify twiceBase twiceRule)) (ratify (adopt twiceBase (ratify twiceBase twiceRule)) twiceRule) ]
-  | charterSquash (charterFrom : Charter) (charterTo : Charter) (charterLeft : Path Charter charterFrom charterTo) (charterRight : Path Charter charterFrom charterTo) (i : I) (j : I)
-    [ ~i -> charterLeft @ j, i -> charterRight @ j, ~j -> charterFrom, j -> charterTo ]
+  | adoptTwice (twiceBase : Charter) (twiceRule : Size) (i : I) [ ~i -> adopt twiceBase (ratify twiceBase twiceRule), i -> adopt (adopt twiceBase (ratify twiceBase twiceRule)) (ratify (adopt twiceBase (ratify twiceBase twiceRule)) twiceRule) ]
+  | charterSquash (charterFrom : Charter) (charterTo : Charter) (charterLeft : Path Charter charterFrom charterTo) (charterRight : Path Charter charterFrom charterTo) (i : I) (j : I) [ ~i -> charterLeft @ j, i -> charterRight @ j, ~j -> charterFrom, j -> charterTo ]
 and Ratified : Charter -> Type 0 := ratify (ratifyBase : Charter) (ratifyRule : Size) : Ratified ratifyBase
-  | ratifiedSquash (ratifiedAt : Charter) (ratifiedFrom : Ratified ratifiedAt) (ratifiedTo : Ratified ratifiedAt) (ratifiedLeft : Path (Ratified ratifiedAt) ratifiedFrom ratifiedTo) (ratifiedRight : Path (Ratified ratifiedAt) ratifiedFrom ratifiedTo) (i : I) (j : I) : Ratified ratifiedAt
-    [ ~i -> ratifiedLeft @ j, i -> ratifiedRight @ j, ~j -> ratifiedFrom, j -> ratifiedTo ]
+  | ratifiedSquash (ratifiedAt : Charter) (ratifiedFrom : Ratified ratifiedAt) (ratifiedTo : Ratified ratifiedAt) (ratifiedLeft : Path (Ratified ratifiedAt) ratifiedFrom ratifiedTo) (ratifiedRight : Path (Ratified ratifiedAt) ratifiedFrom ratifiedTo) (i : I) (j : I) : Ratified ratifiedAt [ ~i -> ratifiedLeft @ j, i -> ratifiedRight @ j, ~j -> ratifiedFrom, j -> ratifiedTo ]
 
 -- Equivalences (S3a, R3 (a)): contractible types, fibers, isEquiv and
 -- Equiv as Sigma types (the map, then for each y the center pack x p and
 -- the contraction), idEquiv, and isoToEquiv as in agda/cubical
 -- isoToIsEquiv. isoCap is the fill at k = i1; isoPath is the first part
 -- of the fiber path. The squares are inline, with j flipped.
-def isContr : (A : Type 0) -> Type 0 :=
-  fun (A : Type 0) => Sigma (c : A) ((x : A) -> Path A c x)
+def isContr : (A : Type 0) -> Type 0 := fun (A : Type 0) => Sigma (c : A) ((x : A) -> Path A c x)
+
 def fiber : (A : Type 0) -> (B : Type 0) -> (f : A -> B) -> (y : B) -> Type 0 :=
-  fun (A : Type 0) => fun (B : Type 0) => fun (f : A -> B) => fun (y : B) => Sigma (x : A) (Path B (f x) y)
+  fun (A : Type 0) (B : Type 0) (f : A -> B) (y : B) => Sigma (x : A) (Path B (f x) y)
+
 def isEquiv : (A : Type 0) -> (B : Type 0) -> (f : A -> B) -> Type 0 :=
-  fun (A : Type 0) => fun (B : Type 0) => fun (f : A -> B) => (y : B) -> isContr (fiber A B f y)
+  fun (A : Type 0) (B : Type 0) (f : A -> B) => (y : B) -> isContr (fiber A B f y)
+
 def Equiv : (A : Type 0) -> (B : Type 0) -> Type 0 :=
-  fun (A : Type 0) => fun (B : Type 0) => Sigma (f : A -> B) (isEquiv A B f)
+  fun (A : Type 0) (B : Type 0) => Sigma (f : A -> B) (isEquiv A B f)
+
 def idEquiv : (A : Type 0) -> Equiv A A :=
-  fun (A : Type 0) => pack (fun (x : A) => x) (fun (y : A) =>
-    pack (pack y refl) (fun (z : fiber A A (fun (x : A) => x) y) =>
-      fun (i : I) => pack (payload z @ ~i) (fun (j : I) => payload z @ (~i \/ j))))
-def isoCap : (A : Type 0) -> (B : Type 0) -> (f : A -> B) -> (g : B -> A) -> (t : (x : A) -> Path A (g (f x)) x) ->
-  (y : B) -> (x0 : A) -> (p0 : Path B (f x0) y) -> Path A (g y) x0 :=
-  fun (A : Type 0) => fun (B : Type 0) => fun (f : A -> B) => fun (g : B -> A) => fun (t : (x : A) -> Path A (g (f x)) x) =>
-  fun (y : B) => fun (x0 : A) => fun (p0 : Path B (f x0) y) =>
-    fun (i : I) => hcomp A (i \/ ~i \/ ~i1) (fun (m : I) => [ i -> t x0 @ (i1 /\ m), ~i -> g y, ~i1 -> g (p0 @ ~i) ]) (g (p0 @ ~i))
-def isoPath : (A : Type 0) -> (B : Type 0) -> (f : A -> B) -> (g : B -> A) -> (t : (x : A) -> Path A (g (f x)) x) ->
-  (y : B) -> (x0 : A) -> (p0 : Path B (f x0) y) -> (x1 : A) -> (p1 : Path B (f x1) y) -> Path A x0 x1 :=
-  fun (A : Type 0) => fun (B : Type 0) => fun (f : A -> B) => fun (g : B -> A) => fun (t : (x : A) -> Path A (g (f x)) x) =>
-  fun (y : B) => fun (x0 : A) => fun (p0 : Path B (f x0) y) => fun (x1 : A) => fun (p1 : Path B (f x1) y) =>
-    fun (i : I) => hcomp A (i \/ ~i \/ ~i1) (fun (m2 : I) => [ i -> isoCap A B f g t y x1 p1 @ (i1 /\ m2), ~i -> isoCap A B f g t y x0 p0 @ (i1 /\ m2), ~i1 -> g y ]) (g y)
-def isoToEquiv : (A : Type 0) -> (B : Type 0) -> (f : A -> B) -> (g : B -> A) ->
-  (s : (y : B) -> Path B (f (g y)) y) -> (t : (x : A) -> Path A (g (f x)) x) -> Equiv A B :=
-  fun (A : Type 0) => fun (B : Type 0) => fun (f : A -> B) => fun (g : B -> A) =>
-  fun (s : (y : B) -> Path B (f (g y)) y) => fun (t : (x : A) -> Path A (g (f x)) x) =>
-  pack f (fun (y : B) => pack (pack (g y) (s y)) (fun (z : fiber A B f y) =>
-    fun (i : I) => pack (isoPath A B f g t y (g y) (s y) (witness z) (payload z) @ i) (fun (j : I) =>
-      hcomp B (i \/ ~i \/ ~j \/ j) (fun (m4 : I) => [
-        i -> s (payload z @ j) @ m4,
-        ~i -> s (s y @ j) @ m4,
-        ~j -> s (f (isoPath A B f g t y (g y) (s y) (witness z) (payload z) @ i)) @ m4,
-        j -> s y @ m4 ])
-      (f (hcomp A (i \/ ~i \/ ~j \/ j) (fun (m3 : I) => [
-        i -> hcomp A (~j \/ j \/ m3) (fun (m : I) => [ ~j -> t (witness z) @ (~m3 /\ m), j -> g y, m3 -> g (payload z @ j) ]) (g (payload z @ j)),
-        ~i -> hcomp A (~j \/ j \/ m3) (fun (m : I) => [ ~j -> t (g y) @ (~m3 /\ m), j -> g y, m3 -> g (s y @ j) ]) (g (s y @ j)),
-        ~j -> t (isoPath A B f g t y (g y) (s y) (witness z) (payload z) @ i) @ ~m3,
-        j -> g y ])
-        (hcomp A (i \/ ~i \/ j) (fun (m2 : I) => [
-          i -> isoCap A B f g t y (witness z) (payload z) @ (~j /\ m2),
-          ~i -> isoCap A B f g t y (g y) (s y) @ (~j /\ m2),
-          j -> g y ]) (g y)))))))
+  fun (A : Type 0) => pack (fun (x : A) => x) (fun (y : A) => pack (pack y refl) (fun (z : fiber A A (fun (x : A) => x) y) (i : I) => pack (payload z @ ~i) (fun (j : I) => payload z @ (~i \/ j))))
+
+def isoCap : (A : Type 0) -> (B : Type 0) -> (f : A -> B) -> (g : B -> A) -> (t : (x : A) -> Path A (g (f x)) x) -> (y : B) -> (x0 : A) -> (p0 : Path B (f x0) y) -> Path A (g y) x0 :=
+  fun (A : Type 0) (B : Type 0) (f : A -> B) (g : B -> A) (t : (x : A) -> Path A (g (f x)) x) (y : B) (x0 : A) (p0 : Path B (f x0) y) (i : I) => hcomp A (i \/ ~i \/ ~i1) (fun (m : I) => [ i -> t x0 @ (i1 /\ m), ~i -> g y, ~i1 -> g (p0 @ ~i) ]) (g (p0 @ ~i))
+
+def isoPath : (A : Type 0) -> (B : Type 0) -> (f : A -> B) -> (g : B -> A) -> (t : (x : A) -> Path A (g (f x)) x) -> (y : B) -> (x0 : A) -> (p0 : Path B (f x0) y) -> (x1 : A) -> (p1 : Path B (f x1) y) -> Path A x0 x1 :=
+  fun (A : Type 0) (B : Type 0) (f : A -> B) (g : B -> A) (t : (x : A) -> Path A (g (f x)) x) (y : B) (x0 : A) (p0 : Path B (f x0) y) (x1 : A) (p1 : Path B (f x1) y) (i : I) => hcomp A (i \/ ~i \/ ~i1) (fun (m2 : I) => [ i -> isoCap A B f g t y x1 p1 @ (i1 /\ m2), ~i -> isoCap A B f g t y x0 p0 @ (i1 /\ m2), ~i1 -> g y ]) (g y)
+
+def isoToEquiv : (A : Type 0) -> (B : Type 0) -> (f : A -> B) -> (g : B -> A) -> (s : (y : B) -> Path B (f (g y)) y) -> (t : (x : A) -> Path A (g (f x)) x) -> Equiv A B :=
+  fun (A : Type 0) (B : Type 0) (f : A -> B) (g : B -> A) (s : (y : B) -> Path B (f (g y)) y) (t : (x : A) -> Path A (g (f x)) x) => pack f (fun (y : B) => pack (pack (g y) (s y)) (fun (z : fiber A B f y) (i : I) => pack (isoPath A B f g t y (g y) (s y) (witness z) (payload z) @ i) (fun (j : I) => hcomp B (i \/ ~i \/ ~j \/ j) (fun (m4 : I) => [ i -> s (payload z @ j) @ m4, ~i -> s (s y @ j) @ m4, ~j -> s (f (isoPath A B f g t y (g y) (s y) (witness z) (payload z) @ i)) @ m4, j -> s y @ m4 ]) (f (hcomp A (i \/ ~i \/ ~j \/ j) (fun (m3 : I) => [ i -> hcomp A (~j \/ j \/ m3) (fun (m : I) => [ ~j -> t (witness z) @ (~m3 /\ m), j -> g y, m3 -> g (payload z @ j) ]) (g (payload z @ j)), ~i -> hcomp A (~j \/ j \/ m3) (fun (m : I) => [ ~j -> t (g y) @ (~m3 /\ m), j -> g y, m3 -> g (s y @ j) ]) (g (s y @ j)), ~j -> t (isoPath A B f g t y (g y) (s y) (witness z) (payload z) @ i) @ ~m3, j -> g y ]) (hcomp A (i \/ ~i \/ j) (fun (m2 : I) => [ i -> isoCap A B f g t y (witness z) (payload z) @ (~j /\ m2), ~i -> isoCap A B f g t y (g y) (s y) @ (~j /\ m2), j -> g y ]) (g y)))))))
 
 -- ua (S3b): the Glue line from A to B. At i0 the type is A through e; at
 -- i1 the type is B through idEquiv B. Transport along ua e at a closed
 -- value of A gives witness e of the value (uaBeta).
 def ua : (A : Type 0) -> (B : Type 0) -> (e : Equiv A B) -> Path (Type 0) A B :=
-  fun (A : Type 0) => fun (B : Type 0) => fun (e : Equiv A B) =>
-    fun (i : I) => Glue B (~i \/ i) (fun (_ : I) => [ ~i -> pack A e, i -> pack B (idEquiv B) ])
+  fun (A : Type 0) (B : Type 0) (e : Equiv A B) (i : I) => Glue B (~i \/ i) (fun (_ : I) => [ ~i -> pack A e, i -> pack B (idEquiv B) ])
+
 -- uaArrow (S3c): agda/cubical ua-> with a constant C. A path h a from
 -- f0 a to f1 (witness e a) for each a gives a path of functions over ua e
 -- from f0 to f1. At i0 the hcomp is its ~i tube at j = i1, h a @ i0 =
 -- f0 a; at i1 it is its i tube, f1 a. The base is f1 (unglue a).
-def uaArrow : (A : Type 0) -> (B : Type 0) -> (C : Type 0) -> (e : Equiv A B) -> (f0 : A -> C) -> (f1 : B -> C) ->
-  (h : (a : A) -> Path C (f0 a) (f1 (witness e a))) -> PathP (fun (i : I) => (ua A B e @ i) -> C) f0 f1 :=
-  fun (A : Type 0) => fun (B : Type 0) => fun (C : Type 0) => fun (e : Equiv A B) => fun (f0 : A -> C) => fun (f1 : B -> C) =>
-  fun (h : (a : A) -> Path C (f0 a) (f1 (witness e a))) =>
-    fun (i : I) => fun (a : ua A B e @ i) => hcomp C (~i \/ i) (fun (j : I) => [ ~i -> h a @ ~j, i -> f1 a ]) (f1 (unglue a))
+def uaArrow : (A : Type 0) -> (B : Type 0) -> (C : Type 0) -> (e : Equiv A B) -> (f0 : A -> C) -> (f1 : B -> C) -> (h : (a : A) -> Path C (f0 a) (f1 (witness e a))) -> PathP (fun (i : I) => ua A B e @ i -> C) f0 f1 :=
+  fun (A : Type 0) (B : Type 0) (C : Type 0) (e : Equiv A B) (f0 : A -> C) (f1 : B -> C) (h : (a : A) -> Path C (f0 a) (f1 (witness e a))) (i : I) (a : ua A B e @ i) => hcomp C (~i \/ i) (fun (j : I) => [ ~i -> h a @ ~j, i -> f1 a ]) (f1 (unglue a))
 
 -- A binary tree for the IR tests (S3). fork has
 -- two recursive fields, so a fold over a run-time Tree gives
@@ -294,6 +266,7 @@ family Tree := tip | fork (forkLeft : Tree) (forkRight : Tree)
 -- other family, so the lowering refuses a fold over them (test/ir/hop.lang).
 family Signal := sigQuiet | sigLoud (loudLevel : Nat)
 and Window := winOpen | winShut (shutFor : Nat)
+
 family Hop := hopEnd | hopNext (nextEcho : Echo)
 and Echo := echoBack (backHop : Hop)
 
@@ -301,88 +274,105 @@ and Echo := echoBack (backHop : Hop)
 -- chain of segments (resRoot, resChild). `within r g` is flagYes when g
 -- is r or an ancestor of r.
 family Action := inspect | propose | execute
-family Reason := scopeMiss | boundSpent | budgetShort | noApproval | digestDiffers | approvalUsed | widen | malformed
+
+family Reason := scopeMiss
+  | boundSpent
+  | budgetShort
+  | noApproval
+  | digestDiffers
+  | approvalUsed
+  | widen
+  | malformed
+
 family Decision := permit | deny (why : Reason)
+
 -- A deadline is a StepBound: a count of later operations (Q-S5-2 (a)).
 def StepBound : Type 0 := Size
+
 -- A mutation (S7, Q-S7-11 (a)): a target, an action and a payload. canon m
 -- is the bytes that an approval signs: the target and the payload.
 family Mutation := mutation (mTarget : Resource) (mAction : Action) (mPayload : Payload)
+
 def canon : Mutation -> Bytes := fun (m : Mutation) => envelope (mTarget m) (mPayload m)
+
 -- A ticket is the copyable record of one call: the mutation, the cost and
 -- the digest of the approval (none when the call has no approval).
 family Ticket := ticket (tkMutation : Mutation) (tkCost : Nat) (tkDigest : Option Digest)
+
 -- A call at the tool boundary (Q-S7-11 (a)). The Approval field makes Call
 -- a resource type (affine). callTicket uses the approval one time.
 family Call := call (callMutation : Mutation) (callCost : Nat) (callApproval : Option Approval)
+
 def ticketWith : Mutation -> Nat -> Option Digest -o Ticket :=
   fun (m : Mutation) (n : Nat) (d : Option Digest) => ticket m n d
+
 def someDigest : Digest -o Option Digest := fun (d : Digest) => some d
+
 def callTicket : Call -o Ticket :=
-  fun (c : Call) => elim (fun (@0 x : Call) => Ticket)
-    (fun (m : Mutation) (n : Nat) (a : Option Approval) => ticketWith m n (option none (fun (p : Approval) => someDigest (approvalDigest p)) a)) c
+  fun (c : Call) => elim (fun (@0 x : Call) => Ticket) (fun (m : Mutation) (n : Nat) (a : Option Approval) => ticketWith m n (option none (fun (p : Approval) => someDigest (approvalDigest p)) a)) c
+
 def actEq : Action -> Action -> Flag :=
-  fun (a : Action) (b : Action) => elim (fun (x : Action) => Flag)
-    (elim (fun (y : Action) => Flag) flagYes flagNo flagNo b)
-    (elim (fun (y : Action) => Flag) flagNo flagYes flagNo b)
-    (elim (fun (y : Action) => Flag) flagNo flagNo flagYes b) a
+  fun (a : Action) (b : Action) => elim (fun (x : Action) => Flag) (elim (fun (y : Action) => Flag) flagYes flagNo flagNo b) (elim (fun (y : Action) => Flag) flagNo flagYes flagNo b) (elim (fun (y : Action) => Flag) flagNo flagNo flagYes b) a
+
 -- A scope is a FreeMon of grants. The grant (g, b) allows the action b on
 -- g and on each resource below g. allows and scopeWithin count the
 -- grants that match (fmBindNat, a fold by fmFold; len): the domain cannot
 -- prove the Flag monoid laws that a fold into Flag needs.
 def Scope : Type 0 := FreeMon (Prod Resource Action)
+
 def grants : Resource -> Action -> Prod Resource Action -> Flag :=
   fun (r : Resource) (a : Action) (g : Prod Resource Action) => flagIf (within r (first g)) (actEq a (second g)) flagNo
+
 def allows : Scope -> Resource -> Action -> Flag :=
-  fun (s : Scope) (r : Resource) (a : Action) =>
-    flagIf (natEq (len Nat (fmBindNat (Prod Resource Action) (fun (g : Prod Resource Action) => flagIf (grants r a g) (fmEtaNat 0) (fmUnit Nat)) s)) 0) flagNo flagYes
+  fun (s : Scope) (r : Resource) (a : Action) => flagIf (natEq (len Nat (fmBindNat (Prod Resource Action) (fun (g : Prod Resource Action) => flagIf (grants r a g) (fmEtaNat 0) (fmUnit Nat)) s)) 0) flagNo flagYes
+
 -- scopeWithin s t is flagYes when t allows each grant of s (a delegated
 -- scope can only narrow; else the Reason is widen).
 def scopeWithin : Scope -> Scope -> Flag :=
-  fun (s : Scope) (t : Scope) =>
-    natEq (len Nat (fmBindNat (Prod Resource Action) (fun (g : Prod Resource Action) => flagIf (allows t (first g) (second g)) (fmUnit Nat) (fmEtaNat 0)) s)) 0
+  fun (s : Scope) (t : Scope) => natEq (len Nat (fmBindNat (Prod Resource Action) (fun (g : Prod Resource Action) => flagIf (allows t (first g) (second g)) (fmUnit Nat) (fmEtaNat 0)) s)) 0
+
 -- The allowance (Q-S5-4 (b)): eps is the value that the allowance holds
 -- now and advance is the allowance after one call (its ticket, S7).
 affine cofamily Allowance (A : Type 0) := alCorec (eps : A) (advance : Ticket -> Allowance A)
+
 -- alOpen gives the value now and the allowance after one call, as one
 -- pair (Q-S5-8 (a)). The pair is a resource: split it with unpack.
 def alOpen : (A : Type 0) -> Allowance A -o Prod A (Ticket -o Allowance A) := AllowanceOpen
+
 -- sizeLe a b is flagYes when a is at most b (a child step bound cannot
 -- pass the parent bound).
 def sizeLe : Size -> Size -> Flag :=
-  fun (a : Size) (b : Size) => elim (fun (t : Size) => Size -> Flag)
-    (fun (u : Size) => flagYes)
-    (fun (m : Size) (ih : Size -> Flag) => fun (u : Size) => elim (fun (v : Size) => Flag) flagNo (fun (w : Size) (jh : Flag) => ih w) u) a b
+  fun (a : Size) (b : Size) => elim (fun (t : Size) => Size -> Flag) (fun (u : Size) => flagYes) (fun (m : Size) (ih : Size -> Flag) (u : Size) => elim (fun (v : Size) => Flag) flagNo (fun (w : Size) (jh : Flag) => ih w) u) a b
+
 -- The capability (S6, Q-S6-4 (a)): a scope, a step bound and a budget.
 -- The Budget field makes Capability a resource type (affine).
 family Capability := cap (capScope : Scope) (capSteps : StepBound) (capBudget : Budget)
+
 -- delegate c s k n gives some (child, rest) when s is within the parent
 -- scope, k is at most the parent step bound and the parent budget has n
 -- units. The child has s, k and the n units; the rest keeps the parent
 -- scope, the parent step bound and the remaining units. Else none.
 def delegate : Capability -o Scope -> StepBound -> Nat -> Option (Prod Capability Capability) :=
-  fun (c : Capability) (s : Scope) (k : StepBound) (n : Nat) => elim (fun (@0 x : Capability) => Option (Prod Capability Capability))
-    (fun (ps : Scope) (pk : StepBound) (pb : Budget) =>
-      flagIf (scopeWithin s ps)
-        (flagIf (sizeLe k pk)
-          (option none (fun (bs : Prod Budget Budget) => some (unpack bs (fun (b1 : Budget) (b2 : Budget) => pair (cap s k b1) (cap ps pk b2)))) (split pb n))
-          none)
-        none) c
+  fun (c : Capability) (s : Scope) (k : StepBound) (n : Nat) => elim (fun (@0 x : Capability) => Option (Prod Capability Capability)) (fun (ps : Scope) (pk : StepBound) (pb : Budget) => flagIf (scopeWithin s ps) (flagIf (sizeLe k pk) (option none (fun (bs : Prod Budget Budget) => some (unpack bs (fun (b1 : Budget) (b2 : Budget) => pair (cap s k b1) (cap ps pk b2)))) (split pb n)) none) none) c
+
 -- The authority (S7, Q-S7-12 (a)): the copyable state of the allowance. A
 -- scope, a step bound, the units left (a Nat: the gate holds the Budget,
 -- S9) and the digests of the approvals that were used.
 family Authority := authority (auScope : Scope) (auSteps : StepBound) (auLeft : Nat) (auUsed : FreeMon Digest)
+
 -- stepLeft k is flagYes when k has one more step.
 def stepLeft : StepBound -> Flag :=
   fun (k : StepBound) => elim (fun (v : Size) => Flag) flagNo (fun (w : Size) (jh : Flag) => flagYes) k
+
 -- usedHas u d is flagYes when the digest d is in u (a count, as allows).
 def usedHas : FreeMon Digest -> Digest -> Flag :=
-  fun (u : FreeMon Digest) (d : Digest) =>
-    flagIf (natEq (len Nat (fmBindNat Digest (fun (e : Digest) => flagIf (digestEq e d) (fmEtaNat 0) (fmUnit Nat)) u)) 0) flagNo flagYes
+  fun (u : FreeMon Digest) (d : Digest) => flagIf (natEq (len Nat (fmBindNat Digest (fun (e : Digest) => flagIf (digestEq e d) (fmEtaNat 0) (fmUnit Nat)) u)) 0) flagNo flagYes
+
 -- auTake s c u is the authority after a decision: one step less, c units
 -- less and the used digests u.
 def auTake : Authority -> Nat -> FreeMon Digest -> Authority :=
   fun (s : Authority) (c : Nat) (u : FreeMon Digest) => authority (auScope s) (sizePred (auSteps s)) (natSub (auLeft s) c) u
+
 -- judge s t is the decision on the ticket t and the authority after it.
 -- The denials come in this order (S7 survey sec 2): scopeMiss, boundSpent,
 -- budgetShort, noApproval (an execute with no digest), digestDiffers (the
@@ -391,40 +381,31 @@ def auTake : Authority -> Nat -> FreeMon Digest -> Authority :=
 -- the digest to auUsed. A deny takes one step and keeps the budget and
 -- the used digests (Q-S0-6).
 def judge : Authority -> Ticket -> Prod Decision Authority :=
-  fun (s : Authority) (t : Ticket) =>
-    flagIf (allows (auScope s) (mTarget (tkMutation t)) (mAction (tkMutation t)))
-      (flagIf (stepLeft (auSteps s))
-        (flagIf (natLe (tkCost t) (auLeft s))
-          (elim (fun (x : Action) => Prod Decision Authority)
-            (pair permit (auTake s (tkCost t) (auUsed s)))
-            (pair permit (auTake s (tkCost t) (auUsed s)))
-            (option (pair (deny noApproval) (auTake s 0 (auUsed s)))
-              (fun (d : Digest) => flagIf (digestEq d (hash (canon (tkMutation t))))
-                (flagIf (usedHas (auUsed s) d) (pair (deny approvalUsed) (auTake s 0 (auUsed s))) (pair permit (auTake s (tkCost t) (fmCons Digest d (auUsed s)))))
-                (pair (deny digestDiffers) (auTake s 0 (auUsed s))))
-              (tkDigest t))
-            (mAction (tkMutation t)))
-          (pair (deny budgetShort) (auTake s 0 (auUsed s))))
-        (pair (deny boundSpent) (auTake s 0 (auUsed s))))
-      (pair (deny scopeMiss) (auTake s 0 (auUsed s)))
+  fun (s : Authority) (t : Ticket) => flagIf (allows (auScope s) (mTarget (tkMutation t)) (mAction (tkMutation t))) (flagIf (stepLeft (auSteps s)) (flagIf (natLe (tkCost t) (auLeft s)) (elim (fun (x : Action) => Prod Decision Authority) (pair permit (auTake s (tkCost t) (auUsed s))) (pair permit (auTake s (tkCost t) (auUsed s))) (option (pair (deny noApproval) (auTake s 0 (auUsed s))) (fun (d : Digest) => flagIf (digestEq d (hash (canon (tkMutation t)))) (flagIf (usedHas (auUsed s) d) (pair (deny approvalUsed) (auTake s 0 (auUsed s))) (pair permit (auTake s (tkCost t) (fmCons Digest d (auUsed s))))) (pair (deny digestDiffers) (auTake s 0 (auUsed s)))) (tkDigest t)) (mAction (tkMutation t))) (pair (deny budgetShort) (auTake s 0 (auUsed s)))) (pair (deny boundSpent) (auTake s 0 (auUsed s)))) (pair (deny scopeMiss) (auTake s 0 (auUsed s)))
+
 -- S8 (Q-S8-4 (a)): a call of a tool with no bind line, or with no value at
 -- the pointer, is malformed. It takes one step (Q-S0-6 (a)).
 def judgeMalformed : Authority -> Prod Decision Authority :=
   fun (s : Authority) => pair (deny malformed) (auTake s 0 (auUsed s))
+
 -- The allowance of an authority: eps is the authority now and advance
 -- judges the ticket.
 def allowanceOf : Authority -> Allowance Authority :=
   fun (s : Authority) => alCorec Authority Authority (fun (x : Authority) => x) (fun (x : Authority) (t : Ticket) => second (judge x t)) s
+
 -- decide gives the decision on a call and the allowance after it. The call
 -- gives a ticket (callTicket uses the approval one time); alOpen gives the
 -- authority now and the advance, and judge decides on the ticket.
 def decideTicket : Allowance Authority -o Ticket -o Prod Decision (Allowance Authority) :=
   fun (al : Allowance Authority) (t : Ticket) => unpack (alOpen Authority al) (fun (s : Authority) (k : Ticket -o Allowance Authority) => pair (first (judge s t)) (k t))
+
 def decide : Allowance Authority -o Call -o Prod Decision (Allowance Authority) :=
   fun (al : Allowance Authority) (c : Call) => decideTicket al (callTicket c)
+
 -- The reply of the host to one operation (S7, Q-S7-10 (a)). replyDenied
 -- holds the Reason for the trace; a plan branch does not see it.
 family Reply := replyOk | replyDenied (replyWhy : Reason) | replyFailed
+
 -- A plan (Q-S7-10 (a)) is first order: one branch field for each reply
 -- (rule R1 refuses a field of a function type). An execute of m must lie
 -- in the ppApproved branch of an earlier propose of m (the checker,
@@ -433,7 +414,9 @@ family Plan (A : Type 0) := planDone (planOf : A)
   | planInspect (piTarget : Resource) (piOk : Plan A) (piDenied : Plan A) (piFailed : Plan A)
   | planPropose (ppMutation : Mutation) (ppApproved : Plan A) (ppRefused : Plan A)
   | planExecute (peMutation : Mutation) (peOk : Plan A) (peDenied : Plan A) (peFailed : Plan A)
+
 -- A trace entry: the mutation, the decision, the steps and the units left.
 family Entry := entry (enMutation : Mutation) (enDecision : Decision) (enSteps : StepBound) (enLeft : Nat)
+
 -- The trace (rule R1: a cofamily has one type parameter, so it is a Stream).
 def Trace : Type 0 := Stream Entry

@@ -2,42 +2,74 @@
 -- kit intros resRoot and resChild make the resources (a guest program
 -- gets a Resource from the host). The decide forms are in decide.lang.
 def docs : Resource := resRoot 1
+
 def report : Resource := resChild docs 2
+
 def mail : Resource := resRoot 3
+
 def readDocs : Scope := fmEta (Prod Resource Action) (pair docs inspect)
+
 -- The scope gate: a ticket in the scope is permitted, else it is denied
 -- with the reason scopeMiss.
 def scopeGate : Scope -> Ticket -> Decision :=
   fun (s : Scope) (c : Ticket) => flagIf (allows s (mTarget (tkMutation c)) (mAction (tkMutation c))) permit (deny scopeMiss)
+
 def readReport : Ticket := ticket (mutation report inspect (payloadOf 0)) 1 none
+
 def sendMail : Ticket := ticket (mutation mail execute (payloadOf 0)) 1 none
+
 def editReport : Ticket := ticket (mutation report execute (payloadOf 0)) 1 none
+
 -- L6 on closed rows: the gate permits a ticket in the scope and denies a
 -- ticket out of it.
 def lawScopeIn : Path Decision (scopeGate readDocs readReport) permit := refl
+
 def lawScopeOut : Path Decision (scopeGate readDocs sendMail) (deny scopeMiss) := refl
+
 def lawActionOut : Path Decision (scopeGate readDocs editReport) (deny scopeMiss) := refl
+
 -- The kernel Resource ops (eval rows).
 def reportWithin : Flag := within report docs
+
 def docsWithin : Flag := within docs report
+
 def sameReport : Flag := resEq report (resChild (resRoot 1) 2)
+
 def docsMail : Flag := resEq docs mail
+
 -- L4 on closed rows (item 6): an Allowance of later operations. Each call
 -- takes one step from the count; sizePred stays at sz0 (it saturates).
 def steps : StepBound := szS (szS sz0)
+
 def countdown : StepBound -> Allowance StepBound :=
   fun (n : StepBound) => alCorec StepBound StepBound (fun (m : StepBound) => m) (fun (m : StepBound) (c : Ticket) => sizePred m) n
-def lawAdvance : Path StepBound (eps StepBound (advance StepBound (countdown steps) readReport)) (szS sz0) := refl
-def lawSaturate : Path StepBound (eps StepBound (advance StepBound (advance StepBound (countdown sz0) readReport) sendMail)) sz0 := refl
+
+def lawAdvance : Path StepBound (eps StepBound (advance StepBound (countdown steps) readReport)) (szS sz0) :=
+  refl
+
+def lawSaturate : Path StepBound (eps StepBound (advance StepBound (advance StepBound (countdown sz0) readReport) sendMail)) sz0 :=
+  refl
+
 -- alOpen, then unpack uses each part one time (Q-S5-8 (a)).
 def openBoth : (A : Type 0) -> Ticket -> Allowance A -o Prod A (Allowance A) :=
   fun A c x => unpack (alOpen A x) (fun a k => pair a (k c))
-def lawOpen : Path StepBound (unpack (alOpen StepBound (countdown steps)) (fun a k => eps StepBound (k readReport))) (szS sz0) := refl
+
+def lawOpen : Path StepBound (unpack (alOpen StepBound (countdown steps)) (fun a k => eps StepBound (k readReport))) (szS sz0) :=
+  refl
+
 def afterOne : StepBound := eps StepBound (advance StepBound (countdown steps) readReport)
-def openAfterOne : StepBound := unpack (alOpen StepBound (countdown steps)) (fun a k => eps StepBound (k readReport))
+
+def openAfterOne : StepBound :=
+  unpack (alOpen StepBound (countdown steps)) (fun a k => eps StepBound (k readReport))
+
 -- Position closures can capture copyable values. A linear continuation
 -- can move an existing Allowance without observing it more than once.
 def constantAllowance : StepBound -> Allowance StepBound := fun n p => n
-def keepAllowance : (A : Type 0) -> Allowance A -o (Ticket -o Allowance A) := fun A x c => advance A x c
+
+def keepAllowance : (A : Type 0) -> Allowance A -o Ticket -o Allowance A :=
+  fun A x c => advance A x c
+
 def lawConstant : Path StepBound (eps StepBound (constantAllowance steps)) steps := refl
-def lawKeep : Path StepBound (eps StepBound (keepAllowance StepBound (countdown steps) readReport)) (szS sz0) := refl
+
+def lawKeep : Path StepBound (eps StepBound (keepAllowance StepBound (countdown steps) readReport)) (szS sz0) :=
+  refl

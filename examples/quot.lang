@@ -7,36 +7,35 @@
 -- (a)): a case binder of a type variable binds at 1, and f takes it at
 -- omega.
 def map0 : (f : Nat -> Nat) -> Trunc0 Nat -> Trunc0 Nat :=
-  fun (f : Nat -> Nat) (t : Trunc0 Nat) => fold (fun (a : Nat) => trunc0 Nat (f a))
-    (fun (x : Trunc0 Nat) (y : Trunc0 Nat) (p : Path (Trunc0 Nat) x y) (q : Path (Trunc0 Nat) x y) => fun (i : I) => fun (j : I) => squash0 Nat x y p q i j) t
-def map0At : Path (Trunc0 Nat) (map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (trunc0 Nat 0)) (trunc0 Nat 1) := refl
+  fun (f : Nat -> Nat) (t : Trunc0 Nat) => fold (fun (a : Nat) => trunc0 Nat (f a)) (fun (x : Trunc0 Nat) (y : Trunc0 Nat) (p : Path (Trunc0 Nat) x y) (q : Path (Trunc0 Nat) x y) (i : I) (j : I) => squash0 Nat x y p q i j) t
+
+def map0At : Path (Trunc0 Nat) (map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (trunc0 Nat 0)) (trunc0 Nat 1) :=
+  refl
+
 -- refl and trans refl refl are not equal by conversion (there is no
 -- regularity), but squash0 gives a square between them.
-def sq0 : Path (Path (Trunc0 Nat) (trunc0 Nat 0) (trunc0 Nat 0)) refl
-  (trans (Trunc0 Nat) (trunc0 Nat 0) (trunc0 Nat 0) (trunc0 Nat 0) refl refl) :=
-  fun (i : I) => fun (j : I) => squash0 Nat (trunc0 Nat 0) (trunc0 Nat 0) refl
-    (trans (Trunc0 Nat) (trunc0 Nat 0) (trunc0 Nat 0) (trunc0 Nat 0) refl refl) i j
+def sq0 : Path (Path (Trunc0 Nat) (trunc0 Nat 0) (trunc0 Nat 0)) refl (trans (Trunc0 Nat) (trunc0 Nat 0) (trunc0 Nat 0) (trunc0 Nat 0) refl refl) :=
+  fun (i : I) (j : I) => squash0 Nat (trunc0 Nat 0) (trunc0 Nat 0) refl (trans (Trunc0 Nat) (trunc0 Nat 0) (trunc0 Nat 0) (trunc0 Nat 0) refl refl) i j
+
 -- The fold of a squash0 square folds the path fields too: p goes to
 -- fun k => map0 (p @ k).
-def map0Sq : (x : Trunc0 Nat) -> (p : Path (Trunc0 Nat) x x) ->
-  Path (Path (Path (Trunc0 Nat) (map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) x) (map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) x))
-      (fun (k : I) => map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (p @ k)) (fun (k : I) => map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (p @ k)))
-    (fun (i : I) => fun (j : I) => map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (squash0 Nat x x p p i j))
-    (fun (i : I) => fun (j : I) => squash0 Nat (map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) x) (map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) x)
-      (fun (k : I) => map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (p @ k)) (fun (k : I) => map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (p @ k)) i j) :=
+def map0Sq : (x : Trunc0 Nat) -> (p : Path (Trunc0 Nat) x x) -> Path (Path (Path (Trunc0 Nat) (map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) x) (map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) x)) (fun (k : I) => map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (p @ k)) (fun (k : I) => map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (p @ k))) (fun (i : I) (j : I) => map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (squash0 Nat x x p p i j)) (fun (i : I) (j : I) => squash0 Nat (map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) x) (map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) x) (fun (k : I) => map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (p @ k)) (fun (k : I) => map0 (fun (r : Nat) => flagIf (natEq (natMod r 2) 0) 1 0) (p @ k)) i j) :=
   fun (x : Trunc0 Nat) (p : Path (Trunc0 Nat) x x) => refl
+
 -- Parity on Size (domain.lang): parityEq relates two points with the
 -- same sizeEven.
 def qPath : Path Parity (parityOf sz0) (parityOf (szS (szS sz0))) :=
   fun (i : I) => parityEq sz0 (szS (szS sz0)) refl i
+
 -- The fold of Parity into Trunc0 Size: the point case is trunc0 (sizeEven
 -- a), the parityEq case is the path r, the paritySquash case is squash0.
 def toTrunc : Parity -> Trunc0 Size :=
-  fun (z : Parity) => fold (fun (a : Size) => trunc0 Size (sizeEven a))
-    (fun (a : Size) (b : Size) (r : Path Size (sizeEven a) (sizeEven b)) => fun (i : I) => trunc0 Size (r @ i))
-    (fun (x : Trunc0 Size) (y : Trunc0 Size) (p : Path (Trunc0 Size) x y) (q : Path (Trunc0 Size) x y) => fun (i : I) => fun (j : I) => squash0 Size x y p q i j) z
+  fun (z : Parity) => fold (fun (a : Size) => trunc0 Size (sizeEven a)) (fun (a : Size) (b : Size) (r : Path Size (sizeEven a) (sizeEven b)) (i : I) => trunc0 Size (r @ i)) (fun (x : Trunc0 Size) (y : Trunc0 Size) (p : Path (Trunc0 Size) x y) (q : Path (Trunc0 Size) x y) (i : I) (j : I) => squash0 Size x y p q i j) z
+
 def toTrunc2 : Path (Trunc0 Size) (toTrunc (parityOf (szS (szS sz0)))) (trunc0 Size sz0) := refl
+
 def toTrunc3 : Trunc0 Size := toTrunc (parityOf (szS (szS (szS sz0))))
+
 -- The fold of qPath is the constant path at trunc0 Size sz0.
-def toTruncPath : Path (Path (Trunc0 Size) (trunc0 Size sz0) (trunc0 Size sz0))
-  (fun (i : I) => toTrunc (parityEq sz0 (szS (szS sz0)) refl i)) refl := refl
+def toTruncPath : Path (Path (Trunc0 Size) (trunc0 Size sz0) (trunc0 Size sz0)) (fun (i : I) => toTrunc (parityEq sz0 (szS (szS sz0)) refl i)) refl :=
+  refl

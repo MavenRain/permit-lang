@@ -1,31 +1,61 @@
 -- The capability on closed rows (S6, Q-S6-4 (a)). Kit mode: budget and
 -- budgetLeft are kit items, and the rows use Nat literals.
 def docs : Resource := resRoot 1
+
 def report : Resource := resChild docs 2
+
 def mail : Resource := resRoot 3
+
 def readDocs : Scope := fmEta (Prod Resource Action) (pair docs inspect)
+
 def readReport : Scope := fmEta (Prod Resource Action) (pair report inspect)
+
 def sendMail : Scope := fmEta (Prod Resource Action) (pair mail execute)
+
 def one : StepBound := szS sz0
+
 def two : StepBound := szS (szS sz0)
+
 -- L2 on closed rows: split gives the n units and the rest; spend gives the rest.
-def lawSplit : Path (Option (Prod Budget Budget)) (split (budget 5) 3) (some (pair (budget 3) (budget 2))) := refl
+def lawSplit : Path (Option (Prod Budget Budget)) (split (budget 5) 3) (some (pair (budget 3) (budget 2))) :=
+  refl
+
 def lawSpend : Path (Option Budget) (spend (budget 5) 3) (some (budget 2)) := refl
+
 def lawShort : Path (Option Budget) (spend (budget 2) 3) none := refl
+
 def lawLeft : Path Nat (budgetLeft (budget 4)) 4 := refl
+
 -- L1 on closed rows: a narrowing delegate gives (child, rest); a wider
 -- scope, a longer step bound or a short budget gives none.
-def lawDelegate : Path (Option (Prod Capability Capability)) (delegate (cap readDocs two (budget 5)) readReport one 3) (some (pair (cap readReport one (budget 3)) (cap readDocs two (budget 2)))) := refl
-def lawWiden : Path (Option (Prod Capability Capability)) (delegate (cap readReport two (budget 5)) readDocs one 3) none := refl
-def lawOtherScope : Path (Option (Prod Capability Capability)) (delegate (cap readDocs two (budget 5)) sendMail one 3) none := refl
-def lawLonger : Path (Option (Prod Capability Capability)) (delegate (cap readDocs one (budget 5)) readReport two 3) none := refl
-def lawOverspend : Path (Option (Prod Capability Capability)) (delegate (cap readDocs two (budget 2)) readReport one 3) none := refl
-def lawSameSteps : Path (Option (Prod Capability Capability)) (delegate (cap readDocs two (budget 5)) readDocs two 5) (some (pair (cap readDocs two (budget 5)) (cap readDocs two (budget 0)))) := refl
+def lawDelegate : Path (Option (Prod Capability Capability)) (delegate (cap readDocs two (budget 5)) readReport one 3) (some (pair (cap readReport one (budget 3)) (cap readDocs two (budget 2)))) :=
+  refl
+
+def lawWiden : Path (Option (Prod Capability Capability)) (delegate (cap readReport two (budget 5)) readDocs one 3) none :=
+  refl
+
+def lawOtherScope : Path (Option (Prod Capability Capability)) (delegate (cap readDocs two (budget 5)) sendMail one 3) none :=
+  refl
+
+def lawLonger : Path (Option (Prod Capability Capability)) (delegate (cap readDocs one (budget 5)) readReport two 3) none :=
+  refl
+
+def lawOverspend : Path (Option (Prod Capability Capability)) (delegate (cap readDocs two (budget 2)) readReport one 3) none :=
+  refl
+
+def lawSameSteps : Path (Option (Prod Capability Capability)) (delegate (cap readDocs two (budget 5)) readDocs two 5) (some (pair (cap readDocs two (budget 5)) (cap readDocs two (budget 0)))) :=
+  refl
+
 -- sizeLe on closed rows (eval rows).
 def oneTwo : Flag := sizeLe one two
+
 def twoOne : Flag := sizeLe two one
+
 def twoTwo : Flag := sizeLe two two
+
 -- Term-level rows (S6, Q-S6-5 (a), Q-S6-6 (a)): a narrowing delegate and
 -- a spend within the budget check ok; the closed codes do not fire.
-def child : Option (Prod Capability Capability) := delegate (cap readDocs two (budget 5)) readReport one 3
+def child : Option (Prod Capability Capability) :=
+  delegate (cap readDocs two (budget 5)) readReport one 3
+
 def rest : Option Budget := spend (budget 5) 3

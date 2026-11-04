@@ -1,0 +1,7 @@
+bind "read_doc" inspect "/path"
+
+bind "write_doc"   propose "/path/a"
+-- a comment inside the run
+bind "run" execute "/path/b"
+def n : Nat := 0
+bind "after" inspect "/x"
