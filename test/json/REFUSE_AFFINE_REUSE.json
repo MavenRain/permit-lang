@@ -1,0 +1,1 @@
+{"diagnostics":[{"code":"REFUSE_AFFINE_REUSE","fix":null,"message":"two: the variable b is used more times than its multiplicity allows on one evaluation path: used 2, allowed 1 (PLAN 6)","span":{"col":1,"end_col":84,"end_line":1,"file":"test/json/REFUSE_AFFINE_REUSE.lang","line":1}}],"progress":{"laws_discharged":0,"laws_total":0,"parsed":1,"typed":0}}

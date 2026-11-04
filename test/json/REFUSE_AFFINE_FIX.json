@@ -1,0 +1,1 @@
+{"diagnostics":[{"code":"REFUSE_AFFINE_FIX","fix":null,"message":"f: the variable b is used by a fold step or an elimination case that can run more than one time: used at omega, allowed 1 (PLAN 6)","span":{"col":1,"end_col":84,"end_line":2,"file":"test/json/REFUSE_AFFINE_FIX.lang","line":1}}],"progress":{"laws_discharged":0,"laws_total":0,"parsed":1,"typed":0}}

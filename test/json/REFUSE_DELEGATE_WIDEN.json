@@ -1,0 +1,1 @@
+{"diagnostics":[{"code":"REFUSE_DELEGATE_WIDEN","fix":null,"message":"wide: delegate: the child scope is not within the parent scope (scopeWithin gives flagNo) (PLAN 7)","span":{"col":1,"end_col":58,"end_line":16,"file":"test/json/REFUSE_DELEGATE_WIDEN.lang","line":15}}],"progress":{"laws_discharged":0,"laws_total":0,"parsed":7,"typed":6}}

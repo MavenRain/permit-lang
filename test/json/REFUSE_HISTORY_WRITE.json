@@ -1,0 +1,1 @@
+{"diagnostics":[{"code":"REFUSE_HISTORY_WRITE","fix":null,"message":"mk: the history field earned must be (earned t), natAdd (earned t) e, or the variable of bind (natAdd (earned t) e) (rule D-9)","span":{"col":1,"end_col":42,"end_line":4,"file":"test/json/REFUSE_HISTORY_WRITE.lang","line":4}}],"progress":{"laws_discharged":0,"laws_total":0,"parsed":2,"typed":1}}

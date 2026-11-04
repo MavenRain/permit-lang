@@ -1,0 +1,2 @@
+def f : (@1 b : Budget) -> Hop -> (Budget -o Unit) -> Unit :=
+  fun b h k => fold Unit Unit (k b) (fun (e : Unit) => e) (fun (r : Unit) => k b) h

@@ -1,0 +1,5 @@
+-- A law after the failing decl (S13): laws_total counts lawAfter, a program
+-- law that check does not reach. lawAfter has a Path codomain.
+def bad : Type 0 := Type 0
+
+def lawAfter : (u : Unit) -> Path Unit u u := fun (u : Unit) => refl

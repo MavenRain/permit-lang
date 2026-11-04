@@ -3,77 +3,8 @@
 #include <string.h>
 
 #include "jcs.h"
+#include "jsonout.h"
 #include "report.h"
-
-/* The JSON text of the line, on the arena: the JsonOut layout of
-   evolve-lang 550e73b src/json.c. The buffer starts at 4096 bytes and
-   doubles when the text does not fit. Each put returns 1, or 0 after a
-   diagnostic, so the calls chain with &&. The text is not canonical: JCS
-   makes the bytes (Q-S10-2 (a)). */
-typedef struct {
-  Arena *arena;
-  Diag *diag;
-  char *data; /* NUL-terminated; NULL before the first put */
-  size_t len;
-  size_t cap;
-} JsonOut;
-
-static int out_put(JsonOut *out, const char *text, size_t n) {
-  size_t cap = out->cap == 0 ? 4096u : out->cap;
-  char *data;
-  while (cap < out->len + n + 1u)
-    cap *= 2u;
-  if (cap != out->cap) {
-    data = arena_alloc(out->arena, cap);
-    if (data == NULL)
-      return diag_fail(out->diag, "OOM", "report", "out of memory");
-    if (out->len > 0)
-      memcpy(data, out->data, out->len);
-    out->data = data;
-    out->cap = cap;
-  }
-  memcpy(out->data + out->len, text, n);
-  out->len += n;
-  out->data[out->len] = '\0';
-  return 1;
-}
-
-static int out_text(JsonOut *out, const char *text) {
-  return out_put(out, text, strlen(text));
-}
-
-/* Adds the N bytes at TEXT inside a JSON string: '"', '\\' and each byte
-   below 0x20 as a \u escape, each other byte as it is. */
-static int out_bytes(JsonOut *out, const char *text, size_t n) {
-  char esc[8];
-  size_t i;
-  int ok = 1;
-  for (i = 0; ok && i < n; i++) {
-    unsigned char c = (unsigned char)text[i];
-    snprintf(esc, sizeof esc, "\\u%04x", (unsigned)c);
-    ok = c >= 0x20u && c != '"' && c != '\\' ? out_put(out, text + i, 1u) : out_text(out, esc);
-  }
-  return ok;
-}
-
-/* Adds TEXT as a JSON string, or null when TEXT is NULL. */
-static int out_string(JsonOut *out, const char *text) {
-  return text == NULL ? out_text(out, "null")
-                      : out_text(out, "\"") && out_bytes(out, text, strlen(text)) && out_text(out, "\"");
-}
-
-/* Adds the 64-bit word W as a JSON string of decimal digits (Q-S10-3 (a)):
-   JCS refuses a number above 2^53 - 1. */
-static int out_word(JsonOut *out, uint64_t w) {
-  char buf[32];
-  snprintf(buf, sizeof buf, "\"%llu\"", (unsigned long long)w);
-  return out_text(out, buf);
-}
-
-/* Adds ",", except before item 0. */
-static int out_comma(JsonOut *out, size_t i) {
-  return i == 0 || out_text(out, ",");
-}
 
 static int refuse(Machine *m, const char *what) {
   return diag_fail(m->diag, "REFUSE_REPORT", m->def, "%s (S10)", what);
@@ -195,7 +126,7 @@ static int out_start(Machine *m, JsonOut *out) {
 }
 
 int report_value(Machine *m, const IrProgram *prog, JsonValue *value) {
-  JsonOut text = {m->arena, m->diag, NULL, 0, 0};
+  JsonOut text = {m->arena, m->diag, "report", NULL, 0, 0};
   int ok = out_text(&text, "{\"kind\":\"program\",\"permit\":1") && out_binds(m, &text, prog) &&
            out_laws(m, &text) && out_start(m, &text) && out_text(&text, "}");
   return ok && json_parse(m->arena, text.data, text.len, value, m->diag);

@@ -97,6 +97,11 @@ typedef struct {
   int line;
   int col;
   int end_line; /* the line of the last token of the decl (S12 fmt) */
+  int end_col;  /* the column after the last token of the decl (S13) */
+  int type_line;     /* the range of the tokens of type, from the parser (S13) */
+  int type_col;
+  int type_end_line;
+  int type_end_col;
   const char *name;
   const Term *type;
   const Term *body;

@@ -1,0 +1,1 @@
+{"diagnostics":[{"code":"REFUSE_STATE","fix":{"span":{"col":1,"end_col":39,"end_line":3,"file":"test/json/REFUSE_STATE.lang","line":3},"text":""},"message":"State: a program can declare one state only","span":{"col":1,"end_col":39,"end_line":3,"file":"test/json/REFUSE_STATE.lang","line":3}}],"progress":{"laws_discharged":0,"laws_total":0,"parsed":2,"typed":1}}

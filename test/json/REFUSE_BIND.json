@@ -1,0 +1,1 @@
+{"diagnostics":[{"code":"REFUSE_BIND","fix":null,"message":"x: frob is not an arm of Action (inspect, propose or execute) (PLAN 4)","span":{"col":1,"end_col":19,"end_line":2,"file":"test/json/REFUSE_BIND.lang","line":2}}],"progress":{"laws_discharged":0,"laws_total":0,"parsed":1,"typed":0}}

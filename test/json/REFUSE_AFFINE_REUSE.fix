@@ -1,0 +1,2 @@
+1 1 1 84
+def two : Type 1 := Type 0

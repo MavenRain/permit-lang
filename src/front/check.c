@@ -20,7 +20,14 @@
 #define NO_FAMILY UINT32_MAX
 #define NO_DEF UINT32_MAX
 
-#define FAIL(c, code, ...) diag_fail((c)->m->diag, (code), (c)->m->def, __VA_ARGS__)
+#define FAIL(c, code, ...) diag_fail_at((c)->m->diag, (c)->m->def_span, (code), (c)->m->def, __VA_ARGS__)
+/* FAIL with a fix: replace SPAN by TEXT (S13; no fix when TEXT is NULL). */
+#define FAIL_FIX(c, span, text, code, ...) (diag_fix((c)->m->diag, (span), (text)), FAIL((c), (code), __VA_ARGS__))
+
+/* The span of the declaration D, for diagnostics (S13). */
+static Span decl_span(const Decl *d) {
+  return span_make(d->line, d->col, d->end_line, d->end_col);
+}
 
 typedef struct Scope Scope;
 struct Scope {
@@ -3181,6 +3188,17 @@ static int kit_head(const Checker *c, const Head *h) {
   return fam != NO_FAMILY && m->families[fam].origin == ORIGIN_KIT;
 }
 
+/* The REFUSE_CELL fix (S13): List A -> FreeMon A, as both take one type
+   argument. nil, cons and unfold have no one-name fix (NULL). */
+static const char *fix_cell_text(const Term *head) {
+  return strcmp(head->name, "List") == 0 ? "FreeMon" : NULL;
+}
+
+/* The range of the name token of HEAD, a TERM_VAR (S13). */
+static Span fix_name_span(const Term *head) {
+  return span_make(head->line, head->col, head->line, head->col + (int)strlen(head->name));
+}
+
 /* Name resolution order: locals (the innermost first), definitions,
    families, constructors, projections, core names. */
 static int resolve_head(Checker *c, const Term *head, Head *h) {
@@ -3191,7 +3209,7 @@ static int resolve_head(Checker *c, const Term *head, Head *h) {
   if (!find_known(c, head->name, h))
     return unknown_name(c, head->name);
   if (guest(c) && h->kind == HEAD_BUILTIN && h->builtin->vis == VIS_CELL)
-    return FAIL(c, "REFUSE_CELL", "%s is a cons-list name, not a cell monad; a guest program uses FreeMon of domain/domain.lang (rule R1)", head->name);
+    return FAIL_FIX(c, fix_name_span(head), fix_cell_text(head), "REFUSE_CELL", "%s is a cons-list name, not a cell monad; a guest program uses FreeMon of domain/domain.lang (rule R1)", head->name);
   return guest(c) && kit_head(c, h) ? kit_refused(c, head->name) : 1;
 }
 
@@ -4400,6 +4418,7 @@ static int check_family(Checker *c, const Decl *d) {
     m->ctor_count = first_ctor;
     for (s = 0; s < count; s++) {
       m->def = d[s].name;
+      m->def_span = decl_span(&d[s]);
       if (s > 0u && (!kernel_sig(c, &d[s]) || !name_free(c, d[s].name)))
         return 0;
       if (!header_order(c, d, s, count) || !check_header(c, &d[s], first + s, first, count, universes[s]))
@@ -4412,6 +4431,7 @@ static int check_family(Checker *c, const Decl *d) {
         const FamilyInfo *f = &m->families[first + s];
         size_t i;
         m->def = d[s].name;
+        m->def_span = decl_span(&d[s]);
         c->scope = NULL;
         c->env = NULL;
         c->level = 0;
@@ -4657,13 +4677,14 @@ typedef struct {
   const Term *type;
   const char *program[3];
   const char *kernel;
+  const char *type_text; /* the REFUSE_SIG fix text (S13) */
   const char *shown;
 } OpSlot;
 
 static const OpSlot OP_SLOTS[] = {
-  {"act", &SIG_ACT, {"Member", "Choice", "Group"}, NULL, "Group -> (Member -> Choice) -> Member -> Choice, after Member, Choice and Group"},
-  {"outcomeSet", &SIG_OUTCOME_SET, {"Outcome", NULL, NULL}, NULL, "isSet Outcome, after Outcome"},
-  {"menu", &SIG_MENU, {"Outcome", NULL, NULL}, "Constitution", "Outcome -> Constitution, after Outcome and the DAO prelude"}
+  {"act", &SIG_ACT, {"Member", "Choice", "Group"}, NULL, "Group -> (Member -> Choice) -> Member -> Choice", "Group -> (Member -> Choice) -> Member -> Choice, after Member, Choice and Group"},
+  {"outcomeSet", &SIG_OUTCOME_SET, {"Outcome", NULL, NULL}, NULL, "isSet Outcome", "isSet Outcome, after Outcome"},
+  {"menu", &SIG_MENU, {"Outcome", NULL, NULL}, "Constitution", "Outcome -> Constitution", "Outcome -> Constitution, after Outcome and the DAO prelude"}
 };
 
 #define OP_SLOT_COUNT ((uint32_t)(sizeof OP_SLOTS / sizeof OP_SLOTS[0]))
@@ -4692,6 +4713,21 @@ static const char *slot_shown(const SigRow *row) {
   }
   s = op_slot(row->name);
   return s == NULL ? "an op slot type" : s->shown;
+}
+
+/* The REFUSE_SIG fix (S13): the type of D -> the slot type, or NULL when
+   D has no type or the signature shows no slot type. */
+static const char *fix_slot_text(const Decl *d, const SigRow *row) {
+  const OpSlot *slot;
+  if (d->type == NULL) return NULL;
+  if (row->sort == SIG_TYPE) return "Type 0";
+  slot = op_slot(row->name);
+  return slot == NULL ? NULL : slot->type_text;
+}
+
+/* The range of the tokens of the type of D (S13). */
+static Span fix_type_span(const Decl *d) {
+  return span_make(d->type_line, d->type_col, d->type_end_line, d->type_end_col);
 }
 
 static int program_def(const Machine *m, const char *name) {
@@ -4731,7 +4767,7 @@ static int check_sig(Checker *c, const Decl *d, const Value *tv) {
     return 1;
   switch (SIGNATURE[i].kind) {
   case SIG_SLOT:
-    return slot_ok(c, &SIGNATURE[i], tv) ? 1 : FAIL(c, "REFUSE_SIG", "the slot %s must have the type %s", d->name, slot_shown(&SIGNATURE[i]));
+    return slot_ok(c, &SIGNATURE[i], tv) ? 1 : FAIL_FIX(c, fix_type_span(d), fix_slot_text(d, &SIGNATURE[i]), "REFUSE_SIG", "the slot %s must have the type %s", d->name, slot_shown(&SIGNATURE[i]));
   case SIG_DEFINED:
   case SIG_PRIMITIVE:
     break;
@@ -4955,7 +4991,7 @@ static int check_state(Checker *c, const Decl *d) {
   const Env *env = c->env;
   uint32_t j;
   if (m->has_state)
-    return FAIL(c, "REFUSE_STATE", "a program can declare one state only");
+    return FAIL_FIX(c, c->m->def_span, "", "REFUSE_STATE", "a program can declare one state only");
   if (strcmp(d->name, "State") != 0)
     return FAIL(c, "REFUSE_STATE", "the state type must have the name State, found %s", d->name);
   if (d->param_count != 0u || d->ctor_count != 1u || d->index != NULL)
@@ -5318,12 +5354,14 @@ static void checker_reset(Checker *c, size_t index, const char *name) {
   c->fold_targets = NULL;
   c->elim_motive = NULL;
   c->m->def = name;
+  c->m->def_span = decl_span(&c->decls->items[index]);
 }
 
 /* A declaration that a cofamily elaborates to: a fresh context, then rule
    R4 on its name (check_def does not check it). */
 static int check_generated(Checker *c, const Decl *d) {
   checker_reset(c, c->decl_index, d->name);
+  c->m->def_span = decl_span(d);
   if (!name_free(c, d->name))
     return 0;
   return d->kind == DECL_FAMILY ? check_family(c, d) : check_def(c, d);
@@ -5476,11 +5514,13 @@ static int check_decl(Checker *c, const Decl *d) {
   return check_def(c, d);
 }
 
-int check_program(Arena *arena, const DeclList *decls, Machine *m, Diag *diag, CheckMode mode) {
+/* STOP is the index of the failing decl, or the decl count on success. */
+static int check_decls(Arena *arena, const DeclList *decls, Machine *m, Diag *diag, CheckMode mode, size_t *stop) {
   Checker c;
   size_t ctors = 0;
   size_t extra = 0;
   size_t i;
+  *stop = 0;
   memset(m, 0, sizeof *m);
   m->arena = arena;
   m->diag = diag;
@@ -5507,13 +5547,92 @@ int check_program(Arena *arena, const DeclList *decls, Machine *m, Diag *diag, C
   c.mode = mode;
   for (i = 0; i < decls->count; i++) {
     checker_reset(&c, i, decls->items[i].name);
+    *stop = i;
     if (!check_decl(&c, &decls->items[i]))
       return 0;
     /* The other sorts of a block are checked with its first sort (S6). */
     i += decls->items[i].kind == DECL_FAMILY && decls->items[i].block_count > 1u ? decls->items[i].block_count - 1u : 0u;
   }
   m->def = NULL;
+  m->def_span = span_make(0, 0, 0, 0);
+  *stop = decls->count;
   return 1;
+}
+
+int check_program(Arena *arena, const DeclList *decls, Machine *m, Diag *diag, CheckMode mode) {
+  size_t stop;
+  return check_decls(arena, decls, m, diag, mode, &stop);
+}
+
+/* S13: the law rule of `langc report` (report.c out_laws: a program def
+   whose type ends in a Path) for the progress counts. law_value is
+   report.c ends_in_path on a typed def. law_syntax is the rule on the
+   syntax of a program def that the check did not type: after the Pi
+   binders (-> and -o), the head of the codomain is Path or PathP, not
+   bound by a binder of the type. The gaps (docs/CHECK-JSON.md): no
+   evaluation, so a type that ends in a Path only through a def is missed,
+   and a type with an error still counts. */
+typedef struct LawBound {
+  const char *name;
+  const struct LawBound *next;
+} LawBound;
+
+static int law_bound(const LawBound *b, const char *name) {
+  return b != NULL && (strcmp(b->name, name) == 0 || law_bound(b->next, name));
+}
+
+static int law_syntax(const LawBound *b, const Term *t) {
+  const Term *h = t;
+  LawBound inner;
+  if (t != NULL && t->kind == TERM_PI) {
+    inner.name = t->name;
+    inner.next = b;
+    return law_syntax(t->name != NULL ? &inner : b, t->right);
+  }
+  while (h != NULL && h->kind == TERM_APP && h->left != NULL)
+    h = h->left;
+  return h != NULL && h->kind == TERM_VAR && h->name != NULL && !law_bound(b, h->name) &&
+         (strcmp(h->name, "Path") == 0 || strcmp(h->name, "PathP") == 0);
+}
+
+static int law_value(Machine *m, const Value *t, uint32_t level) {
+  const Value *cod;
+  if (t == NULL || t->kind != VAL_PI)
+    return t != NULL && t->kind == VAL_PATHP;
+  cod = t->body != NULL ? closure_apply(m, t, val_var(m, level)) : t->arg;
+  return law_value(m, cod, level + 1u);
+}
+
+int check_program_progress(Arena *arena, const DeclList *decls, Machine *m, Diag *diag, CheckMode mode, CheckProgress *progress) {
+  size_t stop;
+  int ok = check_decls(arena, decls, m, diag, mode, &stop);
+  Diag keep = *diag;
+  const char *def = m->def;
+  Span def_span = m->def_span;
+  uint64_t fuel = m->fuel;
+  size_t j;
+  uint32_t k;
+  memset(progress, 0, sizeof *progress);
+  for (j = 0; j < decls->count; j++) {
+    progress->parsed += decls->items[j].origin == ORIGIN_PROGRAM;
+    progress->typed += decls->items[j].origin == ORIGIN_PROGRAM && j < stop;
+  }
+  /* law_value evaluates, as out_laws does: fresh fuel per def, then the
+     diag and machine as check_decls left them (same result as
+     check_program). */
+  for (k = 0; k < m->def_count; k++) {
+    m->def = m->defs[k].name;
+    m->fuel = EVAL_FUEL_STEPS;
+    progress->laws_discharged += m->defs[k].origin == ORIGIN_PROGRAM && m->defs[k].name != NULL && law_value(m, m->defs[k].type, 0u);
+  }
+  *diag = keep;
+  m->def = def;
+  m->def_span = def_span;
+  m->fuel = fuel;
+  progress->laws_total = progress->laws_discharged;
+  for (j = stop; j < decls->count; j++)
+    progress->laws_total += decls->items[j].origin == ORIGIN_PROGRAM && decls->items[j].kind == DECL_DEF && law_syntax(NULL, decls->items[j].type);
+  return ok;
 }
 
 int entry_of(Machine *m, const Value *type, Entry *out) {

@@ -20,3 +20,5 @@ test/parse/affine-field-mark.lang
 test/parse/affine-no-cofamily.lang
 test/parse/unclosed-string.lang
 test/parse/string-nul.lang
+test/json/LEX_CHAR.lang
+test/json/PARSE_EXPECT.lang

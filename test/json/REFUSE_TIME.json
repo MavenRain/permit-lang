@@ -1,0 +1,1 @@
+{"diagnostics":[{"code":"REFUSE_TIME","fix":null,"message":"tick: clock is a time word; count operations: a deadline is a StepBound (a count of later operations)","span":{"col":1,"end_col":24,"end_line":2,"file":"test/json/REFUSE_TIME.lang","line":2}}],"progress":{"laws_discharged":0,"laws_total":0,"parsed":1,"typed":0}}

@@ -1,0 +1,1 @@
+{"diagnostics":[{"code":"REFUSE_BUDGET_OVERSPEND","fix":null,"message":"tooMuch: spend: the cost is more than the budget, so the budget part reduces to none (PLAN 7)","span":{"col":1,"end_col":50,"end_line":2,"file":"test/json/REFUSE_BUDGET_OVERSPEND.lang","line":2}}],"progress":{"laws_discharged":0,"laws_total":0,"parsed":1,"typed":0}}

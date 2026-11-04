@@ -1,0 +1,1 @@
+{"diagnostics":[{"code":"REFUSE_REC","fix":null,"message":"early: late is this definition or a later one; a definition can use only earlier ones (rule R3)","span":{"col":1,"end_col":24,"end_line":1,"file":"test/json/REFUSE_REC.lang","line":1}}],"progress":{"laws_discharged":0,"laws_total":0,"parsed":2,"typed":0}}

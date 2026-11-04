@@ -1,0 +1,1 @@
+{"diagnostics":[{"code":"REFUSE_NAME","fix":null,"message":"natAdd: natAdd is a core name (rule R4)","span":{"col":1,"end_col":22,"end_line":1,"file":"test/json/REFUSE_NAME.lang","line":1}}],"progress":{"laws_discharged":0,"laws_total":0,"parsed":1,"typed":0}}

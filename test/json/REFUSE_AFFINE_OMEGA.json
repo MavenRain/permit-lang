@@ -1,0 +1,1 @@
+{"diagnostics":[{"code":"REFUSE_AFFINE_OMEGA","fix":null,"message":"w: the domain of the arrow has the resource type Budget at omega; bind it at 1 (@1 or -o) or at 0 (@0) (PLAN 6)","span":{"col":1,"end_col":61,"end_line":1,"file":"test/json/REFUSE_AFFINE_OMEGA.lang","line":1}}],"progress":{"laws_discharged":0,"laws_total":0,"parsed":1,"typed":0}}

@@ -26,7 +26,22 @@ typedef enum {
   CHECK_KIT
 } CheckMode;
 
+/* The progress counts of `langc check --json` (S13). */
+typedef struct {
+  int parsed;
+  int typed;
+  int laws_discharged;
+  int laws_total;
+} CheckProgress;
+
 int check_program(Arena *arena, const DeclList *decls, Machine *m, Diag *diag, CheckMode mode);
+/* check_program, then the progress counts of `langc check --json` (S13):
+   parsed and typed count the program decls (a block counts each sort),
+   laws_discharged the typed program defs whose type ends in a Path (the
+   laws of `langc report`, report.c out_laws), and laws_total adds the
+   untyped program defs whose type ends in Path or PathP by syntax
+   (check.c law_syntax). */
+int check_program_progress(Arena *arena, const DeclList *decls, Machine *m, Diag *diag, CheckMode mode, CheckProgress *progress);
 /* Returns 1 when TYPE is the type of an entry. */
 int entry_of(Machine *m, const Value *type, Entry *out);
 /* Evaluates the definition NAME on ARGS and prints the result. Returns 0, 1

@@ -1,0 +1,1 @@
+{"diagnostics":[{"code":"REFUSE_RES","fix":null,"message":"r: \"\" is not a resource path: segments of a-z, 0-9, _ and - with one / between two segments, and no * (PLAN 4)","span":{"col":1,"end_col":27,"end_line":2,"file":"test/json/REFUSE_RES.lang","line":2}}],"progress":{"laws_discharged":0,"laws_total":0,"parsed":1,"typed":0}}

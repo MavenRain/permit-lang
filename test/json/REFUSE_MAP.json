@@ -1,0 +1,1 @@
+{"diagnostics":[{"code":"REFUSE_MAP","fix":null,"message":"bad: the key type of a Map must be Nat, found List Nat","span":{"col":1,"end_col":41,"end_line":2,"file":"test/json/REFUSE_MAP.lang","line":2}}],"progress":{"laws_discharged":0,"laws_total":0,"parsed":1,"typed":0}}

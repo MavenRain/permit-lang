@@ -1,0 +1,16 @@
+-- REFUSE_DELEGATE_WIDEN (Q-S6-5 (a)): the child scope (docs) is wider
+-- than the parent scope (report, below docs).
+def docs : Resource := resRoot 1
+
+def report : Resource := resChild docs 2
+
+def readDocs : Scope := fmEta (Prod Resource Action) (pair docs inspect)
+
+def readReport : Scope := fmEta (Prod Resource Action) (pair report inspect)
+
+def one : StepBound := szS sz0
+
+def two : StepBound := szS (szS sz0)
+
+def wide : Option (Prod Capability Capability) :=
+  delegate (cap readReport two (budget 5)) readDocs one 3

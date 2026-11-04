@@ -119,7 +119,7 @@ The compiler enforces these rules:
 ## CLI
 
 ```sh
-build/langc check PROG
+build/langc check [--json] PROG
 build/langc eval PROG NAME [ARGS...]
 build/langc ir PROG
 build/langc abi PROG
@@ -129,7 +129,9 @@ build/langc cedar PROG
 build/langc fmt PROG [--check]
 ```
 
-- `check` prints `ok`, or refuses the program.
+- `check` prints `ok`, or refuses the program. With `--json`, it prints
+  one JSON line on stdout in place of `ok` or the diagnostic
+  (`docs/CHECK-JSON.md`).
 - `eval` prints the normal form of `NAME`. Each argument is a decimal
   number. An entry has no trap (see "No traps").
 - `ir` prints the first-order IR. It has one `func` for each entry.
@@ -415,10 +417,13 @@ has no approval.
 | `cedar rows: 7 checked` | `langc cedar` writes the Cedar text of each `test/report/*.lang` file: exit 0, no stderr and the bytes of `test/cedar/NAME.cedar`; the count must be the report row count (S11, `docs/CEDAR.md`) |
 | `report write errors: 2 checked` | `build/reporttool` checks the same valid report with writable and read-only stdout: exit 0 and exit 1 |
 | `cedar write errors: 2 checked` | `build/reporttool` checks `langc cedar` on the same program the same way: exit 0 and exit 1 (S11 U2) |
+| `json rows: 28 passed` | for each `test/json/X.lang`, `langc check --json` exits 0 (the rows `ok` and `kit`) or 1 (each other row, whose first code is the file name up to the first dot), writes nothing on stderr, and gives the bytes of `test/json/X.json`; the 11 rows of `json_kit` run with `--kit` (S13, A2, `docs/CHECK-JSON.md`) |
+| `json refusal codes: 21 of 21` | each `REFUSE_` code of `src/front/check.c` has a row `test/json/CODE.lang`, and the list of codes is not empty; `REFUSE_LAW` has no row, because `langc check` cannot give it (Q-S13-9) |
+| `json fixes: 26 passed` | `build/fronttool fix` applies each `test/json/X.fix` to its row, and `langc check --json` of the result exits 0 or gives a first code other than the code of the row |
 | `host rows: 36 checked` | `build/hosttool` runs `build/permitd` on the module of `test/host/deploy.lang` with `build/fakedeploy` as the upstream server, one line at a time. The 12 rows of S9 U3: a line that is not JSON, a tool with no bind row, a target that is not a string, a bad approval hex, `--error` and `--exit` of the upstream server, a bad state file (exit 2), the forwarded bytes (no `permit/approval` key and no empty `_meta`), the `isError` of a deny, `--cost`, an approvals line added between two calls, and `--state` in a missing directory (N6). Six review rows check refusal of batches and scalars before forwarding, the retained metadata key with an embedded NUL, the maximum 64-bit cost, cost overflow, and a large state budget across a restart. The 10 demo rows of S9 U4 (PLAN section 8.3): D1 to D8, D10 and D11, each with the want of its PLAN row; D9 is the static row `test/check/delegate-widen.lang` in `check refusals`. The script line `! L` closes the input of permitd, wants exit 0 and no extra answer, and starts permitd again with the same flags (row D6: the approval stays used after a restart). The 8 report rows, R1 to R8: the script line `# L` wants L as the next line of the `--report` file (`docs/REPORT-JSON.md`) |
-| `fmt canonical: 300 passed` | `langc fmt` gives the same bytes for each accepted `.lang` file of `domain/`, `examples/`, `examples/*/` and `test/*/` outside `test/fmt/` (S12, A1) |
-| `fmt round trip: 312 passed` | each accepted file (the 300 files and the 12 `test/fmt/*.lang` files) and its canonical text give the same `build/fronttool dump`. The dump has no line numbers and no comments. It is scoped (`test/fronttool.c`): each variable prints the distance to its binder or `global`, and each binder prints its mark |
-| `fmt refused: 22 checked` | each file that `langc fmt` refuses is in `test/fmt/refused.txt` (the 22 `test/parse` files), and no accepted file is |
+| `fmt canonical: 326 passed` | `langc fmt` gives the same bytes for each accepted `.lang` file of `domain/`, `examples/`, `examples/*/` and `test/*/` outside `test/fmt/` (S12, A1) |
+| `fmt round trip: 338 passed` | each accepted file (the 326 files and the 12 `test/fmt/*.lang` files) and its canonical text give the same `build/fronttool dump`. The dump has no line numbers and no comments. It is scoped (`test/fronttool.c`): each variable prints the distance to its binder or `global`, and each binder prints its mark |
+| `fmt refused: 24 checked` | each file that `langc fmt` refuses is in `test/fmt/refused.txt` (the 22 `test/parse` files and the `test/json` rows `LEX_CHAR` and `PARSE_EXPECT`), and no accepted file is |
 | `fmt rows: 13 passed` | `langc fmt test/fmt/X.lang` gives the bytes of `test/fmt/X.canon` for each of the 10 golden rows (`aliases`, `binds`, `capture`, `check`, `comment`, `decls`, `lambda`, `layout`, `marks`, `strings`). The 3 witness rows: the dump of `piname.lang` is not the dump of `lambda.canon` (a Pi name), the dump of `mark.lang` is not the dump of `marks.canon` (a mark), and `capture.canon` keeps the group `(x y : x)` (H1, Q-S12-7) |
 | `fmt check: 11 passed` | `langc fmt X.canon --check` exits 0 with no output for each of the 10 golden rows, and `langc fmt test/fmt/check.lang --check` exits 1 with `test/fmt/check.lang:3: not canonical` |
 | `gate: 0 failures` | the sum of all failures of `test/gate.sh` |

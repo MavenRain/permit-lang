@@ -333,6 +333,7 @@ typedef struct {
   Arena *arena;
   Diag *diag;
   const char *def; /* the current definition, for diagnostics */
+  Span def_span;   /* the span of the current definition (S13) */
   DefInfo *defs;
   uint32_t def_count;
   uint32_t def_cap;

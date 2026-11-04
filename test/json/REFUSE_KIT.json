@@ -1,0 +1,1 @@
+{"diagnostics":[{"code":"REFUSE_KIT","fix":null,"message":"x: Nat is a kit item outside the base span (PLAN section 4); only the kit mode langc --kit admits it","span":{"col":1,"end_col":17,"end_line":1,"file":"test/json/REFUSE_KIT.lang","line":1}}],"progress":{"laws_discharged":0,"laws_total":0,"parsed":1,"typed":0}}

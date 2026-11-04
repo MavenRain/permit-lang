@@ -189,10 +189,11 @@ static int lex_nat(Lexer *lx) {
     advance(lx, 1);
   }
   if (overflow) {
-    return diag_fail(lx->diag, "LEX_NAT_RANGE", NULL, "%s:%d:%d: a Nat literal is larger than 2^64 - 1", lx->source, line, col);
+    return diag_fail_at(lx->diag, span_make(line, col, lx->line, lx->col), "LEX_NAT_RANGE", NULL, "%s:%d:%d: a Nat literal is larger than 2^64 - 1", lx->source, line, col);
   }
   if (is_ident_start(peek(lx, 0))) {
-    return diag_fail(lx->diag, "LEX_CHAR", NULL, "%s:%d:%d: a letter follows a Nat literal", lx->source, lx->line, lx->col);
+    diag_fix(lx->diag, span_make(lx->line, lx->col, lx->line, lx->col + 1), "");
+    return diag_fail_at(lx->diag, span_make(lx->line, lx->col, lx->line, lx->col + 1), "LEX_CHAR", NULL, "%s:%d:%d: a letter follows a Nat literal", lx->source, lx->line, lx->col);
   }
   push(lx, TOK_NAT, start, line, col)->nat = value;
   return 1;
@@ -208,10 +209,10 @@ static int lex_string(Lexer *lx) {
   size_t start = lx->pos;
   while (lx->pos < lx->len && peek(lx, 0) != '"' && peek(lx, 0) != '\n' && peek(lx, 0) != '\0') advance(lx, 1);
   if (lx->pos < lx->len && peek(lx, 0) == '\0') {
-    return diag_fail(lx->diag, "LEX_STRING", NULL, "%s:%d:%d: a string literal holds a NUL byte", lx->source, lx->line, lx->col);
+    return diag_fail_at(lx->diag, span_make(lx->line, lx->col, lx->line, lx->col + 1), "LEX_STRING", NULL, "%s:%d:%d: a string literal holds a NUL byte", lx->source, lx->line, lx->col);
   }
   if (peek(lx, 0) != '"') {
-    return diag_fail(lx->diag, "LEX_STRING", NULL, "%s:%d:%d: a string literal has no closing quote on its line", lx->source, line, col);
+    return diag_fail_at(lx->diag, span_make(line, col, lx->line, lx->col), "LEX_STRING", NULL, "%s:%d:%d: a string literal has no closing quote on its line", lx->source, line, col);
   }
   push(lx, TOK_STRING, start, line, col);
   advance(lx, 1);
@@ -266,7 +267,8 @@ static int lex_symbol(Lexer *lx) {
     default: break;
   }
   if (kind == TOK_EOF) {
-    return diag_fail(lx->diag, "LEX_CHAR", NULL, "%s:%d:%d: unexpected byte 0x%02x", lx->source, line, col, (unsigned)(unsigned char)c);
+    diag_fix(lx->diag, span_make(line, col, line, col + 1), "");
+    return diag_fail_at(lx->diag, span_make(line, col, line, col + 1), "LEX_CHAR", NULL, "%s:%d:%d: unexpected byte 0x%02x", lx->source, line, col, (unsigned)(unsigned char)c);
   }
   advance(lx, width);
   push(lx, kind, start, line, col)->nat = kind == TOK_MARK ? (uint64_t)(next - '0') : 0;

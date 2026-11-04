@@ -8,8 +8,9 @@ CLANG_FLAGS = -std=c99 -Wall -Wextra -Wswitch-enum -Werror -fsyntax-only -Isrc
 FRONT = src/front/base.c src/front/lexer.c src/front/parser.c src/front/front.c src/front/eval.c src/front/check.c src/front/fmt.c src/front/lower.c
 TARGET = src/wasm.c
 # S10 U1: langc report builds the JCS line with the host JSON reader. S11
-# U1: langc cedar (src/cedar.c) reads that line.
-REPORT = src/report.c src/cedar.c host/jsonin.c host/jcs.c
+# U1: langc cedar (src/cedar.c) reads that line. S13 U2: src/jsonout.c is
+# the JSON text writer of langc report and langc check --json.
+REPORT = src/report.c src/jsonout.c src/cedar.c host/jsonin.c host/jcs.c
 SRC = src/main.c $(FRONT) $(TARGET) $(REPORT)
 FRONT_TOOL = test/fronttool.c $(filter-out src/front/front.c src/front/lower.c,$(FRONT))
 PATH_TOOL = test/pathtool.c $(filter-out src/front/front.c src/front/lower.c,$(FRONT))

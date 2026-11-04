@@ -11,6 +11,7 @@
 #include "front/lexer.h"
 #include "front/lower.h"
 #include "front/parser.h"
+#include "jsonout.h"
 #include "report.h"
 #include "target.h"
 
@@ -35,7 +36,7 @@ typedef struct {
   int arg_count;
   const char *out_path;
   int runtime;
-  int json;
+  int json; /* abi: the JSON form; check: --json (S13 A2) */
   int fmt_check; /* fmt --check (S12 A1): compare PROG with its canonical text */
   CheckMode mode; /* orbit-lang S3: --kit selects the kit mode */
 } Options;
@@ -55,7 +56,7 @@ static const struct {
 };
 
 static int usage(FILE *err) {
-  fputs("usage: langc [--kit] check PROG\n"
+  fputs("usage: langc [--kit] check [--json] PROG\n"
         "       langc [--kit] eval PROG NAME [ARGS...]\n"
         "       langc [--kit] ir PROG\n"
         "       langc [--kit] abi PROG [--text]\n"
@@ -97,6 +98,12 @@ static int parse_options(int argc, char **argv, Options *opt, Diag *diag) {
   opt->prog_path = argv[2];
   switch (opt->command) {
     case CMD_CHECK:
+      /* check --json (S13 A2, Q-S13-1 (a)): --json comes right after check,
+         so `check PROG --json` is a USAGE failure. */
+      opt->json = strcmp(argv[2], "--json") == 0;
+      if (opt->json && argc < 4) return diag_fail(diag, "USAGE", NULL, "check --json needs a program path");
+      opt->prog_path = argv[2 + opt->json];
+      return argc == 3 + opt->json ? 1 : diag_fail(diag, "USAGE", NULL, "too many arguments");
     case CMD_IR:
     case CMD_REPORT:
     case CMD_CEDAR:
@@ -167,10 +174,70 @@ static int run_target(const Options *opt, Machine *machine, Diag *diag) {
   return fclose(out) == 0 && ok ? 0 : 1;
 }
 
+/* Adds the span SPAN of the file PATH, or null when SPAN has no source
+   position (line 0). */
+static int out_span(JsonOut *out, const char *path, Span span) {
+  char nums[128];
+  snprintf(nums, sizeof nums, ",\"line\":%d,\"col\":%d,\"end_line\":%d,\"end_col\":%d}", span.line, span.col,
+           span.end_line, span.end_col);
+  return span.line == 0 ? out_text(out, "null")
+                        : out_text(out, "{\"file\":") && out_string(out, path) && out_text(out, nums);
+}
+
+/* Adds the fix of DIAG: null, or {"span":..,"text":..} (replace the span
+   by the text). */
+static int out_fix(JsonOut *out, const char *path, const Diag *diag) {
+  return !diag->fix_set ? out_text(out, "null")
+                        : out_text(out, "{\"span\":") && out_span(out, path, diag->fix_span) &&
+                              out_text(out, ",\"text\":") && out_string(out, diag->fix) && out_text(out, "}");
+}
+
+/* Adds the text of the check --json line (Q-S13-2, -3 (a)): 0 or 1
+   diagnostic (the first failure), then the progress counts. The message is
+   the text after `CODE: ` that diag_print writes. */
+static int out_check(JsonOut *out, const char *path, const Diag *diag, const CheckProgress *progress) {
+  char message[sizeof diag->def + sizeof diag->msg + 2];
+  char counts[160];
+  snprintf(message, sizeof message, "%s: %s", diag->def, diag->msg);
+  snprintf(counts, sizeof counts, "],\"progress\":{\"parsed\":%d,\"typed\":%d,\"laws_discharged\":%d,\"laws_total\":%d}}",
+           progress->parsed, progress->typed, progress->laws_discharged, progress->laws_total);
+  return out_text(out, "{\"diagnostics\":[") &&
+         (!diag->set ||
+          (out_text(out, "{\"code\":") && out_string(out, diag->code) && out_text(out, ",\"span\":") &&
+           out_span(out, path, diag->span) && out_text(out, ",\"message\":") && out_string(out, message) &&
+           out_text(out, ",\"fix\":") && out_fix(out, path, diag) && out_text(out, "}"))) &&
+         out_text(out, counts);
+}
+
+/* langc [--kit] check --json PROG (S13 A2, ported from accrue-lang
+   02964ec): exit 0 or 1 with one JCS line on stdout, and main prints no
+   diag. After a lex or parse error the progress stays all zero. OOM is
+   exit 2 with no JSON; an IO or USAGE failure exits 2 before this
+   function. When the line itself fails (OOM, IO), its diag replaces DIAG
+   and the exit is 2. */
+static int check_json(const Options *opt, Arena *arena, const char *text, size_t len, Diag *diag) {
+  CheckProgress progress;
+  DeclList decls;
+  Machine machine;
+  Diag line_diag;
+  JsonOut out = {arena, &line_diag, "check", NULL, 0, 0};
+  memset(&progress, 0, sizeof progress);
+  diag_init(&line_diag);
+  int ok = front_load(arena, opt->prog_path, text, len, &decls, diag) &&
+           check_program_progress(arena, &decls, &machine, diag, opt->mode, &progress);
+  if (!ok && diag->set && strcmp(diag->code, "OOM") == 0) return 2;
+  if (!out_check(&out, opt->prog_path, diag, &progress) || !out_line(&out, stdout)) {
+    *diag = line_diag;
+    return 2;
+  }
+  return ok ? 0 : 1;
+}
+
 static int run(const Options *opt, Arena *arena, Diag *diag) {
   char *text = NULL;
   size_t len = 0;
   if (!read_source(arena, opt->prog_path, &text, &len, diag)) return 2;
+  if (opt->command == CMD_CHECK && opt->json) return check_json(opt, arena, text, len, diag);
   DeclList decls;
   if (!front_load(arena, opt->prog_path, text, len, &decls, diag)) return 1;
   Machine machine;
@@ -243,7 +310,9 @@ int main(int argc, char **argv) {
   arena_init(&arena, ARENA_LIMIT_BYTES);
   int status = opt.command == CMD_FMT ? run_fmt(&opt, &arena, &diag) : run(&opt, &arena, &diag);
   arena_release(&arena);
-  /* fmt --check prints its own `PROG:LINE: not canonical` line, with no diag. */
-  if (status != 0 && (opt.command != CMD_FMT || diag.set)) diag_print(&diag, stderr);
+  /* fmt --check prints its own `PROG:LINE: not canonical` line, with no diag.
+     check --json writes a refusal (exit 1) on stdout: stderr stays empty. */
+  int in_json = opt.command == CMD_CHECK && opt.json && status == 1;
+  if (status != 0 && !in_json && (opt.command != CMD_FMT || diag.set)) diag_print(&diag, stderr);
   return status;
 }

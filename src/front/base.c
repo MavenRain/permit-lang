@@ -65,14 +65,42 @@ void diag_init(Diag *diag) {
   memset(diag, 0, sizeof *diag);
 }
 
-int diag_fail(Diag *diag, const char *code, const char *def, const char *fmt, ...) {
+void diag_fix(Diag *diag, Span span, const char *text) {
+  if (diag->set || text == NULL) return;
+  diag->fix_next = 1;
+  diag->fix_span = span;
+  snprintf(diag->fix, sizeof diag->fix, "%s", text);
+}
+
+Span span_make(int line, int col, int end_line, int end_col) {
+  Span span = {line, col, end_line, end_col};
+  return span;
+}
+
+static int diag_vfail(Diag *diag, Span span, const char *code, const char *def, const char *fmt, va_list args) {
   if (diag->set) return 0;
   diag->set = 1;
+  diag->fix_set = diag->fix_next;
+  diag->fix_next = 0;
   diag->code = code;
+  diag->span = span;
   snprintf(diag->def, sizeof diag->def, "%s", def == NULL ? "-" : def);
+  vsnprintf(diag->msg, sizeof diag->msg, fmt, args);
+  return 0;
+}
+
+int diag_fail(Diag *diag, const char *code, const char *def, const char *fmt, ...) {
   va_list args;
   va_start(args, fmt);
-  vsnprintf(diag->msg, sizeof diag->msg, fmt, args);
+  diag_vfail(diag, span_make(0, 0, 0, 0), code, def, fmt, args);
+  va_end(args);
+  return 0;
+}
+
+int diag_fail_at(Diag *diag, Span span, const char *code, const char *def, const char *fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  diag_vfail(diag, span, code, def, fmt, args);
   va_end(args);
   return 0;
 }
