@@ -22,60 +22,66 @@ trap: a denial is a value with a reason code.
 
 ## When to reach for permit-lang
 
-| Use permit-lang when | Use something else when |
-|---|---|
-| An agent needs a narrow, bounded slice of a broad credential. | You need ordinary authorization rules only: use Cedar. permit-lang exports its static scope as Cedar. |
-| A sequence of calls must stay inside one authority (scope, call count, budget). | You need a zero-knowledge proof that a decision obeys a policy: use zkpolicy-lang. |
-| A mutation must run only after an approval of those exact bytes. | You need agent payments on chain: use mandate-lang. |
-| A sub-agent gets a delegated capability that must not widen. | You need general-purpose code. |
+| Task | permit-lang? | Use instead |
+| --- | --- | --- |
+| A read-only scope with a step bound: an inspect in the scope is permitted, an execute outside the scope or a call after the last step is denied (G1) | yes | |
+| A budget with costs and a split, where a cost more than the budget gives `none` (G2) | yes | |
+| An attenuated delegation to a sub-agent: the child scope, the step bound and the budget do not widen (G3) | yes | |
+| The propose and execute of one approved mutation: the approval is the digest of the exact bytes, and it is used one time (G4) | yes | |
+| A deploy tool set behind the tool gate `permitd`, which holds the credential and enforces the rules again on each call (G5) | yes | |
+| Ordinary authorization rules only (a principal, an action and a resource, with no call count, budget or approval) | no | Cedar (permit-lang exports its static scope as Cedar) |
+| A zero-knowledge proof that a decision obeys a policy | no | zkpolicy-lang |
+| Agent payments on chain | no | mandate-lang |
+| General code: a new data type, general recursion or an exception | no | a general-purpose language, for example Rust or Python |
+
+`skills/permit-lang/SKILL.md` gives the examples G1 to G5 (the files of
+`examples/skill/`). `AGENTS.md` gives the loop and the commands for an
+agent.
 
 ## Status
 
-S6: the budget ops, `Capability` and `delegate`. The repo holds the Cubical TT kernel of intent-lang
-(67445ae), ported from relay-lang 05dd63b without the crypto code, on the
-tcc-wasm host, and the plan. S3 adds R0 from relay-lang 5c386bb: total
-Nat operations, `REFUSE_PARTIAL`, and a Wasm writer that emits no trap
-form (`test/notraptool.c` checks each built module). S4 adds the affine
-layer from leaf-lang 47a6f36: the marks `@0` and `@1`, `A -o B`,
-`unpack`, the resource sorts `Budget` and `Approval`, and the codes
-`REFUSE_AFFINE_REUSE`, `REFUSE_AFFINE_OMEGA`, `REFUSE_AFFINE_FIX` and
-`REFUSE_AFFINE_PATH`. The prelude has `fmBindNat`, `fmBindSize`,
-`fmMapNat`, `fmMapSize`, `fmEtaNat` and `fmEtaSize` in place of `fmBind`
-and `fmMap`. The examples have `orbitNExtBag` and `isSetAtLin`, and
-`map0`, `map1` and `truncExt` are at fixed types. S5 adds the domain
-types in `domain/domain.lang`: `Action`, `Reason`, `Decision`,
-`StepBound := Size`, a `Call` stand-in (S7 widens it), `Scope` with `allows` and
-`scopeWithin`, and the affine `cofamily Allowance` with `alOpen`. The
-kernel has the sort `Resource` with `resEq` and `within`, and
-`REFUSE_TIME` names 10 time words. `examples/scope.lang` is the S5
-demo (L4, L6). S6 adds the guest ops `spend` and `split` on a `Budget`
-(kit-only `budget` and `budgetLeft`), the domain `Capability`, `sizeLe`
-and `delegate`, and the codes `REFUSE_DELEGATE_WIDEN` and
-`REFUSE_BUDGET_OVERSPEND` on closed rows. `examples/capability.lang` is
-the S6 demo (L1, L2). S7 adds the kernel sorts `Payload`, `Bytes` and
-`Digest` (kit-only `payloadOf` and `approval`, guest `approvalDigest`),
-the domain `Mutation`, `canon`, `Ticket`, `Call`, `Authority`, `judge`,
-`decide`, `Reply`, the first-order `Plan`, `Entry` and `Trace`, and the
-code `REFUSE_EXECUTE_UNAPPROVED` on a closed `Plan`.
-`examples/decide.lang` is the S7 demo (L3, L5, L7). The gate and the
-three targets do not exist yet.
-`docs/PLAN.md` gives the readings, the route, the slices and the open
-questions.
+S15: the skill (`skills/permit-lang/SKILL.md`), the graded examples G1 to
+G5 (`examples/skill/`), `AGENTS.md` and this table. The repo holds the
+Cubical TT kernel of intent-lang (67445ae), ported from relay-lang 05dd63b
+without the crypto code, on the tcc-wasm host. The slices S3 to S7 add R0
+(no trap), the affine layer, the domain (`domain/domain.lang`: `Scope`,
+`StepBound`, `Capability`, `delegate`, `Mutation`, `Ticket`, `Call`,
+`decide`, `Plan` and `Trace`) and the demos `examples/scope.lang`,
+`examples/capability.lang` and `examples/decide.lang`. The three targets
+exist: the tool gate `permitd` (T1, S8 and S9), the JSON authority report
+`langc report` (T2, S10) and the Cedar export `langc cedar` (T3, S11).
+The agent items A1, A2 and A4 exist: `langc fmt` (S12), `langc check
+--json` (S13) and `langc mcp`, with `langc explain`, `langc base` and
+`langc law` (S14). `make check` is GREEN. `docs/PLAN.md` gives the
+readings, the route, the slices and the open questions. The next slice is
+S16: the token comparison (A6).
 
 ## Layout
 
 - `design/DESIGN.md`: the request, the S0 rulings, the overlap and the
   prior art. It is the only source of the core types and the core
   operations.
-- `docs/PLAN.md`: the plan.
+- `docs/PLAN.md`: the plan: the rulings, the readings, the route, the
+  slices and the open items.
 - `AGENTS.md`: how an agent works in this repo.
+- `skills/permit-lang/SKILL.md`: the skill for an agent. Its examples G1
+  to G5 are the files of `examples/skill/`.
 - `SPEC.md`: the specification. Each section is filled by a slice.
+- `src/`: `langc` (C99, TinyCC): the front end `src/front/`, the Wasm
+  writer, the report, the Cedar export and the MCP server.
+- `host/`: `permitd`, the tool gate, with its Wasm engine, SHA-256 and JCS.
+- `domain/domain.lang`: the domain. `examples/`: the demos.
+- `test/`: the gate `test/gate.sh`, the C test tools (`test/*tool.c`) and
+  their rows. `test/skill/` holds the 3 negative SKILL.md fixtures.
 - `formers/FORMERS.md`: the type formers. `formers/tcc-wasm.md` gives their
   status on the tcc-wasm host.
 - `probe/CAPABILITY.md`: the host probe.
 - `docs/STATUS.md` and `docs/VALIDATION.md`: the status and the gate
   results.
-- `docs/host/README.md`: how to build and test the host kit.
+- `docs/host/README.md`: how to build and test the host kit, the CLI, the
+  codes and the gate lines. `docs/CHECK-JSON.md`, `docs/MCP.md`,
+  `docs/REPORT-JSON.md` and `docs/CEDAR.md`: the JSON line, the MCP
+  server, the report and the Cedar export.
 
 ## Build and test
 

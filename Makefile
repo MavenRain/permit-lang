@@ -25,12 +25,13 @@ FAKEDEPLOY = test/fakedeploy.c host/jsonin.c host/jcs.c src/front/base.c
 HOST_TOOL = test/hosttool.c
 REPORT_TOOL = test/reporttool.c
 MCP_TOOL = test/mcptool.c
+SKILL_TOOL = test/skilltool.c
 HEADERS = $(wildcard src/*.h src/front/*.h)
 HOST_HEADERS = $(wildcard host/*.h)
 
 .PHONY: build check check-clang clean
 
-build: build/langc build/fronttool build/pathtool build/notraptool build/shatool build/enginetool build/jcstool build/permitd build/fakedeploy build/hosttool build/reporttool build/mcptool
+build: build/langc build/fronttool build/pathtool build/notraptool build/shatool build/enginetool build/jcstool build/permitd build/fakedeploy build/hosttool build/reporttool build/mcptool build/skilltool
 
 build/domain.c: domain/domain.lang gen/embed.c
 	mkdir -p build
@@ -83,6 +84,10 @@ build/mcptool: $(MCP_TOOL)
 	mkdir -p build
 	$(TCC) $(CFLAGS) -o build/mcptool $(MCP_TOOL)
 
+build/skilltool: $(SKILL_TOOL)
+	mkdir -p build
+	$(TCC) $(CFLAGS) -o build/skilltool $(SKILL_TOOL)
+
 check-clang: build/domain.c
 	$(CC) $(CLANG_FLAGS) -Ihost $(SRC) build/domain.c
 	$(CC) $(CLANG_FLAGS) $(FRONT_TOOL)
@@ -96,8 +101,9 @@ check-clang: build/domain.c
 	$(CC) $(CLANG_FLAGS) $(HOST_TOOL)
 	$(CC) $(CLANG_FLAGS) $(REPORT_TOOL)
 	$(CC) $(CLANG_FLAGS) $(MCP_TOOL)
+	$(CC) $(CLANG_FLAGS) $(SKILL_TOOL)
 
-check: build/langc build/fronttool build/pathtool build/notraptool build/shatool build/enginetool build/jcstool build/permitd build/fakedeploy build/hosttool build/reporttool build/mcptool check-clang
+check: build/langc build/fronttool build/pathtool build/notraptool build/shatool build/enginetool build/jcstool build/permitd build/fakedeploy build/hosttool build/reporttool build/mcptool build/skilltool check-clang
 	sh test/gate.sh
 	sh test/review.sh
 	build/fronttool

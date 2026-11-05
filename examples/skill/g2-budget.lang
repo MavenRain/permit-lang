@@ -1,0 +1,18 @@
+-- G2 (S15, Q-S15-2 (a)): a budget with costs and a split. split b n gives
+-- the n units first and the rest second, and spend b n gives the rest. A
+-- cost that is more than the budget gives none. Kit mode: budget,
+-- budgetLeft and the Nat literals are kit items.
+def lawSplit : Path (Option (Prod Budget Budget)) (split (budget 5) 3) (some (pair (budget 3) (budget 2))) :=
+  refl
+
+def lawSpend : Path (Option Budget) (spend (budget 5) 3) (some (budget 2)) := refl
+
+def lawShort : Path (Option Budget) (spend (budget 2) 3) none := refl
+
+def lawLeft : Path Nat (budgetLeft (budget 4)) 4 := refl
+
+def halves : Option (Prod Budget Budget) := split (budget 5) 3
+
+def rest : Option Budget := spend (budget 5) 3
+
+def left : Nat := budgetLeft (budget 4)

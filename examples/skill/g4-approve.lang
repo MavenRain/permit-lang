@@ -1,0 +1,35 @@
+-- G4 (S15, Q-S15-2 (a)): propose and execute of one approved mutation. The
+-- plan executes m1 only in the ppApproved branch of the propose of m1, and
+-- judge permits the exact approved ticket one time. Kit mode: payloadOf and
+-- the Nat literals are kit items.
+def prod : Resource := res "prod"
+
+def m1 : Mutation := mutation prod execute (payloadOf 7)
+
+def m2 : Mutation := mutation prod execute (payloadOf 8)
+
+def sc : Scope := fmEta (Prod Resource Action) (pair prod execute)
+
+def a0 : Authority := authority sc (szS (szS sz0)) 5 (fmUnit Digest)
+
+def tOk : Ticket := ticket m1 2 (some (hash (canon m1)))
+
+def tChanged : Ticket := ticket m2 2 (some (hash (canon m1)))
+
+def stop : Plan Unit := planDone Unit unit
+
+def approvePlan : Plan Unit := planPropose Unit m1 (planExecute Unit m1 stop stop stop) stop
+
+-- L3 and L7: the exact approved ticket is permitted, a second use of the
+-- approval is denied, and a changed payload is denied.
+def lawOk : Path Decision (first (judge a0 tOk)) permit := refl
+
+def lawUsed : Path Decision (first (judge (second (judge a0 tOk)) tOk)) (deny approvalUsed) := refl
+
+def lawDiffers : Path Decision (first (judge a0 tChanged)) (deny digestDiffers) := refl
+
+def exact : Decision := first (judge a0 tOk)
+
+def usedTwice : Decision := first (judge (second (judge a0 tOk)) tOk)
+
+def changed : Decision := first (judge a0 tChanged)

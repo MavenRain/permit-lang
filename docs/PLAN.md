@@ -172,6 +172,10 @@ section 12). Next: S13 (A2, section 12).
 | 2026-11-04 | Q-S14-8 The unit split: (a), as S13. U1: the source (`src/mcp.c`, `src/mcp.h`, the code, base and law tables, the `FILE *` writer, the verbs of `src/main.c` and the out and err routing), the `Makefile` and `test/mcptool.c`. U2: the `test/mcp/` rows and the gate block (mcp, explain codes, base names). U3: the docs (`docs/MCP.md`, the README codes, this plan), the mutants and the close. Edit: none. | USER, S14 |
 | 2026-11-04 | Q-S14-U2-1 The base names (U2): (b), domain names only. The gate finds each name of a `BASE_ROWS` row as a def, family, cofamily, affine cofamily or sealed family of `domain/domain.lang`: `base names: 15 of 15`. A fixed list skips the 12 other names: the kernel sorts `Resource`, `Budget`, `Payload`, `Bytes`, `Digest` and `Approval`, the kernel ops `hash` and `envelope`, the syntax forms `res`, `bind` and `start`, and the mark `needsApproval` (O21, Q-S8-7 (a): not in `src` or the domain). Edit: `test/gate.sh`. | USER, S14 |
 | 2026-11-04 | Q-S14-U2-2 The README text of 11 codes (U2): (a). 11 codes had only a prose or Gate sentence. U3 adds one rules table row in `docs/host/README.md` for each of `REFUSE_AFFINE_REUSE`, `REFUSE_AFFINE_OMEGA`, `REFUSE_AFFINE_FIX`, `REFUSE_AFFINE_PATH`, `REFUSE_PARTIAL`, `REFUSE_LOWER`, `REFUSE_KIT`, `REFUSE_EXECUTE_UNAPPROVED`, `REFUSE_RES`, `REFUSE_BIND` and `REFUSE_LAW`, and `src/front/codes.c` takes the row text. Edit: `docs/host/README.md`, `src/front/codes.c`. | USER, S14 |
+| 2026-11-05 | Q-S15-1 The port source: (a). The accrue-lang S14 skill on accrue HEAD 2c804b7 (in flight, not committed) and the cairn-lang 2df0354 `test/skilltool.c`. The skill block of `test/gate.sh` is the accrue block, after `# mcp rows: end`. U1 delta: the pin of the accrue `skills/accrue-lang/SKILL.md` moved from b038b471 to 67a748e9. Edit: `Makefile`, `test/gate.sh`. | USER, S15 |
+| 2026-11-05 | Q-S15-2 Guest or kit: (a). A G file is a guest file where it can be. G5 is the demo `test/host/deploy.lang`, a guest file. A file is a kit file only when it needs a kit-only name (`budget`, `budgetLeft`, `payloadOf`, `approval`, `resRoot`, `resChild`): G1 to G4. `examples/skill/kit.txt` names the kit files only. The loop and the examples show both forms. Edit: none. | USER, S15 |
+| 2026-11-05 | Q-S15-3 The G3 repair pair: (a). One repair pair on the refused file `test/check/delegate-widen.lang` (D9), and no new refused file. U1 delta: the file is a kit file, so the pair is `build/langc --kit check --json test/check/delegate-widen.lang` (exit 1, the code `REFUSE_DELEGATE_WIDEN` and its fix) and `build/langc explain REFUSE_DELEGATE_WIDEN` (exit 0). Edit: none. | USER, S15 |
+| 2026-11-05 | Q-S15-4 The docs: (a), the cairn shape. `AGENTS.md` is rewritten: Routing rule, The loop, Status (S15), Commands that work now, Rules for a change, When to use permit-lang (Task, permit-lang?, Use instead: G1 to G5 are yes rows, then Cedar, zkpolicy-lang, mandate-lang and general code are no rows) and Files. The README table "When to reach for permit-lang" takes the same 3 columns and rows. README Status and Layout are true at S15. Edit: `AGENTS.md`, `README.md`. | USER, S15 |
 
 The seed is `bin/new-lang.sh permit-lang tcc-wasm` from lang-template
 5265a2a. The kit gives the parser, the checker, the evaluator, the lowering
@@ -671,9 +675,9 @@ fits. Each item has one deliverable, one slice and one gate.
 |---|---|---|---|---|
 | A1 | "one canonical form per operation and a langc fmt canonical printer" | No aliases, no second syntax. `langc fmt PROG` prints the canonical form. `langc fmt PROG --check` exits 1 when a file is not canonical (Q-S12-1). | S12 | `fmt` is idempotent; `parse (fmt x)` has the same core term as `x`; each example and test file is canonical. |
 | A2 | "langc check --json, giving fix hints and progress counts (parsed, typed, laws discharged)" | One JSON line in JCS form: `diagnostics` (0 or 1: `code`, `span`, `message`, `fix`: a concrete edit or `null`) and `progress` (`parsed`, `typed`, `laws_discharged`, `laws_total`), Q-S13-1 to Q-S13-3. Schema in `docs/CHECK-JSON.md`. | S13 | 28 rows in `test/json/`, byte equal. Each `REFUSE_` code of `src/front/check.c` has a row, except `REFUSE_LAW` (Q-S13-9); each refused row has a `.fix` row (26). |
-| A3 | "a SKILL.md with 3 to 5 graded examples" | `skills/permit-lang/SKILL.md` with five graded examples in `examples/skill/`: G1 a read-only scope with a step bound, G2 a budget with costs and a split, G3 an attenuated delegation to a sub-agent, G4 propose and execute of one approved mutation, G5 the demo. SKILL.md quotes each file. | S15 | The gate checks each example and checks that each SKILL.md block and its file are byte equal. |
+| A3 | "a SKILL.md with 3 to 5 graded examples" | `skills/permit-lang/SKILL.md` with five graded examples in `examples/skill/`: G1 a read-only scope with a step bound, G2 a budget with costs and a split, G3 an attenuated delegation to a sub-agent, G4 propose and execute of one approved mutation, G5 the demo. SKILL.md quotes each file. | S15 DONE | The gate checks each example and checks that each SKILL.md block and its file are byte equal. |
 | A4 | "an MCP server written in TinyCC (langc mcp)" | An MCP server over stdio (JSON-RPC 2.0, one message on each line), in C, in the same `langc`. Tools: `check`, `fmt`, `eval`, `build` (with a target), `explain` (a refusal code), `list-base` (section 4), `show-law` (section 7). The MCP spec version is pinned in `docs/MCP.md` (`## langc mcp`), Q-S14-1 to Q-S14-8. | S14 DONE | A C tool `test/mcptool.c` sends the 11 rows `test/mcp/*.in` and compares the replies with `*.out`, byte equal. 26 explain codes, 15 base names. |
-| A5 | "AGENTS.md and a README table saying when to use the language" | `AGENTS.md` (the gate command, the layout, the rules) and the README table "When to reach for permit-lang". Both exist at S0, and S15 makes them final. | S0, S15 | Review only. |
+| A5 | "AGENTS.md and a README table saying when to use the language" | `AGENTS.md` (the gate command, the layout, the rules) and the README table "When to reach for permit-lang". Both exist at S0, and S15 makes them final. | S0, S15 DONE | Review only. |
 | A6 | "a token-count comparison against Python and Rust" | G1 to G5 and the demo in permit-lang, Python and Rust, with equal outputs. Report `docs/TOKEN-BASELINE.md`: the tokenizer pin, each count, each file hash (Q-S0-10). | S16 | `make tokens`, not in `make check`. |
 
 ## 10. Tests
@@ -761,6 +765,23 @@ is equivalent: the two give the same Wasm bytes (`src/target.h`), so it
 has no mutant (as accrue-lang Q-S13-7). Each mutant was restored and
 compared byte equal; the end rebuild gave the base counts. S14 total: 21
 mutants, 20 killed, 1 survivor.
+S15: 6 mutants (U3: M1 to M6, the cairn-lang S14 set) of
+`test/skilltool.c` and the skill block of `test/gate.sh`, each with the
+serial `test/gate.sh`. The bad-exit fixture kills M2 (the exit code is
+not compared): `skill negatives: 2 of 3`. 4 `REFUSE_KIT` lines kill M4
+(the skill block drops `--kit`): `skill checks: 1 of 5`. M1 (only the G1
+program block is compared) and M3 (the block compare does not compare
+the last byte of the file) are LIVE (O25). M5 (the skill block skips
+`langc fmt --check`) gives exit 0, but the fmt canonical row reads
+`examples/*/*.lang`: the probe M5P (M5 and a G5 file with one more
+newline) fails with `FAIL fmt examples/skill/g5-deploy.lang: not
+canonical`. Thus the M5 gap of cairn-lang O37 is not in permit-lang. M6
+(a negative fixture that passes adds no failure) is equivalent, because
+the 3 fixtures fail as given. The probe M26 (M2 and M6) writes `FAIL
+skill negative bad-exit: exit 0` and `skill negatives: 2 of 3`, but the
+gate exits 0 (O25). Each mutant was restored and its sha1 is the pin;
+the end run gave the base counts. S15 total: 6 mutants, 2 killed, 2
+LIVE, 1 covered, 1 equivalent.
 
 ## 11. Port sources
 
@@ -807,7 +828,7 @@ One session for each slice: scope, gate, mutants, docs, close.
 | S12 | A1: canonical forms and `langc fmt`. Built: `langc fmt PROG [--check]` (`src/front/fmt.c`, a port of accrue-lang S11 with the bind run, the marks, the strings and the H1 group; the comment table of the lexer and the end line of a decl), the scoped dump of `build/fronttool`, `LEX_STRING` for a NUL byte in a string (Q-S12-8), 178 files made canonical, `test/fmt/` (10 golden rows, 3 witness rows, `refused.txt`) and the fmt block of `test/gate.sh`, which also reads `examples/*/*.lang`. Rulings Q-S12-1 to Q-S12-9 (section 1). Gate EXIT 0: the S11 counts with 23 parse refusals, plus 300 fmt canonical, 312 fmt round trip, 22 fmt refused, 13 fmt rows and 11 fmt check. 11 mutants, 10 killed, 1 equivalent (section 10). | DONE |
 | S13 | A2: `langc check --json`. Built: the spans of the lexer, the parser and the check in `Diag`, the fix sites (`LEX_CHAR`, `REFUSE_CELL`, `REFUSE_SIG`, `REFUSE_STATE`), the progress counts, `src/jsonout.c` (the JCS writer of `langc report`, now shared), `langc check --json PROG`, `build/fronttool fix`, the 28 `test/json/` rows and the json block of `test/gate.sh`, and `docs/CHECK-JSON.md`. Rulings Q-S13-1 to Q-S13-9 (section 1). Gate EXIT 0: the S12 counts, with 326 fmt canonical, 338 fmt round trip and 24 fmt refused, plus 28 json rows, 21 of 21 json refusal codes and 26 json fixes. 8 mutants, 8 killed (section 10). | DONE |
 | S14 | A4: `langc mcp`. Built: `src/mcp.c` and `src/mcp.h` (the accrue-lang 02964ec server, 7 tools, pin `2025-11-25`), the verbs `langc explain`, `langc base`, `langc law` and `langc [--kit] mcp`, the tables `src/front/codes.c` (26 codes, the README text) and `src/front/plantab.c` (20 base rows, L1 to L8), the `FILE *` string writer of `src/jsonout.c`, `test/mcptool.c`, the 11 `test/mcp/` rows and the mcp block of `test/gate.sh`, 16 new README rules rows and the `REFUSE_REPORT` sentence, and `docs/MCP.md` `## langc mcp`. Rulings Q-S14-1 to Q-S14-8, Q-S14-U2-1 and Q-S14-U2-2 (section 1). Gate EXIT 0: the S13 counts, plus 11 mcp rows, 3 of 3 mcp negatives, 7 of 7 mcp tools, 2 of 2 mcp builds, 1 of 1 mcp long line, 26 of 26 explain codes and 15 of 15 base names. 21 mutants, 20 killed, 1 survivor (section 10). | DONE |
-| S15 | A3 and A5: SKILL.md, G1 to G5, AGENTS.md and the README table final. | |
+| S15 | A3 and A5: SKILL.md, G1 to G5, AGENTS.md and the README table final. Built: `skills/permit-lang/SKILL.md` (the routing rule, the loop, the verbs and the 5 graded examples G1 to G5; each program block is equal to its file in `examples/skill/`, and each row gives its output block and its exit code), `examples/skill/` (G1 to G4 are kit files, `kit.txt`; G5 is the demo, a guest file), `test/skilltool.c`, the 3 fixtures of `test/skill/` and the skill block of `test/gate.sh`, `AGENTS.md` (the cairn-lang shape), the README table "When to reach for permit-lang", README Status and Layout, 4 skill rows in `docs/host/README.md` and the skill gate paragraph in `docs/VALIDATION.md`. Rulings Q-S15-1 to Q-S15-4 (section 1). Gate EXIT 0: the S14 counts, with 331 fmt canonical and 343 fmt round trip (326 and 338 at S14; the 5 examples are new), plus 5 of 5 skill checks, 5 of 5 skill quotes, 22 of 22 skill outputs and 3 of 3 skill negatives. 6 mutants: 2 killed, 2 LIVE (O25), 1 covered by the fmt canonical row, 1 equivalent (section 10). | DONE |
 | S16 | A6: the token comparison. | |
 | S17 | Close: SPEC.md, probe/CAPABILITY.md, VALIDATION.md, final gate. | |
 
@@ -900,6 +921,16 @@ One session for each slice: scope, gate, mutants, docs, close.
   `isError` answer or a closed upstream). A line for the outcome needs a
   new line kind with the id, written after the answer of the upstream
   server.
+- O25 OPEN (S15, as cairn-lang O37). 2 mutants of the skill gate are
+  LIVE, and no row kills them. M1 (`build/skilltool` compares only the
+  G1 program block) is LIVE, because each fixture holds only G1, so no
+  fixture changes a block of G2 to G5; a fixture with 2 examples and a
+  changed byte in G2 kills it. M3 (the block compare does not compare
+  the last byte of the file) is LIVE, because no fixture differs from
+  its file only in the last byte; a fixture whose file has no newline
+  at the end kills it. With M2 and M6, the bad-exit fixture passes: the
+  gate writes its FAIL line and `skill negatives: 2 of 3`, but it exits
+  0. No slice owns this gap yet.
 
 ## 14. Questions for the USER (S0)
 

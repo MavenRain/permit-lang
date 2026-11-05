@@ -1,0 +1,30 @@
+-- G3 (S15, Q-S15-2 (a)): an attenuated delegation to a sub-agent. delegate
+-- gives (child, rest) when the child scope is within the parent scope, the
+-- child step bound is not longer and the budget covers the cost. Kit mode:
+-- budget and the Nat literals are kit items.
+def docs : Resource := res "docs"
+
+def report : Resource := res "docs/report"
+
+def readDocs : Scope := fmEta (Prod Resource Action) (pair docs inspect)
+
+def readReport : Scope := fmEta (Prod Resource Action) (pair report inspect)
+
+def one : StepBound := szS sz0
+
+def two : StepBound := szS (szS sz0)
+
+-- L1: a narrower scope gives some (child, rest), and a wider scope gives
+-- none.
+def lawDelegate : Path (Option (Prod Capability Capability)) (delegate (cap readDocs two (budget 5)) readReport one 3) (some (pair (cap readReport one (budget 3)) (cap readDocs two (budget 2)))) :=
+  refl
+
+def lawWiden : Path (Option (Prod Capability Capability)) (delegate (cap readReport two (budget 5)) readDocs one 3) none :=
+  refl
+
+def child : Option (Prod Capability Capability) :=
+  delegate (cap readDocs two (budget 5)) readReport one 3
+
+def oneTwo : Flag := sizeLe one two
+
+def twoOne : Flag := sizeLe two one
