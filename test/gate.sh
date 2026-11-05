@@ -683,6 +683,141 @@ echo "json refusal codes: $jcodes of $jwant"
 echo "json fixes: $jfixes passed"
 # json rows: end
 
+# mcp rows: begin
+# S14 A4 (Q-S14-6, Q-S14-7 and Q-S14-U2-1; the rows of accrue-lang 02964ec
+# test/gate.sh L588-701). Each test/mcp/NAME.in is a row: build/mcptool runs
+# `langc mcp` (`langc --kit mcp` when NAME starts with kit-) with NAME.in on
+# stdin. The stdout equals test/mcp/NAME.out byte for byte, the stderr is
+# empty and the exit is 0. The rows call each of the 7 tools. The REFUSE_
+# codes of src (src/front/codes.c aside) are the rows of src/front/codes.c
+# (26), and `langc explain CODE` writes one line `CODE: ...` and nothing on
+# stderr for each. build/mcptool exits 1 on each of 3 bad inputs: a changed
+# .out, a missing .out and no rows (its FAIL lines go to $tmp, not to the
+# log). The build row writes build/mcp-deploy.{main,runtime} from
+# test/host/deploy.lang: each file equals the file of `langc build` with -o or
+# -o --runtime. The Wasm main and runtime parts are the same bytes
+# (src/target.h), so these 2 checks cannot show a target swap. A line of
+# 1048577 bytes (MCP_LINE_MAX_BYTES of src/mcp.h, plus 1) gets the -32700
+# reply with id null, and the ping on the next line gets its reply. Base
+# names (Q-S14-U2-1 (b)): each name of a BASE_ROWS row of src/front/plantab.c
+# is a def, family, cofamily, affine cofamily or sealed family of
+# domain/domain.lang, except the names of $bskip: the kernel sorts and ops,
+# the syntax forms and the mark needsApproval (O21, Q-S8-7 (a)).
+status=0
+build/mcptool test/mcp/*.in || status=$?
+[ "$status" -eq 0 ] || { echo "FAIL mcp: build/mcptool exit $status"; fail=$((fail + 1)); }
+mkdir -p "$tmp/neg"
+cp test/mcp/explain.in test/mcp/explain.out "$tmp/neg/"
+printf x >>"$tmp/neg/explain.out"
+neg=0
+status=0
+build/mcptool "$tmp/neg/explain.in" >"$tmp/neg.out" 2>&1 || status=$?
+if [ "$status" -eq 1 ]; then
+  neg=$((neg + 1))
+else
+  echo "FAIL mcp negative changed .out: exit $status"
+  fail=$((fail + 1))
+fi
+cp test/mcp/explain.out "$tmp/neg/explain.out"
+cp test/mcp/explain.in "$tmp/neg/kit-explain.in"
+status=0
+build/mcptool "$tmp/neg/explain.in" "$tmp/neg/kit-explain.in" >"$tmp/neg.out" 2>&1 || status=$?
+if [ "$status" -eq 1 ]; then
+  neg=$((neg + 1))
+else
+  echo "FAIL mcp negative missing .out: exit $status"
+  fail=$((fail + 1))
+fi
+status=0
+build/mcptool >"$tmp/neg.out" 2>&1 || status=$?
+if [ "$status" -eq 1 ]; then
+  neg=$((neg + 1))
+else
+  echo "FAIL mcp negative no rows: exit $status"
+  fail=$((fail + 1))
+fi
+echo "mcp negatives: $neg of 3"
+tools=0
+for t in check fmt eval build explain list-base show-law; do
+  if rg -qF -- "\"method\":\"tools/call\",\"params\":{\"name\":\"$t\"" test/mcp/*.in; then
+    tools=$((tools + 1))
+  else
+    echo "FAIL mcp tools: no row of test/mcp calls $t"
+    fail=$((fail + 1))
+  fi
+done
+echo "mcp tools: $tools of 7"
+mkdir -p "$tmp/mcpb"
+mbuilds=0
+for t in main runtime; do
+  status=0
+  case $t in
+    main) build/langc build test/host/deploy.lang -o "$tmp/mcpb/deploy.$t" >"$tmp/mcpb.out" 2>&1 || status=$? ;;
+    runtime) build/langc build test/host/deploy.lang -o "$tmp/mcpb/deploy.$t" --runtime >"$tmp/mcpb.out" 2>&1 || status=$? ;;
+  esac
+  if [ "$status" -eq 0 ] && cmp -s "build/mcp-deploy.$t" "$tmp/mcpb/deploy.$t"; then
+    mbuilds=$((mbuilds + 1))
+  else
+    echo "FAIL mcp build $t: langc build exit $status, or build/mcp-deploy.$t is not the file of the CLI"
+    fail=$((fail + 1))
+  fi
+done
+echo "mcp builds: $mbuilds of 2"
+mpre='{"jsonrpc":"2.0","id":8,"method":"ping","params":{"pad":"'
+{
+  printf '%s' "$mpre"
+  head -c $((1048577 - ${#mpre} - 3)) /dev/zero | tr '\0' a
+  printf '"}}\n{"jsonrpc":"2.0","id":9,"method":"ping"}\n'
+} >"$tmp/long.in"
+printf '%s\n' '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error"}}' \
+  '{"jsonrpc":"2.0","id":9,"result":{}}' >"$tmp/long.want"
+mlong=0
+mlen=$(($(head -n 1 "$tmp/long.in" | wc -c)))
+status=0
+build/langc mcp <"$tmp/long.in" >"$tmp/long.out" 2>"$tmp/long.err" || status=$?
+if [ "$mlen" -eq 1048578 ] && [ "$status" -eq 0 ] && cmp -s "$tmp/long.want" "$tmp/long.out" && [ ! -s "$tmp/long.err" ]; then
+  mlong=$((mlong + 1))
+else
+  echo "FAIL mcp long line: line of $mlen bytes, exit $status, or the reply is not $tmp/long.want"
+  fail=$((fail + 1))
+fi
+echo "mcp long line: $mlong of 1"
+rg -o --no-filename 'REFUSE_[A-Z0-9_]+' src -g '!codes.c' | sort -u >"$tmp/codes.src"
+awk -F '"' '$1 == "  {" && $2 ~ /^REFUSE_/ {print $2}' src/front/codes.c | sort -u >"$tmp/codes.rows"
+cmp -s "$tmp/codes.src" "$tmp/codes.rows" || { echo "FAIL explain codes: the REFUSE_ codes of src are not the rows of src/front/codes.c"; fail=$((fail + 1)); }
+codes=0
+for code in $(cat "$tmp/codes.src"); do
+  status=0
+  build/langc explain "$code" >"$tmp/explain.out" 2>"$tmp/explain.err" </dev/null || status=$?
+  lines=$(($(wc -l <"$tmp/explain.out")))
+  if [ "$status" -eq 0 ] && [ "$lines" -eq 1 ] && rg -q "^$code: " "$tmp/explain.out" && [ ! -s "$tmp/explain.err" ]; then
+    codes=$((codes + 1))
+  else
+    echo "FAIL explain $code: exit $status, $lines lines"
+    fail=$((fail + 1))
+  fi
+done
+echo "explain codes: $codes of $(($(wc -l <"$tmp/codes.src")))"
+bskip=' Resource Budget Payload Bytes Digest hash envelope Approval res bind start needsApproval '
+awk -F '"' '/^static const BaseRow BASE_ROWS/ {on = 1; next} on && /^};/ {exit} on && $1 == "  {" {print $2}' src/front/plantab.c |
+  awk '{gsub(/, /, "\n"); print}' >"$tmp/base.names"
+bnames=0
+bwant=0
+for name in $(cat "$tmp/base.names"); do
+  case $bskip in
+    *" $name "*) continue ;;
+  esac
+  bwant=$((bwant + 1))
+  if rg -q "^(def|family|cofamily|affine cofamily|sealed family) $name\b" domain/domain.lang; then
+    bnames=$((bnames + 1))
+  else
+    echo "FAIL base name $name: not a decl of domain/domain.lang"
+    fail=$((fail + 1))
+  fi
+done
+echo "base names: $bnames of $bwant"
+# mcp rows: end
+
 # The MCP gate (S9 U3, N6, docs/MCP.md): build/hosttool runs build/permitd
 # on test/host/deploy.lang with build/fakedeploy as the child, one line at
 # a time (malformed lines, toolFailed, the state file, the forwarded bytes,

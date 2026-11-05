@@ -45,4 +45,12 @@ int out_comma(JsonOut *out, size_t i);
    form and '\n' to FILE (S13 U2: the loop of report_program). */
 int out_line(JsonOut *out, FILE *file);
 
+/* Writes the LEN bytes of TEXT to FILE as a JSON string (S14 A4, Q-S14-5
+   (a)), the escape set of accrue-lang 02964ec src/json.c json_string_n:
+   '"', '\\', newline and tab get a short escape, each other byte below
+   0x20 a \u escape, each byte that does not start a UTF-8 scalar �,
+   each other byte as it is. The `langc mcp` replies use it; the buffer
+   writers above do not change. */
+void json_string_n(const char *text, size_t len, FILE *file);
+
 #endif

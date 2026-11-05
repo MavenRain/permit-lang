@@ -1,0 +1,6 @@
+{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-11-25","capabilities":{"tools":{}},"serverInfo":{"name":"permit-lang","version":"S14"}}}
+{"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"L1 attenuation: `delegate` gives a child with `scopeWithin child parent`, child steps not more than parent steps, and child budget plus rest budget equal to the parent budget. A widening gives `none`.\n"}],"isError":false}}
+{"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"L8 agreement: `langc eval` of `decide` and the Wasm module in the gate give the same `Decision` on each row. This is a gate row, not a law term.\n"}],"isError":false}}
+{"jsonrpc":"2.0","id":4,"result":{"content":[{"type":"text","text":""},{"type":"text","text":"langc: LAW: -: 'L9' is not a law of docs/PLAN.md section 7\n"}],"isError":true}}
+{"jsonrpc":"2.0","id":5,"error":{"code":-32602,"message":"Invalid params"}}
+{"jsonrpc":"2.0","id":6,"error":{"code":-32602,"message":"Invalid params"}}

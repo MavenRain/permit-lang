@@ -70,6 +70,36 @@ int out_bytes(JsonOut *out, const char *text, size_t n) {
   return ok;
 }
 
+/* One byte of a JSON string of json_string_n. */
+static void put_char(unsigned char c, FILE *file) {
+  const char *escape = c == '"' ? "\\\"" : c == '\\' ? "\\\\" : c == '\n' ? "\\n" : c == '\t' ? "\\t" : NULL;
+  if (escape != NULL) {
+    fputs(escape, file);
+    return;
+  }
+  if (c < 0x20u) {
+    fprintf(file, "\\u%04x", (unsigned)c);
+    return;
+  }
+  fputc(c, file);
+}
+
+void json_string_n(const char *text, size_t len, FILE *file) {
+  size_t pos;
+  size_t width;
+  size_t i;
+  fputc('"', file);
+  for (pos = 0; pos < len; pos += width == 0 ? 1u : width) {
+    width = utf8_char_size(text + pos, len - pos);
+    /* Paths and truncated diagnostic buffers can hold invalid bytes. */
+    if (width == 0)
+      fputs("\\ufffd", file);
+    for (i = 0; i < width; i++)
+      put_char((unsigned char)text[pos + i], file);
+  }
+  fputc('"', file);
+}
+
 int out_string(JsonOut *out, const char *text) {
   return text == NULL ? out_text(out, "null")
                       : out_text(out, "\"") && out_bytes(out, text, strlen(text)) && out_text(out, "\"");

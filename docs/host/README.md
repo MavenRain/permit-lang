@@ -109,12 +109,28 @@ The compiler enforces these rules:
 | Rule | Code | The compiler refuses |
 |---|---|---|
 | R1 | `REFUSE_DATA` | a `family` declaration in a program |
+| R1 | `REFUSE_CELL` | a type constructor that is not one cell signature or one cocell signature, a cons-list name in place of a cell monad, or a sealed family that is not a cell monad |
 | R2 | `REFUSE_AXIOM` | an `axiom` declaration |
 | R3 | `REFUSE_REC` | `def rec`, or a definition that refers to itself or to a later definition |
 | R4 | `REFUSE_NAME` | a core name, a domain name, a reserved name or a repeated name as a new definition |
 | R4 | `REFUSE_TIME` | one of 10 time words (`now`, `block`, `timestamp`, `time`, `clock`, `epoch`, `date`, `ttl`, `deadline`, `expires`) as a name or a use; the message says to count operations: a deadline is a `StepBound` (a count of later operations) |
 | L1 | `REFUSE_DELEGATE_WIDEN` | a closed `delegate` application whose child scope is not within the parent scope, at a term level of 1 |
 | L2 | `REFUSE_BUDGET_OVERSPEND` | a closed `spend`, `split` or `delegate` application whose budget part reduces to `none`, at a term level of 1 |
+| D-9 | `REFUSE_HISTORY_WRITE` | a history field `h` that is not `(h t)`, `natAdd (h t) e` or the variable of `bind (natAdd (h t) e)`, a history constructor without all of its arguments, or a definition with `State` in its type that refers to a name that the history rule does not check |
+| - | `REFUSE_MAP` | a `Map` key type that is not `Nat`, or a `Map` value type that is not `Nat` or `Flag` |
+| - | `REFUSE_SIG` | a name of the design signature (PLAN section 3): a slot with the wrong type, a reserved name that no slice gives yet, or a defined or primitive name that the kernel gives |
+| - | `REFUSE_STATE` | a second state, a state type with a name other than `State`, a state with parameters, an index telescope or not one constructor, a state field that is not first-order, or a history field that is not `Nat` |
+| - | `REFUSE_AFFINE_REUSE` | a variable that one evaluation path uses more times than its multiplicity allows (PLAN 6) |
+| - | `REFUSE_AFFINE_OMEGA` | a variable at multiplicity 1 that goes to an omega binder, to a closure that can run more than one time, to a polymorphic payload that can become copyable, or to a `map` result that can be copyable |
+| - | `REFUSE_AFFINE_FIX` | a variable at multiplicity 1 that a fold step or an elimination case uses, when that step or case can run more than one time |
+| - | `REFUSE_AFFINE_PATH` | a variable at multiplicity 1 that is free under an interval binder (`fun i =>`, `refl`, `sym`, `cong`, `funExt`, `transp`, `hcomp`, `Glue`, `glue` or `unglue`): both end points of the path hold it |
+| R0 | `REFUSE_PARTIAL` | a partial name, a literal 0 as a `NonZero Nat`, or an `Option` result in the place of a value |
+| - | `REFUSE_LOWER` | an entry that the Wasm host cannot lower: heap use with no static bound, a recursive fold over a block of families, a `start` that is not closed, a `bind` line with no `def start`, or an entry with the name of a bind export (`langc ir` and `langc build` only) |
+| - | `REFUSE_KIT` | a kit item outside the base span (PLAN section 4) in guest mode; `langc --kit` accepts it |
+| - | `REFUSE_EXECUTE_UNAPPROVED` | a `planExecute` that is not in the `ppApproved` branch of an earlier `planPropose` of the same mutation on its path |
+| - | `REFUSE_RES` | a resource path that is not segments of `a-z`, `0-9`, `_` and `-` with one `/` between two segments, a `*`, or more resource paths or segments than the table holds |
+| - | `REFUSE_BIND` | a second `bind` line of one tool, an action that is not an arm of `Action`, a pointer that is not an RFC 6901 pointer, or more `bind` lines than the table holds |
+| O7 | `REFUSE_LAW` | a definition that uses a law-only name (`decrypt`, `observe`, an elim, fold or projection of a sealed family) but has a type that is not a law (a `Path` or `Trunc1` codomain); `langc check` cannot give it (Q-S13-9) |
 
 ## CLI
 
@@ -127,6 +143,10 @@ build/langc build PROG -o OUT [--runtime]
 build/langc report PROG
 build/langc cedar PROG
 build/langc fmt PROG [--check]
+build/langc explain CODE
+build/langc base
+build/langc law LN
+build/langc [--kit] mcp
 ```
 
 - `check` prints `ok`, or refuses the program. With `--json`, it prints
@@ -140,6 +160,8 @@ build/langc fmt PROG [--check]
   gives the same bytes.
 - `report` prints the `program` line of the JSON authority report
   (S10, `docs/REPORT-JSON.md`).
+  `REFUSE_REPORT` refuses a `def start` that is not a closed `authority`,
+  or that has steps or a scope that are not closed.
 - `cedar` prints the start scope as Cedar `permit` policies (S11,
   `docs/CEDAR.md`).
 - `fmt` prints the canonical text of the program on stdout (S12, A1). It
@@ -164,6 +186,17 @@ build/langc fmt PROG [--check]
   `fmt` lexes and parses the canonical text again. If that text is too
   large or does not parse, `fmt` exits with 1. A usage error, an IO
   error or a full arena gives exit 2.
+- `explain` prints one line `CODE: MEANING (docs/host/README.md, SECTION)`
+  for a refusal code (S14, A4). The meaning is the text of the code in
+  this file. An unknown code gives exit 1 and an `EXPLAIN` diagnostic.
+- `base` prints one line `NAME KIND LINE` for each of the 20 rows of the
+  base span (`docs/PLAN.md` section 4).
+- `law` prints one line `LN NAME: STATEMENT` for the law `LN` (`L1` to
+  `L8`) of `docs/PLAN.md` section 7. An unknown law gives exit 1 and a
+  `LAW` diagnostic.
+- `mcp` is the MCP server of these verbs on stdin and stdout
+  (`docs/MCP.md`, `## langc mcp`). With `--kit`, each tool that reads a
+  program runs in the kit mode.
 
 The exit status is 0 for success, 1 for a refused program and 2 for a
 usage or IO error. A diagnostic on stderr has the form

@@ -11,7 +11,9 @@ TARGET = src/wasm.c
 # U1: langc cedar (src/cedar.c) reads that line. S13 U2: src/jsonout.c is
 # the JSON text writer of langc report and langc check --json.
 REPORT = src/report.c src/jsonout.c src/cedar.c host/jsonin.c host/jcs.c
-SRC = src/main.c $(FRONT) $(TARGET) $(REPORT)
+# S14 U1: langc mcp (src/mcp.c), langc explain (src/front/codes.c), langc
+# base and langc law (src/front/plantab.c).
+SRC = src/main.c src/mcp.c src/front/codes.c src/front/plantab.c $(FRONT) $(TARGET) $(REPORT)
 FRONT_TOOL = test/fronttool.c $(filter-out src/front/front.c src/front/lower.c,$(FRONT))
 PATH_TOOL = test/pathtool.c $(filter-out src/front/front.c src/front/lower.c,$(FRONT))
 NOTRAP_TOOL = test/notraptool.c
@@ -22,12 +24,13 @@ PERMITD = host/permitd.c host/report.c host/engine.c host/wasmread.c host/jsonin
 FAKEDEPLOY = test/fakedeploy.c host/jsonin.c host/jcs.c src/front/base.c
 HOST_TOOL = test/hosttool.c
 REPORT_TOOL = test/reporttool.c
+MCP_TOOL = test/mcptool.c
 HEADERS = $(wildcard src/*.h src/front/*.h)
 HOST_HEADERS = $(wildcard host/*.h)
 
 .PHONY: build check check-clang clean
 
-build: build/langc build/fronttool build/pathtool build/notraptool build/shatool build/enginetool build/jcstool build/permitd build/fakedeploy build/hosttool build/reporttool
+build: build/langc build/fronttool build/pathtool build/notraptool build/shatool build/enginetool build/jcstool build/permitd build/fakedeploy build/hosttool build/reporttool build/mcptool
 
 build/domain.c: domain/domain.lang gen/embed.c
 	mkdir -p build
@@ -76,6 +79,10 @@ build/reporttool: $(REPORT_TOOL)
 	mkdir -p build
 	$(TCC) $(CFLAGS) -o build/reporttool $(REPORT_TOOL)
 
+build/mcptool: $(MCP_TOOL)
+	mkdir -p build
+	$(TCC) $(CFLAGS) -o build/mcptool $(MCP_TOOL)
+
 check-clang: build/domain.c
 	$(CC) $(CLANG_FLAGS) -Ihost $(SRC) build/domain.c
 	$(CC) $(CLANG_FLAGS) $(FRONT_TOOL)
@@ -88,8 +95,9 @@ check-clang: build/domain.c
 	$(CC) $(CLANG_FLAGS) -Ihost $(FAKEDEPLOY)
 	$(CC) $(CLANG_FLAGS) $(HOST_TOOL)
 	$(CC) $(CLANG_FLAGS) $(REPORT_TOOL)
+	$(CC) $(CLANG_FLAGS) $(MCP_TOOL)
 
-check: build/langc build/fronttool build/pathtool build/notraptool build/shatool build/enginetool build/jcstool build/permitd build/fakedeploy build/hosttool build/reporttool check-clang
+check: build/langc build/fronttool build/pathtool build/notraptool build/shatool build/enginetool build/jcstool build/permitd build/fakedeploy build/hosttool build/reporttool build/mcptool check-clang
 	sh test/gate.sh
 	sh test/review.sh
 	build/fronttool
