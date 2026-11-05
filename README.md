@@ -40,7 +40,10 @@ agent.
 
 ## Status
 
-S15: the skill (`skills/permit-lang/SKILL.md`), the graded examples G1 to
+S16: the token comparison (A6). G1 to G5 are also in Python and in Rust
+(`test/baseline/`). `docs/TOKEN-BASELINE.md` gives the bytes, the SHA-256
+and an offline token estimate of each of the 15 files. S15: the skill
+(`skills/permit-lang/SKILL.md`), the graded examples G1 to
 G5 (`examples/skill/`), `AGENTS.md` and this table. The repo holds the
 Cubical TT kernel of intent-lang (67445ae), ported from relay-lang 05dd63b
 without the crypto code, on the tcc-wasm host. The slices S3 to S7 add R0
@@ -54,7 +57,8 @@ The agent items A1, A2 and A4 exist: `langc fmt` (S12), `langc check
 --json` (S13) and `langc mcp`, with `langc explain`, `langc base` and
 `langc law` (S14). `make check` is GREEN. `docs/PLAN.md` gives the
 readings, the route, the slices and the open questions. The next slice is
-S16: the token comparison (A6).
+S17: the close (`SPEC.md`, `probe/CAPABILITY.md`, `docs/VALIDATION.md`
+and the final gate).
 
 ## Layout
 
@@ -73,6 +77,8 @@ S16: the token comparison (A6).
 - `domain/domain.lang`: the domain. `examples/`: the demos.
 - `test/`: the gate `test/gate.sh`, the C test tools (`test/*tool.c`) and
   their rows. `test/skill/` holds the 3 negative SKILL.md fixtures.
+  `test/baseline/` holds G1 to G5 in Python and in Rust (the crate
+  `test/baseline/rust/`). `test/tokcount.c` is the token tool.
 - `formers/FORMERS.md`: the type formers. `formers/tcc-wasm.md` gives their
   status on the tcc-wasm host.
 - `probe/CAPABILITY.md`: the host probe.
@@ -82,6 +88,8 @@ S16: the token comparison (A6).
   codes and the gate lines. `docs/CHECK-JSON.md`, `docs/MCP.md`,
   `docs/REPORT-JSON.md` and `docs/CEDAR.md`: the JSON line, the MCP
   server, the report and the Cedar export.
+- `docs/TOKEN-BASELINE.md`: the token comparison of G1 to G5 in
+  permit-lang, Python and Rust (A6).
 
 ## Build and test
 

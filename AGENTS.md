@@ -49,7 +49,7 @@ routing rule, the loop and 5 graded examples (G1 to G5, the files of
 (`docs/MCP.md`). With `--kit`, each tool that reads a program runs in the
 kit mode.
 
-## Status (S15)
+## Status (S16)
 
 The slices S0 to S14 give the kernel with the affine layer (S2 to S4),
 the domain (S5 to S7), the three targets (the tool gate `permitd`, T1, S8
@@ -58,8 +58,10 @@ and S9; the JSON authority report, T2, S10; the Cedar export, T3, S11),
 explain`, `langc base` and `langc law` (S14). S15 adds
 `skills/permit-lang/SKILL.md`, the graded examples of `examples/skill/`,
 `test/skilltool.c`, the fixtures of `test/skill/`, this file and the
-README table. `docs/PLAN.md` section 12 gives each slice and the next
-slice (S16: the token comparison, A6).
+README table. S16 adds the token comparison (A6): G1 to G5 in Python
+and in Rust (`test/baseline/`), `test/tokcount.c` and
+`docs/TOKEN-BASELINE.md`. `docs/PLAN.md` section 12 gives each slice and
+the next slice (S17: the close).
 
 ## Commands that work now
 
@@ -158,6 +160,8 @@ ok
 - `domain/domain.lang`: the domain. `examples/`: the demos.
 - `test/`: the gate `test/gate.sh`, the C test tools (`test/*tool.c`) and
   their rows. `test/skill/` holds the 3 negative SKILL.md fixtures.
+  `test/baseline/` holds G1 to G5 in Python and in Rust (the crate
+  `test/baseline/rust/`). `test/tokcount.c` is the token tool.
 - `formers/FORMERS.md`: the type formers. `formers/tcc-wasm.md` gives their
   status on the tcc-wasm host.
 - `probe/CAPABILITY.md`: the host probe.
@@ -167,3 +171,5 @@ ok
   codes and the gate lines. `docs/CHECK-JSON.md`, `docs/MCP.md`,
   `docs/REPORT-JSON.md` and `docs/CEDAR.md`: the JSON line, the MCP
   server, the report and the Cedar export.
+- `docs/TOKEN-BASELINE.md`: the token comparison of G1 to G5 in
+  permit-lang, Python and Rust (A6).

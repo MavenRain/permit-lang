@@ -176,6 +176,10 @@ section 12). Next: S13 (A2, section 12).
 | 2026-11-05 | Q-S15-2 Guest or kit: (a). A G file is a guest file where it can be. G5 is the demo `test/host/deploy.lang`, a guest file. A file is a kit file only when it needs a kit-only name (`budget`, `budgetLeft`, `payloadOf`, `approval`, `resRoot`, `resChild`): G1 to G4. `examples/skill/kit.txt` names the kit files only. The loop and the examples show both forms. Edit: none. | USER, S15 |
 | 2026-11-05 | Q-S15-3 The G3 repair pair: (a). One repair pair on the refused file `test/check/delegate-widen.lang` (D9), and no new refused file. U1 delta: the file is a kit file, so the pair is `build/langc --kit check --json test/check/delegate-widen.lang` (exit 1, the code `REFUSE_DELEGATE_WIDEN` and its fix) and `build/langc explain REFUSE_DELEGATE_WIDEN` (exit 0). Edit: none. | USER, S15 |
 | 2026-11-05 | Q-S15-4 The docs: (a), the cairn shape. `AGENTS.md` is rewritten: Routing rule, The loop, Status (S15), Commands that work now, Rules for a change, When to use permit-lang (Task, permit-lang?, Use instead: G1 to G5 are yes rows, then Cedar, zkpolicy-lang, mandate-lang and general code are no rows) and Files. The README table "When to reach for permit-lang" takes the same 3 columns and rows. README Status and Layout are true at S15. Edit: `AGENTS.md`, `README.md`. | USER, S15 |
+| 2026-11-05 | Q-S16-0 The S15 base: (a). S16 builds on USER 9ac759a (tree 674456c9). The USER commit removes the last blank line of `test/skill/bad-exit.md`, `changed-quote.md` and `no-text.md`; the base gate is SAME. Edit: none. | USER, S16 |
+| 2026-11-05 | Q-S16-1 The tokenizer: (a), the cairn-lang route. `docs/TOKEN-BASELINE.md` and `make check` use the offline estimate ceil(bytes / 4) (cairn-lang Q-S15-10 (c)). `make tokens` holds the `count_tokens` route: the newest model from `GET /v1/models`, 1 frame message `x`, and the net count is N minus the frame. The USER runs it outside the sandbox with `ANTHROPIC_API_KEY`. It is not in `make check`. Edit: `Makefile`, `test/tokcount.c`, `docs/TOKEN-BASELINE.md`. | USER, S16 |
+| 2026-11-05 | Q-S16-2 The programs and the outputs: (a). 5 programs, G1 to G5 of `examples/skill/` (G5 is the demo, Q-S15-2 (a)). Each Python and each Rust copy prints the 3 `langc eval` lines of its G in the SKILL.md order, byte equal to `langc --kit eval` (G1 to G4) or `langc eval` (G5). 15 eval rows and 15 counted files (5 `.lang`, 5 `.py` and 5 `.rs`). Edit: `test/baseline/`. | USER, S16 |
+| 2026-11-05 | Q-S16-3 The layout and the gate: (a), the cairn-lang shape. `test/baseline/g1-scope.py` to `g5-deploy.py` (the standard library only); `test/baseline/rust/` (1 crate, bins g1 to g5, `sha2` 0.10 from crates.io for the G4 digest, `Cargo.lock`); the `.gitignore` line `test/baseline/rust/target/`; `test/tokcount.c` with `host/sha256.c` (the modes `--check`, `--estimate`, `--model`, `--request` and `--table`); the `make check` rows `token report hashes: 15 of 15` and `token estimate: passed`; the token recipe block of `test/review.sh` (cairn-lang +46). Edit: `.gitignore`, `Makefile`, `test/review.sh`, `test/tokcount.c`, `test/baseline/`. | USER, S16 |
 
 The seed is `bin/new-lang.sh permit-lang tcc-wasm` from lang-template
 5265a2a. The kit gives the parser, the checker, the evaluator, the lowering
@@ -678,7 +682,7 @@ fits. Each item has one deliverable, one slice and one gate.
 | A3 | "a SKILL.md with 3 to 5 graded examples" | `skills/permit-lang/SKILL.md` with five graded examples in `examples/skill/`: G1 a read-only scope with a step bound, G2 a budget with costs and a split, G3 an attenuated delegation to a sub-agent, G4 propose and execute of one approved mutation, G5 the demo. SKILL.md quotes each file. | S15 DONE | The gate checks each example and checks that each SKILL.md block and its file are byte equal. |
 | A4 | "an MCP server written in TinyCC (langc mcp)" | An MCP server over stdio (JSON-RPC 2.0, one message on each line), in C, in the same `langc`. Tools: `check`, `fmt`, `eval`, `build` (with a target), `explain` (a refusal code), `list-base` (section 4), `show-law` (section 7). The MCP spec version is pinned in `docs/MCP.md` (`## langc mcp`), Q-S14-1 to Q-S14-8. | S14 DONE | A C tool `test/mcptool.c` sends the 11 rows `test/mcp/*.in` and compares the replies with `*.out`, byte equal. 26 explain codes, 15 base names. |
 | A5 | "AGENTS.md and a README table saying when to use the language" | `AGENTS.md` (the gate command, the layout, the rules) and the README table "When to reach for permit-lang". Both exist at S0, and S15 makes them final. | S0, S15 DONE | Review only. |
-| A6 | "a token-count comparison against Python and Rust" | G1 to G5 and the demo in permit-lang, Python and Rust, with equal outputs. Report `docs/TOKEN-BASELINE.md`: the tokenizer pin, each count, each file hash (Q-S0-10). | S16 | `make tokens`, not in `make check`. |
+| A6 | "a token-count comparison against Python and Rust" | G1 to G5 and the demo in permit-lang, Python and Rust, with equal outputs. Report `docs/TOKEN-BASELINE.md`: the tokenizer pin, each count, each file hash (Q-S0-10). | S16 DONE | `make check`: `token report hashes: 15 of 15` and `token estimate: passed` (Q-S16-3 (a)). `make tokens` (the API route, Q-S16-1 (a)) is not in `make check`. |
 
 ## 10. Tests
 
@@ -782,6 +786,22 @@ skill negative bad-exit: exit 0` and `skill negatives: 2 of 3`, but the
 gate exits 0 (O25). Each mutant was restored and its sha1 is the pin;
 the end run gave the base counts. S15 total: 6 mutants, 2 killed, 2
 LIVE, 1 covered, 1 equivalent.
+S16: 6 mutants (U3: M1 to M6) of `test/tokcount.c`, the report and the
+token recipes of the `Makefile`, each with the serial `make -B check`.
+M1 (a counted path of `test/tokcount.c` names a file that is not there)
+gives `token report hashes: 14 of 15` and `cannot read the file`. M2 (1
+hash byte of the G1 row) gives `token report hashes: 14 of 15`. M3 (1
+estimate number of the block) gives `FAIL tokens: the estimate block`.
+M5 (no `|| exit 1` after the `langc eval` producer of the `for row in`
+recipe) and M6 (no FAIL clause after the Python producer of the `for g
+in` recipe) give `FAIL tokens: accepted failed langc producer` and
+`accepted failed python producer` (the `test/review.sh` token block).
+M4 (G5 also runs with `--kit`) gives exit 0, and it is equivalent: the
+kit mode admits each guest file, and `langc --kit eval` of
+`examples/skill/g5-deploy.lang` gives the same 3 lines as `langc eval`.
+Each mutant was restored: the sha1 of each file is its pin and the `git
+diff` sha is the STEP 1 value. S16 total: 6 mutants, 5 killed, 1
+equivalent.
 
 ## 11. Port sources
 
@@ -829,7 +849,7 @@ One session for each slice: scope, gate, mutants, docs, close.
 | S13 | A2: `langc check --json`. Built: the spans of the lexer, the parser and the check in `Diag`, the fix sites (`LEX_CHAR`, `REFUSE_CELL`, `REFUSE_SIG`, `REFUSE_STATE`), the progress counts, `src/jsonout.c` (the JCS writer of `langc report`, now shared), `langc check --json PROG`, `build/fronttool fix`, the 28 `test/json/` rows and the json block of `test/gate.sh`, and `docs/CHECK-JSON.md`. Rulings Q-S13-1 to Q-S13-9 (section 1). Gate EXIT 0: the S12 counts, with 326 fmt canonical, 338 fmt round trip and 24 fmt refused, plus 28 json rows, 21 of 21 json refusal codes and 26 json fixes. 8 mutants, 8 killed (section 10). | DONE |
 | S14 | A4: `langc mcp`. Built: `src/mcp.c` and `src/mcp.h` (the accrue-lang 02964ec server, 7 tools, pin `2025-11-25`), the verbs `langc explain`, `langc base`, `langc law` and `langc [--kit] mcp`, the tables `src/front/codes.c` (26 codes, the README text) and `src/front/plantab.c` (20 base rows, L1 to L8), the `FILE *` string writer of `src/jsonout.c`, `test/mcptool.c`, the 11 `test/mcp/` rows and the mcp block of `test/gate.sh`, 16 new README rules rows and the `REFUSE_REPORT` sentence, and `docs/MCP.md` `## langc mcp`. Rulings Q-S14-1 to Q-S14-8, Q-S14-U2-1 and Q-S14-U2-2 (section 1). Gate EXIT 0: the S13 counts, plus 11 mcp rows, 3 of 3 mcp negatives, 7 of 7 mcp tools, 2 of 2 mcp builds, 1 of 1 mcp long line, 26 of 26 explain codes and 15 of 15 base names. 21 mutants, 20 killed, 1 survivor (section 10). | DONE |
 | S15 | A3 and A5: SKILL.md, G1 to G5, AGENTS.md and the README table final. Built: `skills/permit-lang/SKILL.md` (the routing rule, the loop, the verbs and the 5 graded examples G1 to G5; each program block is equal to its file in `examples/skill/`, and each row gives its output block and its exit code), `examples/skill/` (G1 to G4 are kit files, `kit.txt`; G5 is the demo, a guest file), `test/skilltool.c`, the 3 fixtures of `test/skill/` and the skill block of `test/gate.sh`, `AGENTS.md` (the cairn-lang shape), the README table "When to reach for permit-lang", README Status and Layout, 4 skill rows in `docs/host/README.md` and the skill gate paragraph in `docs/VALIDATION.md`. Rulings Q-S15-1 to Q-S15-4 (section 1). Gate EXIT 0: the S14 counts, with 331 fmt canonical and 343 fmt round trip (326 and 338 at S14; the 5 examples are new), plus 5 of 5 skill checks, 5 of 5 skill quotes, 22 of 22 skill outputs and 3 of 3 skill negatives. 6 mutants: 2 killed, 2 LIVE (O25), 1 covered by the fmt canonical row, 1 equivalent (section 10). | DONE |
-| S16 | A6: the token comparison. | |
+| S16 | A6: the token comparison. Built: `test/baseline/g1-scope.py` to `g5-deploy.py` (the standard library only), `test/baseline/rust/` (1 crate, bins g1 to g5, `sha2` 0.10 for G4, `Cargo.lock`), the `.gitignore` line `test/baseline/rust/target/`, `test/tokcount.c` (the cairn-lang 0175ef1 tool with the permit-lang paths), the Makefile rows and the target `tokens`, the token recipe block of `test/review.sh` and `docs/TOKEN-BASELINE.md` (the bytes, the SHA-256 and the offline estimate ceil(bytes / 4) of each of the 15 files; the Python estimate is 1.63 times and the Rust estimate is 2.31 times the permit-lang estimate). Each Python and Rust program prints the `langc eval` lines of its G, byte for byte (`token outputs: 10 of 10`). `make tokens` is not run (no API key). Rulings Q-S16-0 to Q-S16-3 (section 1). Gate EXIT 0: the S15 counts, plus `token report hashes: 15 of 15` and `token estimate: passed`. 6 mutants: 5 killed, 1 equivalent (section 10). | DONE |
 | S17 | Close: SPEC.md, probe/CAPABILITY.md, VALIDATION.md, final gate. | |
 
 ## 13. Open items
