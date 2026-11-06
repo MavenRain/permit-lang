@@ -42,7 +42,14 @@ authority report: `langc report`, `permitd --report FILE` and
 S11 DONE: the Cedar export: `langc cedar` and `docs/CEDAR.md` (sections
 1, 8.2, 10 and 13; the S11 row of section 12). S12 DONE: A1, the
 canonical forms and `langc fmt` (sections 1, 9 and 10; the S12 row of
-section 12). Next: S13 (A2, section 12).
+section 12). S13 DONE: A2, `langc check --json` (the S13 row of section
+12). S14 DONE: A4, `langc mcp`, `langc explain`, `langc base` and `langc
+law` (the S14 row of section 12). S15 DONE: A3 and A5,
+`skills/permit-lang/SKILL.md` and the graded examples G1 to G5 (the S15
+row of section 12). S16 DONE: A6, the token comparison (the S16 row of
+section 12). S17 DONE: the close, `SPEC.md`, `probe/CAPABILITY.md`,
+`docs/VALIDATION.md` and the final gate (the S17 row of section 12). The
+plan is CLOSED (Q-S17-3 (a)): O3 and O20 to O25 stay OPEN (section 13).
 
 ## 1. Rulings
 
@@ -180,6 +187,13 @@ section 12). Next: S13 (A2, section 12).
 | 2026-11-05 | Q-S16-1 The tokenizer: (a), the cairn-lang route. `docs/TOKEN-BASELINE.md` and `make check` use the offline estimate ceil(bytes / 4) (cairn-lang Q-S15-10 (c)). `make tokens` holds the `count_tokens` route: the newest model from `GET /v1/models`, 1 frame message `x`, and the net count is N minus the frame. The USER runs it outside the sandbox with `ANTHROPIC_API_KEY`. It is not in `make check`. Edit: `Makefile`, `test/tokcount.c`, `docs/TOKEN-BASELINE.md`. | USER, S16 |
 | 2026-11-05 | Q-S16-2 The programs and the outputs: (a). 5 programs, G1 to G5 of `examples/skill/` (G5 is the demo, Q-S15-2 (a)). Each Python and each Rust copy prints the 3 `langc eval` lines of its G in the SKILL.md order, byte equal to `langc --kit eval` (G1 to G4) or `langc eval` (G5). 15 eval rows and 15 counted files (5 `.lang`, 5 `.py` and 5 `.rs`). Edit: `test/baseline/`. | USER, S16 |
 | 2026-11-05 | Q-S16-3 The layout and the gate: (a), the cairn-lang shape. `test/baseline/g1-scope.py` to `g5-deploy.py` (the standard library only); `test/baseline/rust/` (1 crate, bins g1 to g5, `sha2` 0.10 from crates.io for the G4 digest, `Cargo.lock`); the `.gitignore` line `test/baseline/rust/target/`; `test/tokcount.c` with `host/sha256.c` (the modes `--check`, `--estimate`, `--model`, `--request` and `--table`); the `make check` rows `token report hashes: 15 of 15` and `token estimate: passed`; the token recipe block of `test/review.sh` (cairn-lang +46). Edit: `.gitignore`, `Makefile`, `test/review.sh`, `test/tokcount.c`, `test/baseline/`. | USER, S16 |
+| 2026-11-05 | Q-S17-0 The SPEC form: (a), the cairn-lang and relay-lang form. `SPEC.md` fills all 10 sections, with no template lines, a status line and a pointer. Sections 5 and 6 cite sections of this plan and lines of `domain/domain.lang`. Section 9 gives the open and standing O items with cites to their lines here. Section 10 maps the slices to the kit milestones by content: M0 = S0 to S5, M1 = S6 and S7, M2 = S8 to S11, A = S12 to S16, M3 PARTIAL (no slice), Close = S17. Edit: `SPEC.md`. | USER, S17 |
+| 2026-11-05 | Q-S17-1 The probe: (a), new runs. `probe/CAPABILITY.md` takes the cairn-lang and relay-lang form, from new runs in this repo with `probe/guard.py` and `build/langc` (each step below 4 GB and 120 s): the cost at N = 100 and N = 1000, the permit facts (the `permitd` Wasm engine, SHA-256, JCS, `build/tokcount`), a replay block and the consequences. The kit paths that permit-lang does not have are removed. Edit: `probe/CAPABILITY.md`. | USER, S17 |
+| 2026-11-05 | Q-S17-2 VALIDATION: (a), a header and one paragraph for each slice. `docs/VALIDATION.md` replaces the template header (the date, the tcc version, `build/langc` at the commit, a `make check` paragraph with the count lines and the final gate seconds) and adds one short paragraph for each slice S0 to S14 from section 12. The S15 and S16 paragraphs stay. `docs/STATUS.md` stays template (cairn-lang and relay-lang). Edit: `docs/VALIDATION.md`. | USER, S17 |
+| 2026-11-05 | Q-S17-3 The open items: (a), all stay OPEN. O3 and O20 to O25 stay OPEN (the cairn-lang O37 precedent), and `SPEC.md` section 9 lists them with cites. Section 13 marks the 10 unmarked items O1, O4 to O11 and O16 as standing (v1 scope). The plan ends after S17, with no S18. Edit: this plan. | USER, S17 |
+| 2026-11-05 | Q-S17-4 The unit split: (a), 3 units. U1: `SPEC.md`, all 10 sections, one anchored edit script. U2: `probe/CAPABILITY.md` (new `probe/guard.py` runs, the cost at N = 100 and 1000, the replay block). U3: the VALIDATION header and slice paragraphs, this plan (Q-S17-0 to Q-S17-6, the S17 row, the standing marks, the status), `AGENTS.md` `## Status (S17)`, the README Status, the final gate and the stage. Not asked (the relay-lang Q-S16-4 precedent): `AGENTS.md` and the README Status take an S17 sentence and the `SPEC.md` pointer. Edit: `AGENTS.md`, `README.md`. | USER, S17 |
+| 2026-11-05 | Q-S17-5 The `PENDING_MAX` limit (U3): (a), record only. `permitd` keeps at most 256 open calls (`host/permitd.c:45`). A burst of 1000 `tools/call` lines with no wait gives 256 results and 744 errors -32603 `permit-lang too many pending calls`. `probe/CAPABILITY.md` section 6 and consequence 9 record it. No `docs/MCP.md` line and no new O item. Edit: none. | USER, S17 |
+| 2026-11-05 | Q-S17-6 The kit cite drift in `formers/tcc-wasm.md` (U3): (a), record only. Line 40 names `docs/CAPABILITY.md` (the file is `docs/host/CAPABILITY.md`), and line 28 cites `domain/domain.lang:329` (a comment line). `SPEC.md` section 3 records both. Edit: none. | USER, S17 |
 
 The seed is `bin/new-lang.sh permit-lang tcc-wasm` from lang-template
 5265a2a. The kit gives the parser, the checker, the evaluator, the lowering
@@ -850,34 +864,41 @@ One session for each slice: scope, gate, mutants, docs, close.
 | S14 | A4: `langc mcp`. Built: `src/mcp.c` and `src/mcp.h` (the accrue-lang 02964ec server, 7 tools, pin `2025-11-25`), the verbs `langc explain`, `langc base`, `langc law` and `langc [--kit] mcp`, the tables `src/front/codes.c` (26 codes, the README text) and `src/front/plantab.c` (20 base rows, L1 to L8), the `FILE *` string writer of `src/jsonout.c`, `test/mcptool.c`, the 11 `test/mcp/` rows and the mcp block of `test/gate.sh`, 16 new README rules rows and the `REFUSE_REPORT` sentence, and `docs/MCP.md` `## langc mcp`. Rulings Q-S14-1 to Q-S14-8, Q-S14-U2-1 and Q-S14-U2-2 (section 1). Gate EXIT 0: the S13 counts, plus 11 mcp rows, 3 of 3 mcp negatives, 7 of 7 mcp tools, 2 of 2 mcp builds, 1 of 1 mcp long line, 26 of 26 explain codes and 15 of 15 base names. 21 mutants, 20 killed, 1 survivor (section 10). | DONE |
 | S15 | A3 and A5: SKILL.md, G1 to G5, AGENTS.md and the README table final. Built: `skills/permit-lang/SKILL.md` (the routing rule, the loop, the verbs and the 5 graded examples G1 to G5; each program block is equal to its file in `examples/skill/`, and each row gives its output block and its exit code), `examples/skill/` (G1 to G4 are kit files, `kit.txt`; G5 is the demo, a guest file), `test/skilltool.c`, the 3 fixtures of `test/skill/` and the skill block of `test/gate.sh`, `AGENTS.md` (the cairn-lang shape), the README table "When to reach for permit-lang", README Status and Layout, 4 skill rows in `docs/host/README.md` and the skill gate paragraph in `docs/VALIDATION.md`. Rulings Q-S15-1 to Q-S15-4 (section 1). Gate EXIT 0: the S14 counts, with 331 fmt canonical and 343 fmt round trip (326 and 338 at S14; the 5 examples are new), plus 5 of 5 skill checks, 5 of 5 skill quotes, 22 of 22 skill outputs and 3 of 3 skill negatives. 6 mutants: 2 killed, 2 LIVE (O25), 1 covered by the fmt canonical row, 1 equivalent (section 10). | DONE |
 | S16 | A6: the token comparison. Built: `test/baseline/g1-scope.py` to `g5-deploy.py` (the standard library only), `test/baseline/rust/` (1 crate, bins g1 to g5, `sha2` 0.10 for G4, `Cargo.lock`), the `.gitignore` line `test/baseline/rust/target/`, `test/tokcount.c` (the cairn-lang 0175ef1 tool with the permit-lang paths), the Makefile rows and the target `tokens`, the token recipe block of `test/review.sh` and `docs/TOKEN-BASELINE.md` (the bytes, the SHA-256 and the offline estimate ceil(bytes / 4) of each of the 15 files; the Python estimate is 1.63 times and the Rust estimate is 2.31 times the permit-lang estimate). Each Python and Rust program prints the `langc eval` lines of its G, byte for byte (`token outputs: 10 of 10`). `make tokens` is not run (no API key). Rulings Q-S16-0 to Q-S16-3 (section 1). Gate EXIT 0: the S15 counts, plus `token report hashes: 15 of 15` and `token estimate: passed`. 6 mutants: 5 killed, 1 equivalent (section 10). | DONE |
-| S17 | Close: SPEC.md, probe/CAPABILITY.md, VALIDATION.md, final gate. | |
+| S17 | Close: SPEC.md, probe/CAPABILITY.md, VALIDATION.md, final gate. Built: `SPEC.md` (all 10 sections, 91 cites), `probe/CAPABILITY.md` (new `probe/guard.py` runs: 72 guard rows, the cost at N = 100 and N = 1000, the `PENDING_MAX` limit of 256 open calls, a replay block and 9 consequences), `docs/VALIDATION.md` (the header and the S0 to S14 paragraphs), the rulings Q-S17-0 to Q-S17-6 (section 1), the standing marks of section 13, `AGENTS.md` `## Status (S17)` and the README Status. Gate EXIT 0: the S16 counts, 0 failures. A doc slice: no code change and no mutants. | DONE |
 
 ## 13. Open items
 
-- O1 The kit base data is `Nat` and `Flag`. Section 4 adds names only with
-  a pasted line. A slice that needs more records why here first.
+- O1 STANDING (v1 scope, Q-S17-3 (a)). The kit base data is `Nat` and
+  `Flag`. Section 4 adds names only with a pasted line. A slice that needs
+  more records why here first.
 - O2 CLOSED at S3. The kit "Lazy traps" section and the gate row "a trap
   is equal to a trap" are gone. `docs/host/README.md` has "No traps"
   (the relay-lang 5c386bb text in permit words) and the S3 gate rows.
 - O3 OPEN. The cedar CLI is not on PATH. T3 (S11) is checked by the 7
   golden files of `test/cedar/` only. A `cedar validate` row needs a USER
   install.
-- O4 The link to the thread in pasted 1 did not survive the paste. The
-  README states the problem without the link until the USER gives it.
-- O5 L3 rests on the collision resistance of `hash`. That is an
-  assumption, not a law. v1 binds SHA-256.
-- O6 zkpolicy-lang is a later target (8.4), not v1.
-- O7 The pinned MCP spec version and the JSON-RPC subset go in
-  `docs/MCP.md`: the `langc mcp` part at S14, the `permitd` proxy part at
-  S9.
-- O8 The `fix` of each refusal code (A2) is one concrete edit. A code with
-  no edit gives `fix: null` and a reason.
-- O9 The approver channel is a CLI prompt on the terminal. The gate rows
-  have no terminal, so they use a file of approvals (test mode).
-- O10 A signed approval (an approver key) is not in v1.
-- O11 The gate reads the credential from a file or an environment variable
-  that its flags name, and gives it only to the upstream child. A run on a
-  real SaaS tool is a USER-run check.
+- O4 STANDING (v1 scope, Q-S17-3 (a)). The link to the thread in pasted 1
+  did not survive the paste. The README states the problem without the
+  link until the USER gives it.
+- O5 STANDING (v1 scope, Q-S17-3 (a)). L3 rests on the collision
+  resistance of `hash`. That is an assumption, not a law. v1 binds
+  SHA-256.
+- O6 STANDING (v1 scope, Q-S17-3 (a)). zkpolicy-lang is a later target
+  (8.4), not v1.
+- O7 STANDING (v1 scope, Q-S17-3 (a)). The pinned MCP spec version and the
+  JSON-RPC subset go in `docs/MCP.md`: the `langc mcp` part at S14, the
+  `permitd` proxy part at S9.
+- O8 STANDING (v1 scope, Q-S17-3 (a)). The `fix` of each refusal code (A2)
+  is one concrete edit. A code with no edit gives `fix: null` and a
+  reason.
+- O9 STANDING (v1 scope, Q-S17-3 (a)). The approver channel is a CLI
+  prompt on the terminal. The gate rows have no terminal, so they use a
+  file of approvals (test mode).
+- O10 STANDING (v1 scope, Q-S17-3 (a)). A signed approval (an approver
+  key) is not in v1.
+- O11 STANDING (v1 scope, Q-S17-3 (a)). The gate reads the credential from
+  a file or an environment variable that its flags name, and gives it only
+  to the upstream child. A run on a real SaaS tool is a USER-run check.
 - O12 CLOSED at S8. The S2 kernel port had no Wasm writer in the build
   (Q-S2-3 (a)).
   S3 brings back the IR lines (`ir`, `ir refusals`, `ir lowerings`), the
@@ -898,12 +919,12 @@ One session for each slice: scope, gate, mutants, docs, close.
   boundSpent`. `test/ir/natops.ir` grew from 92 to 120 lines (the old
   text is a prefix). The gate line `natops evals: 2 checked` runs
   `reasonCode 0` and `reasonCode 1`.
-- O16 The S4 rule for the permit forms with no leaf rule is a sound
-  fallback (Q-S4-4 (a)). A part that can run more than one time is
-  checked at omega. So the checker refuses some sound programs: a `map`
-  whose `f` drops a resource element, and a `map` from `Option Budget`
-  to `Option Unit`. A precise rule for a form comes only when a demo row
-  needs one.
+- O16 STANDING (v1 scope, Q-S17-3 (a)). The S4 rule for the permit forms
+  with no leaf rule is a sound fallback (Q-S4-4 (a)). A part that can run
+  more than one time is checked at omega. So the checker refuses some
+  sound programs: a `map` whose `f` drops a resource element, and a `map`
+  from `Option Budget` to `Option Unit`. A precise rule for a form comes
+  only when a demo row needs one.
 - O17 CLOSED at S6 (Q-S6-7 (a)), no change. `alCorec` stays
   guest-visible (Q-S5-6 (a)). A rebuild from the parts of an opened
   `Allowance` cannot add units: the gate holds the one live value (S8,

@@ -40,25 +40,28 @@ agent.
 
 ## Status
 
-S16: the token comparison (A6). G1 to G5 are also in Python and in Rust
+S17: the close. `SPEC.md` is the language spec (10 sections).
+`probe/CAPABILITY.md` gives the probe runs, the cost at N = 100 and N =
+1000 and a replay block. `docs/VALIDATION.md` gives the final gate. S16:
+the token comparison (A6). G1 to G5 are also in Python and in Rust
 (`test/baseline/`). `docs/TOKEN-BASELINE.md` gives the bytes, the SHA-256
 and an offline token estimate of each of the 15 files. S15: the skill
-(`skills/permit-lang/SKILL.md`), the graded examples G1 to
-G5 (`examples/skill/`), `AGENTS.md` and this table. The repo holds the
-Cubical TT kernel of intent-lang (67445ae), ported from relay-lang 05dd63b
-without the crypto code, on the tcc-wasm host. The slices S3 to S7 add R0
-(no trap), the affine layer, the domain (`domain/domain.lang`: `Scope`,
-`StepBound`, `Capability`, `delegate`, `Mutation`, `Ticket`, `Call`,
-`decide`, `Plan` and `Trace`) and the demos `examples/scope.lang`,
-`examples/capability.lang` and `examples/decide.lang`. The three targets
-exist: the tool gate `permitd` (T1, S8 and S9), the JSON authority report
-`langc report` (T2, S10) and the Cedar export `langc cedar` (T3, S11).
-The agent items A1, A2 and A4 exist: `langc fmt` (S12), `langc check
---json` (S13) and `langc mcp`, with `langc explain`, `langc base` and
-`langc law` (S14). `make check` is GREEN. `docs/PLAN.md` gives the
-readings, the route, the slices and the open questions. The next slice is
-S17: the close (`SPEC.md`, `probe/CAPABILITY.md`, `docs/VALIDATION.md`
-and the final gate).
+(`skills/permit-lang/SKILL.md`), the graded examples G1 to G5
+(`examples/skill/`), `AGENTS.md` and this table. The repo holds the
+Cubical TT kernel of intent-lang (67445ae), ported from relay-lang
+05dd63b without the crypto code, on the tcc-wasm host. The slices S3 to
+S7 add R0 (no trap), the affine layer, the domain (`domain/domain.lang`:
+`Scope`, `StepBound`, `Capability`, `delegate`, `Mutation`, `Ticket`,
+`Call`, `decide`, `Plan` and `Trace`) and the demos
+`examples/scope.lang`, `examples/capability.lang` and
+`examples/decide.lang`. The three targets exist: the tool gate `permitd`
+(T1, S8 and S9), the JSON authority report `langc report` (T2, S10) and
+the Cedar export `langc cedar` (T3, S11). The agent items A1, A2 and A4
+exist: `langc fmt` (S12), `langc check --json` (S13) and `langc mcp`,
+with `langc explain`, `langc base` and `langc law` (S14). `make check` is
+GREEN. `docs/PLAN.md` gives the readings, the route, the slices and the
+open questions. The plan is CLOSED: S17 is the last slice, and section 13
+of the plan gives the open items.
 
 ## Layout
 

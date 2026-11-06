@@ -49,7 +49,7 @@ routing rule, the loop and 5 graded examples (G1 to G5, the files of
 (`docs/MCP.md`). With `--kit`, each tool that reads a program runs in the
 kit mode.
 
-## Status (S16)
+## Status (S17)
 
 The slices S0 to S14 give the kernel with the affine layer (S2 to S4),
 the domain (S5 to S7), the three targets (the tool gate `permitd`, T1, S8
@@ -58,10 +58,12 @@ and S9; the JSON authority report, T2, S10; the Cedar export, T3, S11),
 explain`, `langc base` and `langc law` (S14). S15 adds
 `skills/permit-lang/SKILL.md`, the graded examples of `examples/skill/`,
 `test/skilltool.c`, the fixtures of `test/skill/`, this file and the
-README table. S16 adds the token comparison (A6): G1 to G5 in Python
-and in Rust (`test/baseline/`), `test/tokcount.c` and
-`docs/TOKEN-BASELINE.md`. `docs/PLAN.md` section 12 gives each slice and
-the next slice (S17: the close).
+README table. S16 adds the token comparison (A6): G1 to G5 in Python and
+in Rust (`test/baseline/`), `test/tokcount.c` and
+`docs/TOKEN-BASELINE.md`. S17 closes the plan: `SPEC.md` (the language
+spec), `probe/CAPABILITY.md` (the probe runs and the cost),
+`docs/VALIDATION.md` and the final gate. `docs/PLAN.md` section 12 gives
+each slice. The plan is CLOSED, and section 13 gives the open items.
 
 ## Commands that work now
 
